@@ -1,0 +1,494 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\BalanceSheetTotal;
+use App\Models\Debt;
+use App\Models\IncomeEntry;
+use App\Models\Purchase;
+use App\Models\Saving;
+use App\Models\IncomeStream;
+use App\Models\PurchaseCategory;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
+
+/**
+ * Class BalanceSheetService
+ *
+ * Instance-based service that aggregates, computes and returns both
+ * simplified and expanded balance sheet objects for a given user + month.
+ */
+class BalanceSheetService
+{
+    public int $userId;
+    public Carbon $month;            // normalized to first day of month UTC
+    public Carbon $periodStart;      // month start UTC
+    public Carbon $periodEnd;        // month end UTC
+    public Carbon $previousMonth;
+    public Carbon $previousPeriodStart;
+    public Carbon $previousPeriodEnd;
+
+    /** Cached collections */
+    protected ?Collection $purchases = null;
+    protected ?Collection $incomeEntries = null;
+    protected ?Collection $debts = null;
+    protected ?Collection $savings = null;
+
+    /**
+     * Constructor.
+     *
+     * @param int $userId
+     * @param string|Carbon|null $month  // null means current month
+     */
+    public function __construct(int $userId, Carbon|string|null $month = null)
+    {
+        $this->userId = $userId;
+        $this->month = DateTimeService::normalizeMonth($month);
+        $this->periodStart = DateTimeService::monthStart($this->month);
+        $this->periodEnd = DateTimeService::monthEnd($this->month);
+
+        $this->previousMonth = $this->month->copy()->subMonth();
+        $this->previousPeriodStart = DateTimeService::monthStart($this->previousMonth);
+        $this->previousPeriodEnd = DateTimeService::monthEnd($this->previousMonth);
+    }
+
+    // ----------------------------------------------------------
+    // PUBLIC API
+    // ----------------------------------------------------------
+
+    /**
+     * Build and return the simplified balance sheet (totals only).
+     *
+     * @return array
+     */
+    public function getSimplified(): array
+    {
+        // totals
+        $incomeTotal = $this->getIncomeTotal();
+        $spendingTotal = $this->getSpendingTotal();
+        $savingsSnapshot = $this->getSavingsTotal();
+        $debtPaidTotal = $this->getDebtPaidTotalForPeriod();
+
+        // roll_over definition: income - (debt paid + spending)
+        $rollover = MoneyService::subtract($incomeTotal, MoneyService::add($debtPaidTotal, $spendingTotal));
+
+        return [
+            'user_id' => $this->userId,
+            'month' => $this->month->toDateString(), // YYYY-MM-DD (first of month)
+            'total_income' => round($incomeTotal, 2),
+            'total_debt_paid' => round($debtPaidTotal, 2),
+            'total_spending' => round($spendingTotal, 2),
+            'savings_snapshot' => round($savingsSnapshot, 2),
+            'roll_over' => round($rollover, 2),
+        ];
+    }
+
+    /**
+     * Build and return the expanded balance sheet for UI (nested details).
+     *
+     * @return array
+     */
+    public function getExpanded(): array
+    {
+        // Load data (cached)
+        $incomeEntries = $this->getIncomeEntries();
+        $purchases = $this->getPurchases();
+        $debts = $this->getDebts();
+        $savings = $this->getSavingsRows();
+
+        // Income grouped by stream
+        $incomeGrouped = $incomeEntries->groupBy('income_stream_id')->map(function ($group, $streamId) {
+            $stream = $group->first()->stream ?? null;
+            $entries = $group->map(fn($e) => [
+                'id' => $e->id,
+                'income_stream_id' => $e->income_stream_id,
+                'amount' => (float) $e->amount,
+                'month' => DateTimeService::formatForUI($e->month, 'monthDayYear'),
+            ])->values();
+
+            $total = MoneyService::sum($entries->pluck('amount')->toArray());
+
+            return [
+                'income_stream_id' => $streamId,
+                'name' => $stream?->name ?? 'Unknown',
+                'entries' => $entries,
+                'total' => $total,
+            ];
+        })->values();
+
+        $incomeTotal = MoneyService::sum($incomeGrouped->pluck('total')->toArray());
+
+        // Spending grouped by category
+        $spendingByCategory = $purchases->groupBy(fn($p) => $p->category?->id ?? 0)
+            ->map(function ($group, $categoryId) {
+                $cat = $group->first()->category ?? null;
+                $items = $group->map(fn($p) => [
+                    'id' => $p->id,
+                    'description' => $p->description,
+                    'amount' => (float) $p->amount,
+                    'date' => DateTimeService::formatForUI($p->date, 'short'),
+                    'attachment_path' => $p->attachment_path,
+                    'url' => $p->url,
+                ])->values();
+
+                $amount = MoneyService::sum($items->pluck('amount')->toArray());
+
+                return [
+                    'category_id' => $categoryId ?: null,
+                    'category_name' => $cat?->category_name ?? 'Uncategorized',
+                    'amount' => $amount,
+                    'items' => $items,
+                ];
+            })->values();
+
+        $spendingTotal = MoneyService::sum($spendingByCategory->pluck('amount')->toArray());
+
+        // Debt details (per-debt paid this month computed via heuristic)
+        $debtDetails = $debts->map(function ($d) {
+            $paidThisMonth = $this->getDebtPaidForDebtInPeriod($d, $this->periodStart, $this->periodEnd);
+
+            return [
+                'id' => $d->id,
+                'category_id' => $d->category_id,
+                'description' => $d->description,
+                'amount' => (float) $d->amount,
+                'remaining_balance' => (float) $d->remaining_balance,
+                'settle_date' => $d->settle_date ? DateTimeService::formatForUI($d->settle_date, 'date') : null,
+                'total_paid_in_period' => round($paidThisMonth, 2),
+            ];
+        });
+
+        $debtTotalPaid = MoneyService::sum($debtDetails->pluck('total_paid_in_period')->toArray());
+        $debtBalanceTotal = MoneyService::sum($debtDetails->pluck('remaining_balance')->toArray());
+
+        // Savings
+        $savingsRows = $savings->map(fn($s) => [
+            'id' => $s->id,
+            'amount' => (float) $s->amount,
+            'month' => DateTimeService::formatForUI($s->month, 'monthDayYear'),
+        ]);
+
+        $savingsMonthlyTotal = MoneyService::sum($savingsRows->pluck('amount')->toArray());
+        $savingsGrandTotal = (float) Saving::where('user_id', $this->userId)
+            ->whereDate('month', '<=', $this->month->toDateString())
+            ->sum('amount');
+
+        // Rollover
+        $rollover = MoneyService::subtract($incomeTotal, MoneyService::add($debtTotalPaid, $spendingTotal));
+
+        // Final structure
+        return [
+            'user_id' => $this->userId,
+            'month' => DateTimeService::formatForUI($this->month, 'monthYear'),
+            'income' => [
+                'total' => round($incomeTotal, 2),
+                'income_entries' => $incomeGrouped,
+            ],
+            'debt' => [
+                'total' => round($debtTotalPaid, 2),
+                'balance_total' => round($debtBalanceTotal, 2),
+                'debts' => $debtDetails,
+            ],
+            'spending' => [
+                'total' => round($spendingTotal, 2),
+                'categories' => $spendingByCategory,
+            ],
+            'savings' => [
+                'monthly_total' => round($savingsMonthlyTotal, 2),
+                'grand_total' => round($savingsGrandTotal, 2),
+                'rows' => $savingsRows,
+            ],
+            'roll_over' => [
+                'total' => round($rollover, 2),
+            ],
+        ];
+    }
+
+    /**
+     * Compare two months for the same user.
+     *
+     * @param string|Carbon $monthA
+     * @param string|Carbon $monthB
+     * @return array
+     */
+    public function compareMonths(string|Carbon $monthA, string|Carbon $monthB): array
+    {
+        $svcA = new self($this->userId, DateTimeService::normalizeMonth($monthA));
+        $svcB = new self($this->userId, DateTimeService::normalizeMonth($monthB));
+
+        $a = $svcA->getSimplified();
+        $b = $svcB->getSimplified();
+
+        $map = [
+            'total_income' => 'income',
+            'total_debt_paid' => 'debt',
+            'total_spending' => 'spending',
+            'savings_snapshot' => 'savings',
+            'roll_over' => 'rollover',
+        ];
+
+        $out = [];
+        foreach ($map as $k => $label) {
+            $aval = (float) ($a[$k] ?? 0.0);
+            $bval = (float) ($b[$k] ?? 0.0);
+            $pct = MoneyService::deltaPercent($bval, $aval);
+            $out[$label] = [
+                'a' => round($aval, 2),
+                'b' => round($bval, 2),
+                'percent_change' => $pct,
+            ];
+        }
+
+        return $out;
+    }
+
+    // ----------------------------------------------------------
+    // INTERNAL: Totals & Data Loading
+    // ----------------------------------------------------------
+
+    /**
+     * Load purchases for the period (cached).
+     *
+     * @return Collection
+     */
+    protected function getPurchases(): Collection
+    {
+        if ($this->purchases !== null) {
+            return $this->purchases;
+        }
+
+        $this->purchases = Purchase::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'date', 'month')
+            ->with('category')
+            ->get();
+
+        return $this->purchases;
+    }
+
+    /**
+     * Load income entries for the period (cached).
+     *
+     * @return Collection
+     */
+    protected function getIncomeEntries(): Collection
+    {
+        if ($this->incomeEntries !== null) {
+            return $this->incomeEntries;
+        }
+
+        $this->incomeEntries = IncomeEntry::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'month', 'month')
+            ->with('stream')
+            ->get();
+
+        return $this->incomeEntries;
+    }
+
+    /**
+     * Load debts relevant to this period (cached).
+     *
+     * Criteria: debts issued on or before period end.
+     *
+     * @return Collection
+     */
+    protected function getDebts(): Collection
+    {
+        if ($this->debts !== null) {
+            return $this->debts;
+        }
+
+        // We include debts issued on/before period end. Debts settled before period start are excluded.
+        $this->debts = Debt::where('user_id', $this->userId)
+            ->where(function ($q) {
+                // debt.issue_date <= periodEnd
+                $q->whereDate('issue_date', '<=', $this->periodEnd->toDateString());
+            })
+            // exclude debts already settled before this period (settle_date < periodStart)
+            ->where(function ($q) {
+                $q->whereNull('settle_date')
+                  ->orWhereDate('settle_date', '>=', $this->periodStart->toDateString());
+            })
+            ->get();
+
+        return $this->debts;
+    }
+
+    /**
+     * Load savings rows for the period (cached).
+     *
+     * @return Collection
+     */
+    protected function getSavingsRows(): Collection
+    {
+        if ($this->savings !== null) {
+            return $this->savings;
+        }
+
+        $this->savings = Saving::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'month', 'month')
+            ->get();
+
+        return $this->savings;
+    }
+
+    /**
+     * Sum income for the period.
+     *
+     * @return float
+     */
+    protected function getIncomeTotal(): float
+    {
+        return (float) IncomeEntry::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'month', 'month')
+            ->sum('amount');
+    }
+
+    /**
+     * Sum spending (purchases) for the period.
+     *
+     * @return float
+     */
+    protected function getSpendingTotal(): float
+    {
+        return (float) Purchase::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'date', 'month')
+            ->sum('amount');
+    }
+
+    /**
+     * Get savings total for the month (snapshot).
+     *
+     * @return float
+     */
+    protected function getSavingsTotal(): float
+    {
+        return (float) Saving::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'month', 'month')
+            ->sum('amount');
+    }
+
+    // ----------------------------------------------------------
+    // DEBT: Heuristics using remaining_balance (no payments table)
+    // ----------------------------------------------------------
+
+    /**
+     * Compute total debt paid during the current period for the user.
+     *
+     * Strategy:
+     *  - If a `debt_payments` table exists, use it (accurate).
+     *  - Else compute per-debt using heuristics based on issue_date, settle_date, amount, remaining_balance.
+     *
+     * @return float
+     */
+    protected function getDebtPaidTotalForPeriod(): float
+    {
+        if (Schema::hasTable('debt_payments')) {
+            return (float) DB::table('debt_payments')
+                ->where('user_id', $this->userId)
+                ->whereBetween('paid_at', [$this->periodStart->toDateTimeString(), $this->periodEnd->toDateTimeString()])
+                ->sum('amount');
+        }
+
+        // Heuristic: sum per-debt computed paid amount
+        $total = 0.0;
+        foreach ($this->getDebts() as $debt) {
+            $total += $this->getDebtPaidForDebtInPeriod($debt, $this->periodStart, $this->periodEnd);
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * Compute amount paid for a single debt during the period using heuristics.
+     *
+     * Heuristic logic (no payments table):
+     * 1) If the debt was issued within the period:
+     *      paid = max(0, amount - remaining_balance)
+     * 2) Else if the debt was settled within the period:
+     *      paid = amount (we assume final payoff)
+     * 3) Else if we have a previous snapshot of debts (not available by default),
+     *      we would compute previousRemaining - currentRemaining.
+     * 4) Otherwise return 0 (conservative).
+     *
+     * NOTE: This method is conservative by design to avoid over-counting without per-debt history.
+     *
+     * @param Debt $debt
+     * @param Carbon $periodStart
+     * @param Carbon $periodEnd
+     * @return float
+     */
+    protected function getDebtPaidForDebtInPeriod(Debt $debt, Carbon $periodStart, Carbon $periodEnd): float
+    {
+        // If there is a debt_payments table, prefer precise payments.
+        if (Schema::hasTable('debt_payments')) {
+            return (float) DB::table('debt_payments')
+                ->where('debt_id', $debt->id)
+                ->whereBetween('paid_at', [$periodStart->toDateTimeString(), $periodEnd->toDateTimeString()])
+                ->sum('amount');
+        }
+
+        // 1) Issued in this period: difference between amount and current remaining (if any)
+        if ($debt->issue_date && DateTimeService::isBetween($debt->issue_date, $periodStart, $periodEnd)) {
+            $paid = max(0.0, (float)$debt->amount - (float)$debt->remaining_balance);
+            return round($paid, 2);
+        }
+
+        // 2) Settled in this period: assume full amount was paid this period (conservative)
+        if ($debt->settle_date && DateTimeService::isBetween($debt->settle_date, $periodStart, $periodEnd)) {
+            // If settle_date falls in period, treat as paid off now.
+            // If remaining_balance is already 0, this still returns amount (conservative approach).
+            return round((float) $debt->amount, 2);
+        }
+
+        // 3) If there's a previous month snapshot of debts stored elsewhere, we could compute:
+        //    previousRemaining - currentRemaining. Not available by default.
+        //    Because you opted not to persist per-debt snapshots, return 0 here to be conservative.
+        return 0.0;
+    }
+
+    // ----------------------------------------------------------
+    // Persistence & History helpers
+    // ----------------------------------------------------------
+
+    /**
+     * Persist simplified snapshot to balance_sheet_totals (update or create).
+     *
+     * @param array|null $simplified  // if null, will compute one
+     * @return BalanceSheetTotal
+     */
+    public function persistSnapshot(array|null $simplified = null): BalanceSheetTotal
+    {
+        $data = $simplified ?? $this->getSimplified();
+
+        return BalanceSheetTotal::updateOrCreate(
+            [
+                'user_id' => $data['user_id'],
+                'month' => $data['month'],
+            ],
+            [
+                'total_income' => $data['total_income'],
+                'total_debt_paid' => $data['total_debt_paid'],
+                'total_spending' => $data['total_spending'],
+                'savings_snapshot' => $data['savings_snapshot'],
+                'roll_over' => $data['roll_over'],
+            ]
+        );
+    }
+
+    /**
+     * Get history (last N months) simplified snapshots for the user.
+     *
+     * @param int $months
+     * @return Collection
+     */
+    public function getHistory(int $months = 12): Collection
+    {
+        return BalanceSheetTotal::where('user_id', $this->userId)
+            ->forLastPeriods($months, 'month', 'month')
+            ->orderBy('month', 'asc')
+            ->get();
+    }
+}
