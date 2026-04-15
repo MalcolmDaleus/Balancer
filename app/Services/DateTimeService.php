@@ -117,7 +117,7 @@ class DateTimeService
         return self::toUtc($date)->format('Y-m');
     }
 
-        public static function today(): Carbon
+    public static function today(): Carbon
     {
         return Carbon::now('UTC')->startOfDay();
     }

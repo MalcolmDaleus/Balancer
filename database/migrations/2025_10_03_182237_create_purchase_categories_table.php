@@ -14,7 +14,8 @@ return new class extends Migration
         Schema::create('purchase_categories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('category_name', 64)->unique();
+            $table->string('category_name', 64);
+            $table->unique(['user_id', 'category_name']);
         });
     }
 

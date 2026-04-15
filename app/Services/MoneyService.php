@@ -39,22 +39,16 @@ class MoneyService
         }
     }
 
-    public static function formatWithSign(float $amount, ?User $user = null, $unit = 'symbol' ,$prefix = true): string
+    public static function formatWithSign(float $amount, ?User $user = null, $unit = 'symbol', $prefix = true): string
     {
-        switch ($unit) {
-            case 'symbol': 
-                return ($amount >= 0 ? '+' : '-') . self::formatWithSymbol(self::absolute($amount), $user, $prefix);
-                break;
-            case 'abbr':
-                return ($amount >= 0 ? '+' : '-') . self::formatWithAbbr(self::absolute($amount), $user);
-                break;
-            case 'name':
-                return ($amount >= 0 ? '+' : '-') . self::formatWithName(self::absolute($amount), $user);
-                break;
-            default: 
-                 return ($amount >= 0 ? '+' : '-') . self::formatWithSymbol(self::absolute($amount), $user, $prefix);
-                break;
-        }
+        $sign = $amount >= 0 ? '+' : '-';
+        $abs  = self::absolute($amount);
+
+        return match ($unit) {
+            'abbr'  => $sign . self::formatWithAbbr($abs, $user),
+            'name'  => $sign . self::formatWithName($abs, $user),
+            default => $sign . self::formatWithSymbol($abs, $user, $prefix),
+        };
     }
 
     public static function percentOf(float $amount, float $total): float
@@ -114,7 +108,7 @@ class MoneyService
 
     public static function isZero(float $amount): bool
     {
-        return $amount === 0.0;
+        return abs($amount) < PHP_FLOAT_EPSILON;
     }
 
     public static function sum(array $amounts): float
@@ -145,7 +139,9 @@ class MoneyService
 
     public static function deltaPercent(float $current, float $previous): float
     {
-        if ($previous == 0) return 100.0;
+        if (abs($previous) < PHP_FLOAT_EPSILON) {
+            return abs($current) < PHP_FLOAT_EPSILON ? 0.0 : 100.0;
+        }
         return round((($current - $previous) / $previous) * 100, 2);
     }
 }

@@ -15,7 +15,7 @@ class CurrencyService
         }
 
         $code = $user->currency;
-        $currencies = Config::get('currencies', []);
+        $currencies = Config::get('currency', []);
 
         return $currencies[$code] ?? [];
     }

@@ -23,13 +23,13 @@ use InvalidArgumentException;
  */
 class BalanceSheetService
 {
-    public int $userId;
-    public Carbon $month;            // normalized to first day of month UTC
-    public Carbon $periodStart;      // month start UTC
-    public Carbon $periodEnd;        // month end UTC
-    public Carbon $previousMonth;
-    public Carbon $previousPeriodStart;
-    public Carbon $previousPeriodEnd;
+    public readonly int $userId;
+    public readonly Carbon $month;            // normalized to first day of month UTC
+    public readonly Carbon $periodStart;      // month start UTC
+    public readonly Carbon $periodEnd;        // month end UTC
+    public readonly Carbon $previousMonth;
+    public readonly Carbon $previousPeriodStart;
+    public readonly Carbon $previousPeriodEnd;
 
     /** Cached collections */
     protected ?Collection $purchases = null;
@@ -161,6 +161,7 @@ class BalanceSheetService
             ];
         });
 
+        $debtDetails = $debtDetails->values();
         $debtTotalPaid = MoneyService::sum($debtDetails->pluck('total_paid_in_period')->toArray());
         $debtBalanceTotal = MoneyService::sum($debtDetails->pluck('remaining_balance')->toArray());
 
@@ -169,7 +170,7 @@ class BalanceSheetService
             'id' => $s->id,
             'amount' => (float) $s->amount,
             'month' => DateTimeService::formatForUI($s->month, 'monthDayYear'),
-        ]);
+        ])->values();
 
         $savingsMonthlyTotal = MoneyService::sum($savingsRows->pluck('amount')->toArray());
         $savingsGrandTotal = (float) Saving::where('user_id', $this->userId)
@@ -436,11 +437,9 @@ class BalanceSheetService
             return round($paid, 2);
         }
 
-        // 2) Settled in this period: assume full amount was paid this period (conservative)
+        // 2) Settled in this period: the remaining balance was paid off this period.
         if ($debt->settle_date && DateTimeService::isBetween($debt->settle_date, $periodStart, $periodEnd)) {
-            // If settle_date falls in period, treat as paid off now.
-            // If remaining_balance is already 0, this still returns amount (conservative approach).
-            return round((float) $debt->amount, 2);
+            return round(max(0.0, (float) $debt->remaining_balance), 2);
         }
 
         // 3) If there's a previous month snapshot of debts stored elsewhere, we could compute:
