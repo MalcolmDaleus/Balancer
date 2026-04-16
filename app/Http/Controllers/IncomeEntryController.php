@@ -2,65 +2,61 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\StoreIncomeEntryRequest;
+use App\Http\Requests\Api\UpdateIncomeEntryRequest;
+use App\Http\Resources\IncomeEntryResource;
 use App\Models\IncomeEntry;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class IncomeEntryController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(): AnonymousResourceCollection
     {
-        //
+        $this->authorize('viewAny', IncomeEntry::class);
+
+        $entries = IncomeEntry::where('user_id', auth()->id())
+            ->with('stream')
+            ->latest('month')
+            ->get();
+
+        return IncomeEntryResource::collection($entries);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function store(StoreIncomeEntryRequest $request): IncomeEntryResource
     {
-        //
+        $this->authorize('create', IncomeEntry::class);
+
+        $entry = IncomeEntry::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()]
+        ));
+
+        return new IncomeEntryResource($entry->load('stream'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(IncomeEntry $incomeEntry): IncomeEntryResource
     {
-        //
+        $this->authorize('view', $incomeEntry);
+
+        return new IncomeEntryResource($incomeEntry->load('stream'));
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(IncomeEntry $incomeEntry)
+    public function update(UpdateIncomeEntryRequest $request, IncomeEntry $incomeEntry): IncomeEntryResource
     {
-        //
+        $this->authorize('update', $incomeEntry);
+
+        $incomeEntry->update($request->validated());
+
+        return new IncomeEntryResource($incomeEntry->fresh()->load('stream'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(IncomeEntry $incomeEntry)
+    public function destroy(IncomeEntry $incomeEntry): JsonResponse
     {
-        //
-    }
+        $this->authorize('delete', $incomeEntry);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, IncomeEntry $incomeEntry)
-    {
-        //
-    }
+        $incomeEntry->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(IncomeEntry $incomeEntry)
-    {
-        //
+        return response()->json(null, 204);
     }
 }

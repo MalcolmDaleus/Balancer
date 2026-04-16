@@ -2,65 +2,60 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\StoreSavingRequest;
+use App\Http\Requests\Api\UpdateSavingRequest;
+use App\Http\Resources\SavingResource;
 use App\Models\Saving;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class SavingController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(): AnonymousResourceCollection
     {
-        //
+        $this->authorize('viewAny', Saving::class);
+
+        $savings = Saving::where('user_id', auth()->id())
+            ->latest('month')
+            ->get();
+
+        return SavingResource::collection($savings);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function store(StoreSavingRequest $request): SavingResource
     {
-        //
+        $this->authorize('create', Saving::class);
+
+        $saving = Saving::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()]
+        ));
+
+        return new SavingResource($saving);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(Saving $saving): SavingResource
     {
-        //
+        $this->authorize('view', $saving);
+
+        return new SavingResource($saving);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Saving $saving)
+    public function update(UpdateSavingRequest $request, Saving $saving): SavingResource
     {
-        //
+        $this->authorize('update', $saving);
+
+        $saving->update($request->validated());
+
+        return new SavingResource($saving->fresh());
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Saving $saving)
+    public function destroy(Saving $saving): JsonResponse
     {
-        //
-    }
+        $this->authorize('delete', $saving);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Saving $saving)
-    {
-        //
-    }
+        $saving->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Saving $saving)
-    {
-        //
+        return response()->json(null, 204);
     }
 }

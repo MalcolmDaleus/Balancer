@@ -2,65 +2,60 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\StoreDebtCategoryRequest;
+use App\Http\Requests\Api\UpdateDebtCategoryRequest;
+use App\Http\Resources\DebtCategoryResource;
 use App\Models\DebtCategory;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DebtCategoryController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(): AnonymousResourceCollection
     {
-        //
+        $this->authorize('viewAny', DebtCategory::class);
+
+        $categories = DebtCategory::where('user_id', auth()->id())
+            ->orderBy('category_name')
+            ->get();
+
+        return DebtCategoryResource::collection($categories);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function store(StoreDebtCategoryRequest $request): DebtCategoryResource
     {
-        //
+        $this->authorize('create', DebtCategory::class);
+
+        $category = DebtCategory::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()]
+        ));
+
+        return new DebtCategoryResource($category);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(DebtCategory $debtCategory): DebtCategoryResource
     {
-        //
+        $this->authorize('view', $debtCategory);
+
+        return new DebtCategoryResource($debtCategory);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(DebtCategory $debtCategory)
+    public function update(UpdateDebtCategoryRequest $request, DebtCategory $debtCategory): DebtCategoryResource
     {
-        //
+        $this->authorize('update', $debtCategory);
+
+        $debtCategory->update($request->validated());
+
+        return new DebtCategoryResource($debtCategory->fresh());
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(DebtCategory $debtCategory)
+    public function destroy(DebtCategory $debtCategory): JsonResponse
     {
-        //
-    }
+        $this->authorize('delete', $debtCategory);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, DebtCategory $debtCategory)
-    {
-        //
-    }
+        $debtCategory->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(DebtCategory $debtCategory)
-    {
-        //
+        return response()->json(null, 204);
     }
 }

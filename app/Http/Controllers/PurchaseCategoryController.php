@@ -2,65 +2,60 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\StorePurchaseCategoryRequest;
+use App\Http\Requests\Api\UpdatePurchaseCategoryRequest;
+use App\Http\Resources\PurchaseCategoryResource;
 use App\Models\PurchaseCategory;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PurchaseCategoryController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(): AnonymousResourceCollection
     {
-        //
+        $this->authorize('viewAny', PurchaseCategory::class);
+
+        $categories = PurchaseCategory::where('user_id', auth()->id())
+            ->orderBy('category_name')
+            ->get();
+
+        return PurchaseCategoryResource::collection($categories);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function store(StorePurchaseCategoryRequest $request): PurchaseCategoryResource
     {
-        //
+        $this->authorize('create', PurchaseCategory::class);
+
+        $category = PurchaseCategory::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()]
+        ));
+
+        return new PurchaseCategoryResource($category);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(PurchaseCategory $purchaseCategory): PurchaseCategoryResource
     {
-        //
+        $this->authorize('view', $purchaseCategory);
+
+        return new PurchaseCategoryResource($purchaseCategory);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(PurchaseCategory $purchaseCategory)
+    public function update(UpdatePurchaseCategoryRequest $request, PurchaseCategory $purchaseCategory): PurchaseCategoryResource
     {
-        //
+        $this->authorize('update', $purchaseCategory);
+
+        $purchaseCategory->update($request->validated());
+
+        return new PurchaseCategoryResource($purchaseCategory->fresh());
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(PurchaseCategory $purchaseCategory)
+    public function destroy(PurchaseCategory $purchaseCategory): JsonResponse
     {
-        //
-    }
+        $this->authorize('delete', $purchaseCategory);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, PurchaseCategory $purchaseCategory)
-    {
-        //
-    }
+        $purchaseCategory->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(PurchaseCategory $purchaseCategory)
-    {
-        //
+        return response()->json(null, 204);
     }
 }

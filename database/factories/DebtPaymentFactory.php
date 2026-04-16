@@ -1,0 +1,24 @@
+<?php
+
+namespace Database\Factories;
+
+use App\Models\Debt;
+use App\Models\DebtPayment;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
+class DebtPaymentFactory extends Factory
+{
+    protected $model = DebtPayment::class;
+
+    public function definition(): array
+    {
+        return [
+            'user_id' => User::factory(),
+            'debt_id' => Debt::factory(),
+            'amount'  => $this->faker->randomFloat(2, 10, 500),
+            'paid_at' => $this->faker->dateTimeThisMonth(),
+            'notes'   => null,
+        ];
+    }
+}

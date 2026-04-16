@@ -3,15 +3,20 @@
 use App\Exceptions\MonthLockedException;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -25,11 +30,53 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Month locked — 423 (applies everywhere, but most relevant on API)
         $exceptions->render(function (MonthLockedException $e) {
             return new JsonResponse([
+                'error'   => 'month_locked',
                 'message' => $e->getMessage(),
                 'month'   => $e->month->toDateString(),
-                'error'   => 'month_locked',
-            ], JsonResponse::HTTP_LOCKED); // 423
+            ], JsonResponse::HTTP_LOCKED);
+        });
+
+        // Unauthenticated — 401 (API-only; web redirects to login)
+        $exceptions->render(function (AuthenticationException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'error'   => 'unauthenticated',
+                    'message' => 'Authentication required.',
+                ], 401);
+            }
+        });
+
+        // Unauthorized — 403
+        $exceptions->render(function (AuthorizationException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'error'   => 'forbidden',
+                    'message' => 'This action is unauthorized.',
+                ], 403);
+            }
+        });
+
+        // Validation — 422
+        $exceptions->render(function (ValidationException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'error'   => 'validation_failed',
+                    'message' => 'The given data was invalid.',
+                    'details' => $e->errors(),
+                ], 422);
+            }
+        });
+
+        // Model not found — 404
+        $exceptions->render(function (ModelNotFoundException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'error'   => 'not_found',
+                    'message' => 'The requested resource was not found.',
+                ], 404);
+            }
         });
     })->create();

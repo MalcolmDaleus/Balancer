@@ -2,65 +2,61 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\StoreIncomeStreamRequest;
+use App\Http\Requests\Api\UpdateIncomeStreamRequest;
+use App\Http\Resources\IncomeStreamResource;
 use App\Models\IncomeStream;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class IncomeStreamController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(): AnonymousResourceCollection
     {
-        //
+        $this->authorize('viewAny', IncomeStream::class);
+
+        $streams = IncomeStream::where('user_id', auth()->id())
+            ->with('category')
+            ->orderBy('name')
+            ->get();
+
+        return IncomeStreamResource::collection($streams);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function store(StoreIncomeStreamRequest $request): IncomeStreamResource
     {
-        //
+        $this->authorize('create', IncomeStream::class);
+
+        $stream = IncomeStream::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()]
+        ));
+
+        return new IncomeStreamResource($stream->load('category'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
+    public function show(IncomeStream $incomeStream): IncomeStreamResource
     {
-        //
+        $this->authorize('view', $incomeStream);
+
+        return new IncomeStreamResource($incomeStream->load('category'));
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(IncomeStream $incomeStream)
+    public function update(UpdateIncomeStreamRequest $request, IncomeStream $incomeStream): IncomeStreamResource
     {
-        //
+        $this->authorize('update', $incomeStream);
+
+        $incomeStream->update($request->validated());
+
+        return new IncomeStreamResource($incomeStream->fresh()->load('category'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(IncomeStream $incomeStream)
+    public function destroy(IncomeStream $incomeStream): JsonResponse
     {
-        //
-    }
+        $this->authorize('delete', $incomeStream);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, IncomeStream $incomeStream)
-    {
-        //
-    }
+        $incomeStream->delete();
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(IncomeStream $incomeStream)
-    {
-        //
+        return response()->json(null, 204);
     }
 }
