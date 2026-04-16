@@ -3,13 +3,16 @@
 namespace App\Models;
 
 use App\Models\Traits\DateScopeable;
+use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Debt extends Model
 {
-    use HasFactory, UserScopable, DateScopeable;
+    use HasFactory, UserScopable, DateScopeable, MonthLockable;
+
+    protected string $monthLockColumn = 'issue_date';
 
     protected $fillable = [
         'user_id',
@@ -18,15 +21,13 @@ class Debt extends Model
         'description',
         'issue_date',
         'settle_date',
-        'remaining_balance', // kept for backward-compat; authoritative value is computed via accessor
         'notes',
     ];
 
     protected $casts = [
-        'amount'            => 'decimal:2',
-        'remaining_balance' => 'decimal:2',
-        'issue_date'        => 'datetime',
-        'settle_date'       => 'datetime',
+        'amount'     => 'decimal:2',
+        'issue_date' => 'datetime',
+        'settle_date'=> 'datetime',
     ];
 
     // ----------------------------------------------------------
@@ -34,15 +35,11 @@ class Debt extends Model
     // ----------------------------------------------------------
 
     /**
-     * Returns the current remaining balance computed from actual payments.
+     * Remaining balance computed entirely from debt_payments records.
      *
-     * Reads from the eager-loaded `payments` relation when available (avoids N+1
-     * inside BalanceSheetService which loads debts with ->with('payments')).
-     * Falls back to a DB aggregate query otherwise.
-     *
-     * NOTE: This accessor shadows the legacy `remaining_balance` DB column.
-     *       The column is kept for backward compatibility but is no longer
-     *       authoritative — DebtPayment records are the source of truth.
+     * Reads from the eager-loaded `payments` relation when available (avoids
+     * N+1 inside BalanceSheetService which loads debts with ->with('payments')).
+     * Falls back to a live aggregate query otherwise.
      */
     public function getRemainingBalanceAttribute(): float
     {
@@ -50,8 +47,6 @@ class Debt extends Model
             ? $this->payments->sum('amount')
             : $this->payments()->sum('amount');
 
-        // Computed from the original principal minus all recorded payments.
-        // The legacy DB column `remaining_balance` is no longer authoritative.
         return max(0.0, (float) $this->attributes['amount'] - (float) $paid);
     }
 

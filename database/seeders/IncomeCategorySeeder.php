@@ -12,6 +12,11 @@ class IncomeCategorySeeder extends Seeder
     {
         $user = User::first();
 
+        if (! $user) {
+            $this->command->warn('IncomeCategorySeeder: no users found, skipping.');
+            return;
+        }
+
         $categories = ['Employment', 'Contract', 'Gift', 'Refund'];
 
         foreach ($categories as $name) {

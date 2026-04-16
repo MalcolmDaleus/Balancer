@@ -35,7 +35,7 @@ class MonthLockService
     public static function isLocked(int $userId, Carbon|string $month): bool
     {
         return BalanceSheetTotal::where('user_id', $userId)
-            ->where('month', DateTimeService::normalizeMonth($month)->toDateString())
+            ->whereDate('month', DateTimeService::normalizeMonth($month)->toDateString())
             ->exists();
     }
 

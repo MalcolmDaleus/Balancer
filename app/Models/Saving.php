@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Traits\DateScopeable;
+use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Saving extends Model
 {
-    use HasFactory, UserScopable, DateScopeable;
+    use HasFactory, UserScopable, DateScopeable, MonthLockable;
 
     protected $fillable = [
         'user_id',

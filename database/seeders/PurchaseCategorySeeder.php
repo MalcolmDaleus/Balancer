@@ -10,7 +10,12 @@ class PurchaseCategorySeeder extends Seeder
 {
     public function run(): void
     {
-        $user = User::first(); 
+        $user = User::first();
+
+        if (! $user) {
+            $this->command->warn('PurchaseCategorySeeder: no users found, skipping.');
+            return;
+        }
 
         $categories = ['Groceries', 'Dining', 'Miscellaneous', 'Clothes & Accesories', 'Adulting', 'Household Items', 'Entertainment', 'Surprises', 'Gifts', 'Caprichos'];
 

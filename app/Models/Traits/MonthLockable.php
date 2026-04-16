@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Models\Traits;
+
+use App\Services\MonthLockService;
+
+/**
+ * Trait MonthLockable
+ *
+ * Enforces month-lock rules at the Eloquent model layer for any model that
+ * represents financial data scoped to a calendar month.
+ *
+ * How it works
+ * ------------
+ * Boot hooks intercept creating, updating, and deleting events and call
+ * MonthLockService::assertUnlocked() using the model's designated date
+ * column. If a BalanceSheetTotal row already exists for that user + month,
+ * MonthLockedException (HTTP 423) is thrown and the write is aborted.
+ *
+ * On update, BOTH the original month AND the new month are checked.
+ * This prevents moving a record from a locked month into a new one (or
+ * vice-versa) as either would silently alter a closed month's totals.
+ *
+ * Usage
+ * -----
+ * 1. Add `use MonthLockable;` to the model.
+ * 2. Optionally declare `protected string $monthLockColumn = 'date';`
+ *    to specify which column holds the date/datetime to derive the month
+ *    from. Defaults to 'month' if not declared.
+ */
+trait MonthLockable
+{
+    protected static function bootMonthLockable(): void
+    {
+        static::creating(function ($model) {
+            MonthLockService::assertUnlocked(
+                $model->user_id,
+                $model->{$model->getMonthLockColumn()}
+            );
+        });
+
+        static::updating(function ($model) {
+            $column = $model->getMonthLockColumn();
+
+            // Always guard the month the record currently/will live in.
+            MonthLockService::assertUnlocked($model->user_id, $model->{$column});
+
+            // If the date column itself is being changed, also guard the
+            // original month — otherwise a record could be silently moved
+            // out of a locked month, altering its historical totals.
+            if ($model->isDirty($column)) {
+                MonthLockService::assertUnlocked(
+                    $model->user_id,
+                    $model->getOriginal($column)
+                );
+            }
+        });
+
+        static::deleting(function ($model) {
+            MonthLockService::assertUnlocked(
+                $model->user_id,
+                $model->{$model->getMonthLockColumn()}
+            );
+        });
+    }
+
+    /**
+     * Returns the column name used to derive the month for lock checks.
+     * Models can override by declaring: protected string $monthLockColumn = 'paid_at';
+     */
+    public function getMonthLockColumn(): string
+    {
+        return property_exists($this, 'monthLockColumn')
+            ? $this->monthLockColumn
+            : 'month';
+    }
+}

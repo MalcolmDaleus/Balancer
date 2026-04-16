@@ -12,6 +12,11 @@ class DebtCategorySeeder extends Seeder
     {
         $user = User::first();
 
+        if (! $user) {
+            $this->command->warn('DebtCategorySeeder: no users found, skipping.');
+            return;
+        }
+
         $categories = ['Personal', 'Loan', 'Payment Plan'];
 
         foreach ($categories as $name) {

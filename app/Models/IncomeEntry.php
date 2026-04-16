@@ -4,12 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Traits\UserScopable;
 use App\Models\Traits\DateScopeable;
+use App\Models\Traits\MonthLockable;
+use App\Models\Traits\UserScopable;
 
 class IncomeEntry extends Model
 {
-    use HasFactory, UserScopable, DateScopeable;
+    use HasFactory, UserScopable, DateScopeable, MonthLockable;
 
     protected $fillable = [
         'user_id',

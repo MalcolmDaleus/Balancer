@@ -418,19 +418,27 @@ class BalanceSheetService
     {
         $data = $simplified ?? $this->getSimplified();
 
-        return BalanceSheetTotal::updateOrCreate(
-            [
-                'user_id' => $data['user_id'],
-                'month' => $data['month'],
-            ],
-            [
-                'total_income' => $data['total_income'],
-                'total_debt_paid' => $data['total_debt_paid'],
-                'total_spending' => $data['total_spending'],
-                'savings_snapshot' => $data['savings_snapshot'],
-                'roll_over' => $data['roll_over'],
-            ]
-        );
+        $existing = BalanceSheetTotal::where('user_id', $data['user_id'])
+            ->whereDate('month', $data['month'])
+            ->first();
+
+        $payload = [
+            'total_income'    => $data['total_income'],
+            'total_debt_paid' => $data['total_debt_paid'],
+            'total_spending'  => $data['total_spending'],
+            'savings_snapshot'=> $data['savings_snapshot'],
+            'roll_over'       => $data['roll_over'],
+        ];
+
+        if ($existing) {
+            $existing->update($payload);
+            return $existing->fresh();
+        }
+
+        return BalanceSheetTotal::create(array_merge(
+            ['user_id' => $data['user_id'], 'month' => $data['month']],
+            $payload
+        ));
     }
 
     /**

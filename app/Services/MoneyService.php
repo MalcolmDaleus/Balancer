@@ -3,43 +3,46 @@
 namespace App\Services;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Auth;
 
 class MoneyService
 {
-    private static function getUser(?User $user = null): User
+    /**
+     * Format an amount using the currency name (singular/plural).
+     * Requires an explicit User — there is no Auth fallback.
+     */
+    public static function formatWithName(float $amount, User $user): string
     {
-        if (!$user) {
-            $user = Auth::user();
-        }
-
-        return $user;
-    }
-
-    public static function formatWithName(float $amount, ?User $user = null): string
-    {
-        $user = self::getUser($user);
         $name = ($amount == 1) ? CurrencyService::singular($user) : CurrencyService::plural($user);
         return number_format($amount, 2, '.', ',') . ' ' . $name;
     }
 
-    public static function formatWithAbbr(float $amount, ?User $user = null): string
+    /**
+     * Format an amount using the ISO abbreviation (e.g. "1,234.56 USD").
+     * Requires an explicit User — there is no Auth fallback.
+     */
+    public static function formatWithAbbr(float $amount, User $user): string
     {
-        $user = self::getUser($user);
         return number_format($amount, 2, '.', ',') . ' ' . CurrencyService::abbr($user);
     }
 
-    public static function formatWithSymbol(float $amount, ?User $user = null, $prefix = true): string
+    /**
+     * Format an amount using the currency symbol (e.g. "$1,234.56").
+     * Requires an explicit User — there is no Auth fallback.
+     */
+    public static function formatWithSymbol(float $amount, User $user, bool $prefix = true): string
     {
-        $user = self::getUser($user);
         if ($prefix) {
             return CurrencyService::symbol($user) . number_format($amount, 2, '.', ',');
-        } else {
-            return number_format($amount, 2, '.', ',') . CurrencyService::symbol($user);
         }
+
+        return number_format($amount, 2, '.', ',') . CurrencyService::symbol($user);
     }
 
-    public static function formatWithSign(float $amount, ?User $user = null, $unit = 'symbol', $prefix = true): string
+    /**
+     * Format an amount with a leading +/- sign.
+     * Requires an explicit User — there is no Auth fallback.
+     */
+    public static function formatWithSign(float $amount, User $user, string $unit = 'symbol', bool $prefix = true): string
     {
         $sign = $amount >= 0 ? '+' : '-';
         $abs  = self::absolute($amount);

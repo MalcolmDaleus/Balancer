@@ -3,13 +3,16 @@
 namespace App\Models;
 
 use App\Models\Traits\DateScopeable;
+use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class DebtPayment extends Model
 {
-    use HasFactory, UserScopable, DateScopeable;
+    use HasFactory, UserScopable, DateScopeable, MonthLockable;
+
+    protected string $monthLockColumn = 'paid_at';
 
     protected $fillable = [
         'user_id',

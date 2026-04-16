@@ -3,25 +3,26 @@
 namespace App\Exceptions;
 
 use Carbon\Carbon;
-use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Http\JsonResponse;
+use RuntimeException;
 
 /**
  * Thrown when an attempt is made to write financial data for a month that
  * has already been closed (a BalanceSheetTotal row exists for it).
  *
- * Returns HTTP 423 Locked so clients can distinguish this from generic 422/403.
+ * This is a plain domain exception. The HTTP 423 response mapping lives in
+ * bootstrap/app.php so the exception can be thrown and caught cleanly at
+ * any layer (models, services, tests) without going through the HTTP kernel.
  */
-class MonthLockedException extends HttpResponseException
+class MonthLockedException extends RuntimeException
 {
+    public readonly Carbon $month;
+
     public function __construct(Carbon $month)
     {
+        $this->month = $month;
+
         parent::__construct(
-            new JsonResponse([
-                'message' => 'The month ' . $month->format('F Y') . ' is locked and cannot be modified.',
-                'month'   => $month->toDateString(),
-                'error'   => 'month_locked',
-            ], JsonResponse::HTTP_LOCKED) // 423
+            'The month ' . $month->format('F Y') . ' is locked and cannot be modified.'
         );
     }
 }
