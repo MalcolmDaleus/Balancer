@@ -14,10 +14,11 @@ class PurchaseFactory extends Factory
     {
         return [
             'user_id'     => User::factory(),
-            'category_id' => null,
+            'category_id' => \App\Models\PurchaseCategory::factory(),
             'amount'      => $this->faker->randomFloat(2, 1, 500),
             'description' => $this->faker->words(3, true),
             'date'        => $this->faker->dateTimeThisMonth(),
+            'is_refunded' => false,
         ];
     }
 }

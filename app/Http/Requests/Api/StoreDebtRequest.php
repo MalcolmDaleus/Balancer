@@ -19,7 +19,6 @@ class StoreDebtRequest extends FormRequest
             'amount'      => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
             'description' => ['required', 'string', 'max:255'],
             'issue_date'  => ['required', 'date'],
-            'settle_date' => ['nullable', 'date', 'after_or_equal:issue_date'],
             'notes'       => ['nullable', 'string', 'max:1000'],
         ];
     }

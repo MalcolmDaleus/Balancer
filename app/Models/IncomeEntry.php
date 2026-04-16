@@ -17,6 +17,7 @@ class IncomeEntry extends Model
         'income_stream_id',
         'amount',
         'month',
+        'purchase_id',
     ];
 
     protected $casts = [
@@ -31,6 +32,11 @@ class IncomeEntry extends Model
 
     public function stream()
     {
-        return $this->belongsTo(IncomeStream::class, 'income_stream_id');
+        return $this->belongsTo(IncomeStream::class, 'income_stream_id')->withTrashed();
+    }
+
+    public function sourcePurchase()
+    {
+        return $this->belongsTo(Purchase::class, 'purchase_id');
     }
 }

@@ -11,7 +11,9 @@ class PurchaseCategoryResource extends JsonResource
     {
         return [
             'id'            => $this->id,
+            'user_id'       => $this->user_id,
             'category_name' => $this->category_name,
+            'deleted_at'    => $this->deleted_at,
         ];
     }
 }

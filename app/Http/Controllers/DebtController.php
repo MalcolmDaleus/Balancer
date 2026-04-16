@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\ForgiveDebtRequest;
 use App\Http\Requests\Api\StoreDebtRequest;
 use App\Http\Requests\Api\UpdateDebtRequest;
 use App\Http\Resources\DebtResource;
@@ -32,7 +33,7 @@ class DebtController extends Controller
             ['user_id' => auth()->id()]
         ));
 
-        return new DebtResource($debt->load(['category', 'payments']));
+        return new DebtResource($debt->refresh()->load(['category', 'payments']));
     }
 
     public function show(Debt $debt): DebtResource
@@ -58,5 +59,35 @@ class DebtController extends Controller
         $debt->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Mark a debt as forgiven.
+     *
+     * Forgiveness can only be applied when the debt still has a remaining balance.
+     * A fully paid debt is already "settled" and cannot be retroactively forgiven.
+     * Sets is_forgiven = true and settle_date to the given date (default: today).
+     */
+    public function forgive(ForgiveDebtRequest $request, Debt $debt): DebtResource|JsonResponse
+    {
+        $this->authorize('update', $debt);
+
+        if ($debt->is_forgiven) {
+            return response()->json(['error' => 'already_forgiven', 'message' => 'This debt has already been forgiven.'], 422);
+        }
+
+        if ($debt->remaining_balance <= 0) {
+            return response()->json(['error' => 'already_settled', 'message' => 'A fully paid debt cannot be marked as forgiven.'], 422);
+        }
+
+        $forgiveDate = $request->input('forgive_date') ?? now()->toDateString();
+
+        $debt->update([
+            'is_forgiven' => true,
+            'settle_date' => $forgiveDate,
+            'notes'       => $request->input('notes', $debt->notes),
+        ]);
+
+        return new DebtResource($debt->fresh()->load(['category', 'payments']));
     }
 }

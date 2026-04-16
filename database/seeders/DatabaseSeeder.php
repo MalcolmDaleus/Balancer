@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             PurchaseCategorySeeder::class,
             IncomeCategorySeeder::class,
             DebtCategorySeeder::class,
+            RecurringPaymentCategorySeeder::class,
         ]);
     }
 }

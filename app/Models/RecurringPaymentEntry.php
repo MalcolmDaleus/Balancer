@@ -3,18 +3,19 @@
 namespace App\Models;
 
 use App\Models\Traits\UserScopable;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class RecurringPurchase extends Model
+class RecurringPaymentEntry extends Model
 {
-    use HasFactory, UserScopable;
+    use HasFactory, UserScopable, SoftDeletes;
 
     protected $fillable = [
         'user_id',
-        'category_id',
+        'recurring_payment_stream_id',
         'amount',
-        'description',
         'frequency',
         'day_of_month',
         'day_of_week',
@@ -41,17 +42,15 @@ class RecurringPurchase extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function category()
+    public function stream()
     {
-        return $this->belongsTo(PurchaseCategory::class, 'category_id');
+        return $this->belongsTo(RecurringPaymentStream::class, 'recurring_payment_stream_id')
+            ->withTrashed();
     }
 
-    /**
-     * All purchases that were auto-generated from this recurring definition.
-     */
     public function purchases()
     {
-        return $this->hasMany(Purchase::class, 'recurring_purchase_id');
+        return $this->hasMany(Purchase::class, 'recurring_payment_entry_id');
     }
 
     // ----------------------------------------------------------
@@ -59,16 +58,16 @@ class RecurringPurchase extends Model
     // ----------------------------------------------------------
 
     /**
-     * Only active definitions that are currently in their active window.
+     * Entries that are active and in effect during the given month.
      */
-    public function scopeActiveOn($query, \Carbon\Carbon $date)
+    public function scopeActiveForMonth($query, Carbon $monthStart, Carbon $monthEnd)
     {
         return $query
             ->where('active', true)
-            ->where('start_date', '<=', $date->toDateString())
-            ->where(function ($q) use ($date) {
+            ->where('start_date', '<=', $monthEnd->toDateString())
+            ->where(function ($q) use ($monthStart) {
                 $q->whereNull('end_date')
-                  ->orWhere('end_date', '>=', $date->toDateString());
+                  ->orWhere('end_date', '>=', $monthStart->toDateString());
             });
     }
 }

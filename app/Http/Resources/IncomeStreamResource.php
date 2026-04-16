@@ -15,6 +15,7 @@ class IncomeStreamResource extends JsonResource
             'category_id' => $this->category_id,
             'name'        => $this->name,
             'description' => $this->description,
+            'is_system'   => $this->is_system,
             'category'    => new IncomeCategoryResource($this->whenLoaded('category')),
             'created_at'  => $this->created_at,
             'updated_at'  => $this->updated_at,

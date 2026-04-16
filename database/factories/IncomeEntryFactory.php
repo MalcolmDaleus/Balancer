@@ -18,6 +18,7 @@ class IncomeEntryFactory extends Factory
             'income_stream_id' => IncomeStream::factory(),
             'amount'           => $this->faker->randomFloat(2, 100, 5000),
             'month'            => now()->startOfMonth(),
+            'purchase_id'      => null,
         ];
     }
 }

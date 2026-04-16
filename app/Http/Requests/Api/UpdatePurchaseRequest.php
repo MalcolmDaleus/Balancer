@@ -15,12 +15,12 @@ class UpdatePurchaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_id'    => ['sometimes', 'nullable', 'integer', Rule::exists('purchase_categories', 'id')->where('user_id', $this->user()->id)],
-            'amount'         => ['sometimes', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'description'    => ['sometimes', 'string', 'max:255'],
-            'date'           => ['sometimes', 'date'],
-            'attachment_path'=> ['sometimes', 'nullable', 'string', 'max:500'],
-            'url'            => ['sometimes', 'nullable', 'url', 'max:500'],
+            'category_id'     => ['sometimes', 'integer', Rule::exists('purchase_categories', 'id')->where('user_id', $this->user()->id)],
+            'amount'          => ['sometimes', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'description'     => ['sometimes', 'string', 'max:255'],
+            'date'            => ['sometimes', 'date'],
+            'attachment_path' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'url'             => ['sometimes', 'nullable', 'url', 'max:500'],
         ];
     }
 }

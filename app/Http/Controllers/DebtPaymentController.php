@@ -30,6 +30,12 @@ class DebtPaymentController extends Controller
             ['user_id' => auth()->id(), 'debt_id' => $debt->id]
         ));
 
+        // Auto-settle: if all payments now cover the original amount, set settle_date.
+        $debt->refresh()->load('payments');
+        if ($debt->remaining_balance <= 0 && is_null($debt->settle_date) && ! $debt->is_forgiven) {
+            $debt->update(['settle_date' => $payment->paid_at->toDateString()]);
+        }
+
         return new DebtPaymentResource($payment);
     }
 

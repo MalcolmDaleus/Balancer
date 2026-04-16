@@ -15,6 +15,12 @@ class IncomeStreamFactory extends Factory
             'category_id' => IncomeCategory::factory(),
             'name'        => fake()->words(2, true),
             'description' => fake()->optional()->sentence(),
+            'is_system'   => false,
         ];
+    }
+
+    public function system(): static
+    {
+        return $this->state(['is_system' => true]);
     }
 }

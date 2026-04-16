@@ -26,9 +26,22 @@ class DebtCategoryController extends Controller
     {
         $this->authorize('create', DebtCategory::class);
 
+        $userId = auth()->id();
+        $name   = $request->input('category_name');
+
+        $existing = DebtCategory::withTrashed()
+            ->where('user_id', $userId)
+            ->whereRaw('LOWER(category_name) = LOWER(?)', [$name])
+            ->first();
+
+        if ($existing && $existing->trashed()) {
+            $existing->restore();
+            return new DebtCategoryResource($existing->fresh());
+        }
+
         $category = DebtCategory::create(array_merge(
             $request->validated(),
-            ['user_id' => auth()->id()]
+            ['user_id' => $userId]
         ));
 
         return new DebtCategoryResource($category);
@@ -50,11 +63,18 @@ class DebtCategoryController extends Controller
         return new DebtCategoryResource($debtCategory->fresh());
     }
 
+    /**
+     * Soft delete if debts reference the category; hard delete if unused.
+     */
     public function destroy(DebtCategory $debtCategory): JsonResponse
     {
         $this->authorize('delete', $debtCategory);
 
-        $debtCategory->delete();
+        if ($debtCategory->debts()->exists()) {
+            $debtCategory->delete();
+        } else {
+            $debtCategory->forceDelete();
+        }
 
         return response()->json(null, 204);
     }

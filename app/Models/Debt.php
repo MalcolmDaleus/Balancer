@@ -14,6 +14,10 @@ class Debt extends Model
 
     protected string $monthLockColumn = 'issue_date';
 
+    protected $attributes = [
+        'is_forgiven' => false,
+    ];
+
     protected $fillable = [
         'user_id',
         'category_id',
@@ -21,13 +25,15 @@ class Debt extends Model
         'description',
         'issue_date',
         'settle_date',
+        'is_forgiven',
         'notes',
     ];
 
     protected $casts = [
-        'amount'     => 'decimal:2',
-        'issue_date' => 'datetime',
-        'settle_date'=> 'datetime',
+        'amount'      => 'decimal:2',
+        'issue_date'  => 'datetime',
+        'settle_date' => 'datetime',
+        'is_forgiven' => 'boolean',
     ];
 
     // ----------------------------------------------------------
@@ -51,12 +57,20 @@ class Debt extends Model
     }
 
     /**
-     * A debt is settled if settle_date is explicitly set OR if all payments
-     * have brought the remaining balance to zero or below.
+     * A debt is settled when all payments have brought the remaining balance to zero.
+     * Forgiven debts are NOT considered settled — they are closed but unpaid.
      */
     public function getIsSettledAttribute(): bool
     {
-        return $this->settle_date !== null || $this->remaining_balance <= 0;
+        return ! $this->is_forgiven && $this->remaining_balance <= 0;
+    }
+
+    /**
+     * A debt is closed (no longer active) if it is settled or forgiven.
+     */
+    public function getIsClosedAttribute(): bool
+    {
+        return $this->is_settled || $this->is_forgiven;
     }
 
     // ----------------------------------------------------------
@@ -70,7 +84,7 @@ class Debt extends Model
 
     public function category()
     {
-        return $this->belongsTo(DebtCategory::class, 'category_id');
+        return $this->belongsTo(DebtCategory::class, 'category_id')->withTrashed();
     }
 
     public function payments()

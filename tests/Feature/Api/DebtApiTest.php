@@ -41,7 +41,9 @@ test('user can create a debt', function () {
 
     $response->assertCreated()
         ->assertJsonPath('data.description', 'Car loan')
-        ->assertJsonPath('data.is_settled', false);
+        ->assertJsonPath('data.is_settled', false)
+        ->assertJsonPath('data.is_forgiven', false)
+        ->assertJsonPath('data.is_closed', false);
     $this->assertEquals(1500, $response->json('data.remaining_balance'));
 });
 
@@ -54,28 +56,19 @@ test('store debt fails validation with missing fields', function () {
         ->assertJsonStructure(['details' => ['amount', 'description', 'issue_date']]);
 });
 
-test('settle_date must be after or equal to issue_date', function () {
+test('store debt does not accept settle_date (set only via payments or forgive)', function () {
     $user = User::factory()->create();
 
-    $this->actingAs($user)->postJson('/api/v1/debts', [
+    // settle_date is not a recognized field; it should be ignored and the debt created
+    $response = $this->actingAs($user)->postJson('/api/v1/debts', [
         'amount'      => 500.00,
         'description' => 'Test',
         'issue_date'  => '2026-04-01',
-        'settle_date' => '2026-03-01',
-    ])->assertStatus(422);
-});
-
-test('update settle_date cannot be before existing issue_date', function () {
-    $user = User::factory()->create();
-    $debt = Debt::factory()->create([
-        'user_id'    => $user->id,
-        'issue_date' => '2026-04-01',
+        'settle_date' => '2026-05-01', // should be ignored
     ]);
 
-    $this->actingAs($user)->putJson("/api/v1/debts/{$debt->id}", [
-        'settle_date' => '2026-03-01',
-    ])->assertStatus(422)
-      ->assertJsonPath('error', 'validation_failed');
+    $response->assertCreated();
+    $this->assertNull($response->json('data.settle_date'));
 });
 
 test('user can view their debt', function () {
@@ -191,6 +184,64 @@ test('user can delete their payment', function () {
 
     $this->actingAs($user)->deleteJson("/api/v1/debt-payments/{$payment->id}")
         ->assertNoContent();
+});
+
+// ---------------------------------------------------------------------------
+// Forgive
+// ---------------------------------------------------------------------------
+
+test('user can forgive a debt with remaining balance', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertOk()
+        ->assertJsonPath('data.is_forgiven', true)
+        ->assertJsonPath('data.is_closed', true)
+        ->assertJsonPath('data.is_settled', false);
+
+    $this->assertNotNull($debt->fresh()->settle_date);
+});
+
+test('cannot forgive a fully paid debt', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 100]);
+    DebtPayment::factory()->create(['user_id' => $user->id, 'debt_id' => $debt->id, 'amount' => 100]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertStatus(422)
+        ->assertJsonPath('error', 'already_settled');
+});
+
+test('cannot forgive an already forgiven debt', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500, 'is_forgiven' => true]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertStatus(422)
+        ->assertJsonPath('error', 'already_forgiven');
+});
+
+test('user cannot forgive another user\'s debt', function () {
+    $user  = User::factory()->create();
+    $other = User::factory()->create();
+    $debt  = Debt::factory()->create(['user_id' => $other->id, 'amount' => 500]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertStatus(403);
+});
+
+test('debt is auto-settled when payments reach the full amount', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 200]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
+        'amount'  => 200.00,
+        'paid_at' => '2026-04-15',
+    ])->assertCreated();
+
+    $this->assertNotNull($debt->fresh()->settle_date);
+    $this->assertEquals(0.0, $debt->fresh()->load('payments')->remaining_balance);
 });
 
 // ---------------------------------------------------------------------------

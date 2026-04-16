@@ -20,6 +20,8 @@ class DebtResource extends JsonResource
             'notes'             => $this->notes,
             'remaining_balance' => (float) $this->remaining_balance,
             'is_settled'        => $this->is_settled,
+            'is_forgiven'       => $this->is_forgiven,
+            'is_closed'         => $this->is_closed,
             'category'          => new DebtCategoryResource($this->whenLoaded('category')),
             'payments'          => DebtPaymentResource::collection($this->whenLoaded('payments')),
             'created_at'        => $this->created_at,

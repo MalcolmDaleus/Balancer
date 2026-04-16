@@ -59,12 +59,48 @@ test('user cannot update another user\'s purchase category', function () {
     ])->assertStatus(403);
 });
 
-test('user can delete their purchase category', function () {
+test('purchase category is hard deleted when unused', function () {
     $user     = User::factory()->create();
     $category = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/categories/purchases/{$category->id}")
         ->assertNoContent();
+
+    $this->assertDatabaseMissing('purchase_categories', ['id' => $category->id]);
+});
+
+test('purchase category is soft deleted when purchases exist', function () {
+    $user     = User::factory()->create();
+    $category = PurchaseCategory::factory()->create(['user_id' => $user->id]);
+    \App\Models\Purchase::factory()->create(['user_id' => $user->id, 'category_id' => $category->id]);
+
+    $this->actingAs($user)->deleteJson("/api/v1/categories/purchases/{$category->id}")
+        ->assertNoContent();
+
+    $this->assertSoftDeleted('purchase_categories', ['id' => $category->id]);
+});
+
+test('creating a purchase category with same name as soft-deleted one restores it', function () {
+    $user     = User::factory()->create();
+    $category = PurchaseCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Food']);
+    $category->delete();
+
+    $this->actingAs($user)->postJson('/api/v1/categories/purchases', ['category_name' => 'Food'])
+        ->assertOk()
+        ->assertJsonPath('data.category_name', 'Food');
+
+    $this->assertNull($category->fresh()->deleted_at);
+});
+
+test('soft-deleted category does not appear in index', function () {
+    $user     = User::factory()->create();
+    PurchaseCategory::factory()->count(2)->create(['user_id' => $user->id]);
+    $hidden = PurchaseCategory::factory()->create(['user_id' => $user->id]);
+    $hidden->delete();
+
+    $this->actingAs($user)->getJson('/api/v1/categories/purchases')
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
 });
 
 // ---------------------------------------------------------------------------

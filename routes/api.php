@@ -9,26 +9,27 @@ use App\Http\Controllers\IncomeEntryController;
 use App\Http\Controllers\IncomeStreamController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchaseController;
-use App\Http\Controllers\RecurringPurchaseController;
+use App\Http\Controllers\RecurringPaymentCategoryController;
+use App\Http\Controllers\RecurringPaymentEntryController;
+use App\Http\Controllers\RecurringPaymentStreamController;
 use App\Http\Controllers\SavingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->prefix('v1')->name('api.v1.')->group(function () {
 
     // ---------------------------------------------------------------
-    // Purchases
+    // Purchases + Refund action
     // ---------------------------------------------------------------
     Route::apiResource('purchases', PurchaseController::class);
+    Route::post('purchases/{purchase}/refund', [PurchaseController::class, 'refund'])
+        ->name('purchases.refund');
 
     // ---------------------------------------------------------------
-    // Recurring purchases
-    // ---------------------------------------------------------------
-    Route::apiResource('recurring-purchases', RecurringPurchaseController::class);
-
-    // ---------------------------------------------------------------
-    // Debts + nested payments (shallow for single-resource operations)
+    // Debts + nested payments + Forgive action
     // ---------------------------------------------------------------
     Route::apiResource('debts', DebtController::class);
+    Route::post('debts/{debt}/forgive', [DebtController::class, 'forgive'])
+        ->name('debts.forgive');
 
     Route::get('debts/{debt}/payments', [DebtPaymentController::class, 'index'])
         ->name('debts.payments.index');
@@ -65,6 +66,16 @@ Route::middleware(['auth'])->prefix('v1')->name('api.v1.')->group(function () {
         ->parameters(['income' => 'incomeCategory']);
     Route::apiResource('categories/debts', DebtCategoryController::class)
         ->parameters(['debts' => 'debtCategory']);
+
+    // ---------------------------------------------------------------
+    // Recurring payments (streams + entries + categories)
+    // ---------------------------------------------------------------
+    Route::apiResource('recurring-payments/categories', RecurringPaymentCategoryController::class)
+        ->parameters(['categories' => 'recurringPaymentCategory']);
+    Route::apiResource('recurring-payments/streams', RecurringPaymentStreamController::class)
+        ->parameters(['streams' => 'recurringPaymentStream']);
+    Route::apiResource('recurring-payments/entries', RecurringPaymentEntryController::class)
+        ->parameters(['entries' => 'recurringPaymentEntry']);
 
     // ---------------------------------------------------------------
     // Balance sheet

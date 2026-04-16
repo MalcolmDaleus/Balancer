@@ -6,6 +6,7 @@ use App\Models\BalanceSheetTotal;
 use App\Models\Debt;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Models\RecurringPaymentEntry;
 use App\Models\Saving;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -32,6 +33,7 @@ class BalanceSheetService
     protected ?Collection $incomeEntries = null;
     protected ?Collection $debts = null;
     protected ?Collection $savings = null;
+    protected ?Collection $recurringEntries = null;
 
     /**
      * Constructor.
@@ -142,17 +144,20 @@ class BalanceSheetService
 
         $spendingTotal = MoneyService::sum($spendingByCategory->pluck('amount')->toArray());
 
-        // Debt details (per-debt paid this month computed via heuristic)
+        // Debt details (per-debt paid this month computed from debt_payments)
         $debtDetails = $debts->map(function ($d) {
             $paidThisMonth = $this->getDebtPaidForDebtInPeriod($d, $this->periodStart, $this->periodEnd);
 
             return [
-                'id' => $d->id,
-                'category_id' => $d->category_id,
-                'description' => $d->description,
-                'amount' => (float) $d->amount,
-                'remaining_balance' => (float) $d->remaining_balance,
-                'settle_date' => $d->settle_date ? DateTimeService::formatForUI($d->settle_date, 'date') : null,
+                'id'                   => $d->id,
+                'category_id'          => $d->category_id,
+                'description'          => $d->description,
+                'amount'               => (float) $d->amount,
+                'remaining_balance'    => (float) $d->remaining_balance,
+                'is_settled'           => $d->is_settled,
+                'is_forgiven'          => $d->is_forgiven,
+                'is_closed'            => $d->is_closed,
+                'settle_date'          => $d->settle_date ? DateTimeService::formatForUI($d->settle_date, 'date') : null,
                 'total_paid_in_period' => round($paidThisMonth, 2),
             ];
         });
@@ -173,6 +178,31 @@ class BalanceSheetService
             ->whereDate('month', '<=', $this->month->toDateString())
             ->sum('amount');
 
+        // Recurring payment entries active this month
+        $recurringEntries   = $this->getRecurringEntries();
+        $recurringGrouped   = $recurringEntries->groupBy(fn ($e) => $e->recurring_payment_stream_id)
+            ->map(function ($group, $streamId) {
+                $stream   = $group->first()->stream ?? null;
+                $category = $stream?->category ?? null;
+                $items    = $group->map(fn ($e) => [
+                    'id'           => $e->id,
+                    'amount'       => (float) $e->amount,
+                    'frequency'    => $e->frequency,
+                    'day_of_month' => $e->day_of_month,
+                    'day_of_week'  => $e->day_of_week,
+                    'start_date'   => $e->start_date?->toDateString(),
+                    'end_date'     => $e->end_date?->toDateString(),
+                ])->values();
+
+                return [
+                    'stream_id'     => $streamId,
+                    'stream_name'   => $stream?->name ?? 'Unknown',
+                    'category_id'   => $category?->id,
+                    'category_name' => $category?->name ?? 'Uncategorized',
+                    'entries'       => $items,
+                ];
+            })->values();
+
         // Rollover
         $rollover = MoneyService::subtract($incomeTotal, MoneyService::add($debtTotalPaid, $spendingTotal));
 
@@ -181,22 +211,25 @@ class BalanceSheetService
             'user_id' => $this->userId,
             'month' => DateTimeService::formatForUI($this->month, 'monthYear'),
             'income' => [
-                'total' => round($incomeTotal, 2),
+                'total'          => round($incomeTotal, 2),
                 'income_entries' => $incomeGrouped,
             ],
             'debt' => [
-                'total' => round($debtTotalPaid, 2),
+                'total'         => round($debtTotalPaid, 2),
                 'balance_total' => round($debtBalanceTotal, 2),
-                'debts' => $debtDetails,
+                'debts'         => $debtDetails,
             ],
             'spending' => [
-                'total' => round($spendingTotal, 2),
+                'total'      => round($spendingTotal, 2),
                 'categories' => $spendingByCategory,
+            ],
+            'recurring_payments' => [
+                'streams' => $recurringGrouped,
             ],
             'savings' => [
                 'monthly_total' => round($savingsMonthlyTotal, 2),
-                'grand_total' => round($savingsGrandTotal, 2),
-                'rows' => $savingsRows,
+                'grand_total'   => round($savingsGrandTotal, 2),
+                'rows'          => $savingsRows,
             ],
             'roll_over' => [
                 'total' => round($rollover, 2),
@@ -297,13 +330,10 @@ class BalanceSheetService
             return $this->debts;
         }
 
-        // We include debts issued on/before period end. Debts settled before period start are excluded.
+        // Include debts issued on/before period end.
+        // Exclude debts already closed (settled OR forgiven) before this period starts.
         $this->debts = Debt::where('user_id', $this->userId)
-            ->where(function ($q) {
-                // debt.issue_date <= periodEnd
-                $q->whereDate('issue_date', '<=', $this->periodEnd->toDateString());
-            })
-            // exclude debts already settled before this period (settle_date < periodStart)
+            ->whereDate('issue_date', '<=', $this->periodEnd->toDateString())
             ->where(function ($q) {
                 $q->whereNull('settle_date')
                   ->orWhereDate('settle_date', '>=', $this->periodStart->toDateString());
@@ -331,6 +361,25 @@ class BalanceSheetService
             ->get();
 
         return $this->savings;
+    }
+
+    /**
+     * Load recurring payment entries that are active during this period (cached).
+     *
+     * @return Collection
+     */
+    protected function getRecurringEntries(): Collection
+    {
+        if ($this->recurringEntries !== null) {
+            return $this->recurringEntries;
+        }
+
+        $this->recurringEntries = RecurringPaymentEntry::where('user_id', $this->userId)
+            ->activeForMonth($this->periodStart, $this->periodEnd)
+            ->with(['stream', 'stream.category'])
+            ->get();
+
+        return $this->recurringEntries;
     }
 
     /**

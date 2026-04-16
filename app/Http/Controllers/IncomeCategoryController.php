@@ -26,9 +26,22 @@ class IncomeCategoryController extends Controller
     {
         $this->authorize('create', IncomeCategory::class);
 
+        $userId = auth()->id();
+        $name   = $request->input('category_name');
+
+        $existing = IncomeCategory::withTrashed()
+            ->where('user_id', $userId)
+            ->whereRaw('LOWER(category_name) = LOWER(?)', [$name])
+            ->first();
+
+        if ($existing && $existing->trashed()) {
+            $existing->restore();
+            return new IncomeCategoryResource($existing->fresh());
+        }
+
         $category = IncomeCategory::create(array_merge(
             $request->validated(),
-            ['user_id' => auth()->id()]
+            ['user_id' => $userId]
         ));
 
         return new IncomeCategoryResource($category);
@@ -50,11 +63,18 @@ class IncomeCategoryController extends Controller
         return new IncomeCategoryResource($incomeCategory->fresh());
     }
 
+    /**
+     * Soft delete if streams reference the category; hard delete if unused.
+     */
     public function destroy(IncomeCategory $incomeCategory): JsonResponse
     {
         $this->authorize('delete', $incomeCategory);
 
-        $incomeCategory->delete();
+        if ($incomeCategory->streams()->exists()) {
+            $incomeCategory->delete();
+        } else {
+            $incomeCategory->forceDelete();
+        }
 
         return response()->json(null, 204);
     }
