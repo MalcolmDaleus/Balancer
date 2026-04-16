@@ -15,7 +15,7 @@ use App\Http\Controllers\RecurringPaymentStreamController;
 use App\Http\Controllers\SavingController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth'])->prefix('v1')->name('api.v1.')->group(function () {
+Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(function () {
 
     // ---------------------------------------------------------------
     // Purchases + Refund action

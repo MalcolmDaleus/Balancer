@@ -40,7 +40,7 @@ test('user can get simplified balance sheet for a month', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/summary?month=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['user_id', 'month', 'total_income', 'total_debt_paid', 'total_spending', 'savings_snapshot', 'roll_over']);
+        ->assertJsonStructure(['user_id', 'month', 'total_income', 'total_debt_paid', 'total_spending', 'total_recurring', 'savings_snapshot', 'roll_over']);
     $this->assertEquals(3000, $response->json('total_income'));
     $this->assertEquals(500, $response->json('total_spending'));
 });
@@ -51,7 +51,7 @@ test('user can get expanded balance sheet', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet?month=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'savings', 'roll_over']);
+        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'recurring_payments', 'savings', 'roll_over']);
 });
 
 // ---------------------------------------------------------------------------
@@ -110,6 +110,7 @@ test('user can get balance sheet history', function () {
             'total_income'     => 0,
             'total_debt_paid'  => 0,
             'total_spending'   => 0,
+            'total_recurring'  => 0,
             'savings_snapshot' => 0,
             'roll_over'        => 0,
         ]);
@@ -122,6 +123,7 @@ test('user can get balance sheet history', function () {
         'total_income'     => 0,
         'total_debt_paid'  => 0,
         'total_spending'   => 0,
+        'total_recurring'  => 0,
         'savings_snapshot' => 0,
         'roll_over'        => 0,
     ]);
@@ -141,7 +143,7 @@ test('user can compare two months', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/compare?month_a=2026-03&month_b=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['income', 'debt', 'spending', 'savings', 'rollover']);
+        ->assertJsonStructure(['income', 'debt', 'spending', 'recurring', 'savings', 'rollover']);
 });
 
 test('compare requires both month params', function () {

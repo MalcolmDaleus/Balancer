@@ -6,11 +6,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use App\Models\RecurringPaymentCategory;
+use App\Models\RecurringPaymentStream;
+use App\Models\RecurringPaymentEntry;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -76,7 +80,18 @@ class User extends Authenticatable
         return $this->hasMany(DebtPayment::class);
     }
 
-    public function recurringPurchases() {
-        return $this->hasMany(RecurringPurchase::class);
+    public function recurringPaymentCategories()
+    {
+        return $this->hasMany(RecurringPaymentCategory::class);
+    }
+
+    public function recurringPaymentStreams()
+    {
+        return $this->hasMany(RecurringPaymentStream::class);
+    }
+
+    public function recurringPaymentEntries()
+    {
+        return $this->hasMany(RecurringPaymentEntry::class);
     }
 }

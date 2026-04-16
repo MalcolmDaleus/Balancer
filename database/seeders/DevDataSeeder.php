@@ -1,0 +1,392 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Debt;
+use App\Models\DebtCategory;
+use App\Models\DebtPayment;
+use App\Models\IncomeCategory;
+use App\Models\IncomeEntry;
+use App\Models\IncomeStream;
+use App\Models\Purchase;
+use App\Models\PurchaseCategory;
+use App\Models\RecurringPaymentCategory;
+use App\Models\RecurringPaymentEntry;
+use App\Models\RecurringPaymentStream;
+use App\Models\Saving;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\Seeder;
+
+/**
+ * DevDataSeeder
+ *
+ * Populates a realistic 3-month dataset for the first user so you can
+ * immediately hit the balance-sheet endpoint and see real-looking JSON.
+ *
+ * Safe to re-run: uses firstOrCreate where possible.
+ * Does NOT touch locked months — inserts only into current + last 2 months.
+ *
+ * Run with:
+ *   php artisan db:seed --class=DevDataSeeder
+ *
+ * To wipe and re-seed from scratch:
+ *   php artisan migrate:fresh --seed        (resets everything)
+ *   php artisan db:seed --class=DevDataSeeder   (just re-adds dev data)
+ */
+class DevDataSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $user = User::first();
+
+        if (! $user) {
+            $this->command->error('DevDataSeeder: no user found. Run db:seed first to create the user.');
+            return;
+        }
+
+        $this->command->info("Seeding dev data for: {$user->email}");
+
+        $now        = Carbon::now();
+        $thisMonth  = $now->copy()->startOfMonth();
+        $lastMonth  = $now->copy()->subMonth()->startOfMonth();
+        $twoAgo     = $now->copy()->subMonths(2)->startOfMonth();
+
+        // ------------------------------------------------------------------
+        // 1. Income Streams (persistent definitions)
+        // ------------------------------------------------------------------
+        $this->command->line('  → Income streams');
+
+        $empCat      = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Employment')->first();
+        $contractCat = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Contract')->first();
+        $giftCat     = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Gift')->first();
+
+        $salarStream = IncomeStream::withTrashed()->firstOrCreate(
+            ['user_id' => $user->id, 'name' => 'Main Salary'],
+            ['category_id' => $empCat?->id, 'description' => 'Primary full-time employment income', 'is_system' => false]
+        );
+        if ($salarStream->trashed()) $salarStream->restore();
+
+        $freelanceStream = IncomeStream::withTrashed()->firstOrCreate(
+            ['user_id' => $user->id, 'name' => 'Freelance'],
+            ['category_id' => $contractCat?->id, 'description' => 'Side contract work', 'is_system' => false]
+        );
+        if ($freelanceStream->trashed()) $freelanceStream->restore();
+
+        $giftStream = IncomeStream::withTrashed()->firstOrCreate(
+            ['user_id' => $user->id, 'name' => 'Gift Income'],
+            ['category_id' => $giftCat?->id, 'description' => 'One-time gifts received', 'is_system' => false]
+        );
+        if ($giftStream->trashed()) $giftStream->restore();
+
+        // ------------------------------------------------------------------
+        // 2. Income Entries (per-month amounts)
+        // ------------------------------------------------------------------
+        $this->command->line('  → Income entries');
+
+        $incomeRows = [
+            // [stream, month, amount]
+            [$salarStream->id,    $twoAgo,    2400.00],
+            [$freelanceStream->id, $twoAgo,    320.00],
+            [$salarStream->id,    $lastMonth, 2400.00],
+            [$freelanceStream->id, $lastMonth,  580.00],
+            [$giftStream->id,     $lastMonth,  100.00], // birthday gift
+            [$salarStream->id,    $thisMonth,  2400.00],
+        ];
+
+        foreach ($incomeRows as [$streamId, $month, $amount]) {
+            IncomeEntry::firstOrCreate(
+                ['user_id' => $user->id, 'income_stream_id' => $streamId, 'month' => $month->toDateString()],
+                ['amount' => $amount]
+            );
+        }
+
+        // ------------------------------------------------------------------
+        // 3. Purchases (grouped across months and categories)
+        // ------------------------------------------------------------------
+        $this->command->line('  → Purchases');
+
+        $cats = PurchaseCategory::where('user_id', $user->id)
+            ->get()
+            ->keyBy('category_name');
+
+        $groceriesCat     = $cats->get('Groceries');
+        $diningCat        = $cats->get('Dining');
+        $entertainmentCat = $cats->get('Entertainment');
+        $adultingCat      = $cats->get('Adulting');
+        $miscCat          = $cats->get('Miscellaneous');
+        $clothesCat       = $cats->get('Clothes & Accesories');
+
+        // Helper: create purchase only if description+date combo doesn't exist
+        $mkPurchase = function (PurchaseCategory $cat, string $desc, float $amount, Carbon $date) use ($user) {
+            Purchase::firstOrCreate(
+                ['user_id' => $user->id, 'description' => $desc, 'date' => $date->toDateTimeString()],
+                ['category_id' => $cat->id, 'amount' => $amount]
+            );
+        };
+
+        if ($groceriesCat) {
+            $mkPurchase($groceriesCat, 'Lidl weekly shop',         87.43, $twoAgo->copy()->addDays(3));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop',         91.20, $twoAgo->copy()->addDays(10));
+            $mkPurchase($groceriesCat, 'Mercadona top-up',         34.60, $twoAgo->copy()->addDays(16));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop',         79.90, $lastMonth->copy()->addDays(2));
+            $mkPurchase($groceriesCat, 'Mercadona weekly shop',    95.10, $lastMonth->copy()->addDays(9));
+            $mkPurchase($groceriesCat, 'Lidl top-up',              22.40, $lastMonth->copy()->addDays(15));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop',         88.75, $thisMonth->copy()->addDays(3));
+        }
+
+        if ($diningCat) {
+            $mkPurchase($diningCat, 'Dinner at La Pepita',    42.00, $twoAgo->copy()->addDays(6));
+            $mkPurchase($diningCat, 'Coffee & pastry',         8.50, $twoAgo->copy()->addDays(13));
+            $mkPurchase($diningCat, 'Lunch with colleagues',  28.00, $lastMonth->copy()->addDays(4));
+            $mkPurchase($diningCat, 'Pizza Friday',           19.80, $lastMonth->copy()->addDays(18));
+            $mkPurchase($diningCat, 'Date night dinner',      67.50, $thisMonth->copy()->addDays(5));
+        }
+
+        if ($entertainmentCat) {
+            $mkPurchase($entertainmentCat, 'Cinema tickets x2',   18.00, $twoAgo->copy()->addDays(8));
+            $mkPurchase($entertainmentCat, 'Concert ticket',       55.00, $lastMonth->copy()->addDays(12));
+        }
+
+        if ($adultingCat) {
+            $mkPurchase($adultingCat, 'Electricity bill',      62.30, $twoAgo->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Electricity bill',      58.90, $lastMonth->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Electricity bill',      54.40, $thisMonth->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Car service / ITV',    155.00, $lastMonth->copy()->addDays(20));
+        }
+
+        if ($miscCat) {
+            $mkPurchase($miscCat, 'Amazon - USB hub',         24.99, $twoAgo->copy()->addDays(14));
+            $mkPurchase($miscCat, 'Pharmacist',               11.60, $lastMonth->copy()->addDays(7));
+        }
+
+        if ($clothesCat) {
+            $mkPurchase($clothesCat, 'Zara jacket',          89.95, $lastMonth->copy()->addDays(22));
+        }
+
+        // ------------------------------------------------------------------
+        // 4. One refunded purchase (two months ago — refunded last month)
+        // ------------------------------------------------------------------
+        $this->command->line('  → Refunded purchase');
+
+        $refundPurchase = null;
+        if ($miscCat) {
+            $refundPurchase = Purchase::firstOrCreate(
+                ['user_id' => $user->id, 'description' => 'Faulty headphones', 'date' => $twoAgo->copy()->addDays(19)->toDateTimeString()],
+                ['category_id' => $miscCat->id, 'amount' => 49.99, 'is_refunded' => false]
+            );
+
+            // Only create refund income if purchase hasn't been refunded yet
+            if (! $refundPurchase->is_refunded) {
+                $refundStream = IncomeStream::where('user_id', $user->id)->where('is_system', true)->where('name', 'Refunds')->first();
+                if ($refundStream) {
+                    IncomeEntry::firstOrCreate(
+                        ['user_id' => $user->id, 'income_stream_id' => $refundStream->id, 'purchase_id' => $refundPurchase->id],
+                        ['amount' => 49.99, 'month' => $lastMonth->toDateString()]
+                    );
+                    $refundPurchase->update(['is_refunded' => true]);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 5. Debts
+        // ------------------------------------------------------------------
+        $this->command->line('  → Debts');
+
+        $loanCat     = DebtCategory::where('user_id', $user->id)->where('category_name', 'Loan')->first();
+        $personalCat = DebtCategory::where('user_id', $user->id)->where('category_name', 'Personal')->first();
+
+        // Debt 1: partially paid laptop loan
+        $laptopDebt = Debt::firstOrCreate(
+            ['user_id' => $user->id, 'description' => 'Laptop loan from friend'],
+            [
+                'category_id' => $personalCat?->id,
+                'amount'      => 600.00,
+                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes'       => 'Interest-free, paying back gradually',
+            ]
+        );
+
+        // Add payments if none exist yet
+        if ($laptopDebt->payments()->count() === 0) {
+            DebtPayment::create([
+                'user_id' => $user->id,
+                'debt_id' => $laptopDebt->id,
+                'amount'  => 200.00,
+                'paid_at' => $lastMonth->copy()->addDays(15)->toDateTimeString(),
+                'notes'   => 'First instalment',
+            ]);
+            DebtPayment::create([
+                'user_id' => $user->id,
+                'debt_id' => $laptopDebt->id,
+                'amount'  => 200.00,
+                'paid_at' => $thisMonth->copy()->addDays(2)->toDateTimeString(),
+                'notes'   => 'Second instalment',
+            ]);
+        }
+
+        // Debt 2: fully settled bank loan (paid off last month)
+        $bankDebt = Debt::firstOrCreate(
+            ['user_id' => $user->id, 'description' => 'Bank micro-loan'],
+            [
+                'category_id' => $loanCat?->id,
+                'amount'      => 300.00,
+                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes'       => 'Short-term loan — now paid off',
+            ]
+        );
+
+        if ($bankDebt->payments()->count() === 0) {
+            DebtPayment::create([
+                'user_id' => $user->id,
+                'debt_id' => $bankDebt->id,
+                'amount'  => 150.00,
+                'paid_at' => $twoAgo->copy()->addDays(20)->toDateTimeString(),
+            ]);
+            DebtPayment::create([
+                'user_id' => $user->id,
+                'debt_id' => $bankDebt->id,
+                'amount'  => 150.00,
+                'paid_at' => $lastMonth->copy()->addDays(5)->toDateTimeString(),
+                'notes'   => 'Final payment',
+            ]);
+        }
+
+        // Debt 3: forgiven debt (written off this month)
+        $forgivenDebt = Debt::firstOrCreate(
+            ['user_id' => $user->id, 'description' => 'Old gym debt (forgiven)'],
+            [
+                'category_id' => $personalCat?->id,
+                'amount'      => 120.00,
+                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes'       => 'Friend said forget it',
+            ]
+        );
+
+        if (! $forgivenDebt->is_forgiven && $forgivenDebt->payments()->count() === 0) {
+            $forgivenDebt->update([
+                'is_forgiven' => true,
+                'settle_date' => $lastMonth->copy()->addDays(25)->toDateTimeString(),
+            ]);
+        }
+
+        // ------------------------------------------------------------------
+        // 6. Savings
+        // ------------------------------------------------------------------
+        $this->command->line('  → Savings');
+
+        Saving::firstOrCreate(
+            ['user_id' => $user->id, 'month' => $twoAgo->toDateString()],
+            ['amount' => 250.00]
+        );
+        Saving::firstOrCreate(
+            ['user_id' => $user->id, 'month' => $lastMonth->toDateString()],
+            ['amount' => 300.00]
+        );
+        Saving::firstOrCreate(
+            ['user_id' => $user->id, 'month' => $thisMonth->toDateString()],
+            ['amount' => 150.00]
+        );
+
+        // ------------------------------------------------------------------
+        // 7. Recurring payment streams + entries
+        // ------------------------------------------------------------------
+        $this->command->line('  → Recurring payment streams & entries');
+
+        $rpCats = RecurringPaymentCategory::where('user_id', $user->id)->get()->keyBy('name');
+
+        $subCat  = $rpCats->get('Online Subscription');
+        $rentCat = $rpCats->get('Rent / Mortgage');
+        $gymCat  = $rpCats->get('Gym / Health');
+        $phoneCat= $rpCats->get('Phone / Internet');
+
+        $recurringDefs = [
+            [
+                'stream_name' => 'Netflix',
+                'category'    => $subCat,
+                'amount'      => 15.99,
+                'frequency'   => 'monthly',
+                'day_of_month'=> 12,
+            ],
+            [
+                'stream_name' => 'Spotify',
+                'category'    => $subCat,
+                'amount'      => 10.99,
+                'frequency'   => 'monthly',
+                'day_of_month'=> 1,
+            ],
+            [
+                'stream_name' => 'Apartment Rent',
+                'category'    => $rentCat,
+                'amount'      => 750.00,
+                'frequency'   => 'monthly',
+                'day_of_month'=> 1,
+            ],
+            [
+                'stream_name' => 'Gym Membership',
+                'category'    => $gymCat,
+                'amount'      => 35.00,
+                'frequency'   => 'monthly',
+                'day_of_month'=> 5,
+            ],
+            [
+                'stream_name' => 'Phone Plan',
+                'category'    => $phoneCat,
+                'amount'      => 28.00,
+                'frequency'   => 'monthly',
+                'day_of_month'=> 18,
+            ],
+        ];
+
+        foreach ($recurringDefs as $def) {
+            $stream = RecurringPaymentStream::withTrashed()->firstOrCreate(
+                ['user_id' => $user->id, 'name' => $def['stream_name']],
+                ['recurring_payment_category_id' => $def['category']?->id]
+            );
+            if ($stream->trashed()) $stream->restore();
+
+            // Create a current active entry if none exist
+            if ($stream->entries()->where('active', true)->count() === 0) {
+                RecurringPaymentEntry::create([
+                    'user_id'                     => $user->id,
+                    'recurring_payment_stream_id' => $stream->id,
+                    'amount'                      => $def['amount'],
+                    'frequency'                   => $def['frequency'],
+                    'day_of_month'                => $def['day_of_month'] ?? null,
+                    'day_of_week'                 => $def['day_of_week']  ?? null,
+                    'start_date'                  => $twoAgo->toDateString(),
+                    'active'                      => true,
+                ]);
+            }
+        }
+
+        // One stream showing a price change: Netflix went up last month
+        $netflixStream = RecurringPaymentStream::where('user_id', $user->id)->where('name', 'Netflix')->first();
+        if ($netflixStream && $netflixStream->entries()->count() === 1) {
+            // Close the old entry at end of last month and create a new one
+            $oldEntry = $netflixStream->entries()->first();
+            if ($oldEntry && is_null($oldEntry->end_date)) {
+                $oldEntry->update([
+                    'end_date' => $lastMonth->copy()->endOfMonth()->toDateString(),
+                    'active'   => false,
+                ]);
+                RecurringPaymentEntry::create([
+                    'user_id'                     => $user->id,
+                    'recurring_payment_stream_id' => $netflixStream->id,
+                    'amount'                      => 17.99, // price increase
+                    'frequency'                   => 'monthly',
+                    'day_of_month'                => 12,
+                    'start_date'                  => $thisMonth->toDateString(),
+                    'active'                      => true,
+                ]);
+            }
+        }
+
+        $this->command->info('✓ Dev data seeded successfully.');
+        $this->command->line('');
+        $this->command->line('  Try: GET /api/v1/balance-sheet?month=' . $thisMonth->format('Y-m'));
+        $this->command->line('       GET /api/v1/balance-sheet?month=' . $lastMonth->format('Y-m'));
+        $this->command->line('       GET /api/v1/balance-sheet/compare?month_a=' . $lastMonth->format('Y-m') . '&month_b=' . $thisMonth->format('Y-m'));
+    }
+}

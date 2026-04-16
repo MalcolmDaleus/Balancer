@@ -65,22 +65,25 @@ class BalanceSheetService
     public function getSimplified(): array
     {
         // totals
-        $incomeTotal = $this->getIncomeTotal();
-        $spendingTotal = $this->getSpendingTotal();
-        $savingsSnapshot = $this->getSavingsTotal();
-        $debtPaidTotal = $this->getDebtPaidTotalForPeriod();
+        $incomeTotal      = $this->getIncomeTotal();
+        $spendingTotal    = $this->getSpendingTotal();
+        $savingsSnapshot  = $this->getSavingsTotal();
+        $debtPaidTotal    = $this->getDebtPaidTotalForPeriod();
+        $recurringTotal   = $this->getRecurringTotal();
 
-        // roll_over definition: income - (debt paid + spending)
-        $rollover = MoneyService::subtract($incomeTotal, MoneyService::add($debtPaidTotal, $spendingTotal));
+        // roll_over: income - spending - debt_paid - recurring - savings
+        $outgoings = MoneyService::sum([$debtPaidTotal, $spendingTotal, $recurringTotal, $savingsSnapshot]);
+        $rollover  = MoneyService::subtract($incomeTotal, $outgoings);
 
         return [
-            'user_id' => $this->userId,
-            'month' => $this->month->toDateString(), // YYYY-MM-DD (first of month)
-            'total_income' => round($incomeTotal, 2),
-            'total_debt_paid' => round($debtPaidTotal, 2),
-            'total_spending' => round($spendingTotal, 2),
+            'user_id'          => $this->userId,
+            'month'            => $this->month->toDateString(),
+            'total_income'     => round($incomeTotal, 2),
+            'total_debt_paid'  => round($debtPaidTotal, 2),
+            'total_spending'   => round($spendingTotal, 2),
+            'total_recurring'  => round($recurringTotal, 2),
             'savings_snapshot' => round($savingsSnapshot, 2),
-            'roll_over' => round($rollover, 2),
+            'roll_over'        => round($rollover, 2),
         ];
     }
 
@@ -203,8 +206,12 @@ class BalanceSheetService
                 ];
             })->values();
 
-        // Rollover
-        $rollover = MoneyService::subtract($incomeTotal, MoneyService::add($debtTotalPaid, $spendingTotal));
+        // Recurring total — sum of all active entry amounts for the month
+        $recurringTotal = MoneyService::sum($recurringEntries->pluck('amount')->map(fn ($a) => (float) $a)->toArray());
+
+        // Rollover: income - spending - debt_paid - recurring - savings
+        $outgoings = MoneyService::sum([$debtTotalPaid, $spendingTotal, $recurringTotal, $savingsMonthlyTotal]);
+        $rollover  = MoneyService::subtract($incomeTotal, $outgoings);
 
         // Final structure
         return [
@@ -224,6 +231,7 @@ class BalanceSheetService
                 'categories' => $spendingByCategory,
             ],
             'recurring_payments' => [
+                'total'   => round($recurringTotal, 2),
                 'streams' => $recurringGrouped,
             ],
             'savings' => [
@@ -253,11 +261,12 @@ class BalanceSheetService
         $b = $svcB->getSimplified();
 
         $map = [
-            'total_income' => 'income',
+            'total_income'    => 'income',
             'total_debt_paid' => 'debt',
-            'total_spending' => 'spending',
-            'savings_snapshot' => 'savings',
-            'roll_over' => 'rollover',
+            'total_spending'  => 'spending',
+            'total_recurring' => 'recurring',
+            'savings_snapshot'=> 'savings',
+            'roll_over'       => 'rollover',
         ];
 
         $out = [];
@@ -418,6 +427,17 @@ class BalanceSheetService
             ->sum('amount');
     }
 
+    /**
+     * Sum all recurring payment entry amounts active during the period.
+     * Reuses the cached collection from getRecurringEntries().
+     *
+     * @return float
+     */
+    protected function getRecurringTotal(): float
+    {
+        return (float) $this->getRecurringEntries()->sum('amount');
+    }
+
     // ----------------------------------------------------------
     // DEBT: Payment aggregation via debt_payments event table
     // ----------------------------------------------------------
@@ -468,11 +488,12 @@ class BalanceSheetService
         $data = $simplified ?? $this->getSimplified();
 
         $payload = [
-            'total_income'    => $data['total_income'],
-            'total_debt_paid' => $data['total_debt_paid'],
-            'total_spending'  => $data['total_spending'],
-            'savings_snapshot'=> $data['savings_snapshot'],
-            'roll_over'       => $data['roll_over'],
+            'total_income'     => $data['total_income'],
+            'total_debt_paid'  => $data['total_debt_paid'],
+            'total_spending'   => $data['total_spending'],
+            'total_recurring'  => $data['total_recurring'],
+            'savings_snapshot' => $data['savings_snapshot'],
+            'roll_over'        => $data['roll_over'],
         ];
 
         return DB::transaction(function () use ($data, $payload) {

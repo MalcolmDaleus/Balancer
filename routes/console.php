@@ -9,18 +9,14 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /*
-|--------------------------------------------------------------------------
-| Scheduled Commands
-|--------------------------------------------------------------------------
-|
-| Run: php artisan schedule:run  (or register with system cron)
-|
-*/
-
-// Generate purchases for all active recurring definitions once per day at midnight.
-// The --date option is not passed here, so it defaults to today().
-// Run 'php artisan purchases:generate-recurring --dry-run' to preview.
-Schedule::command('purchases:generate-recurring')
-    ->dailyAt('00:05')
-    ->withoutOverlapping()
-    ->runInBackground();
+||--------------------------------------------------------------------------
+|| Scheduled Commands
+||--------------------------------------------------------------------------
+||
+|| Run: php artisan schedule:run  (or register with system cron)
+||
+|| Note: Recurring payments are modelled as RecurringPaymentEntry records
+|| and surfaced directly by BalanceSheetService — no daily command is needed
+|| to generate purchase rows from them.
+||
+|*/

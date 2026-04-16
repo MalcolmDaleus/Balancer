@@ -18,6 +18,7 @@ class BalanceSheetTotalFactory extends Factory
             'total_income'     => $this->faker->randomFloat(2, 0, 5000),
             'total_debt_paid'  => $this->faker->randomFloat(2, 0, 500),
             'total_spending'   => $this->faker->randomFloat(2, 0, 2000),
+            'total_recurring'  => $this->faker->randomFloat(2, 0, 1000),
             'savings_snapshot' => $this->faker->randomFloat(2, 0, 500),
             'roll_over'        => $this->faker->randomFloat(2, -500, 3000),
         ];
