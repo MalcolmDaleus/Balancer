@@ -7,13 +7,9 @@ use App\Models\Debt;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
 use App\Models\Saving;
-use App\Models\IncomeStream;
-use App\Models\PurchaseCategory;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use InvalidArgumentException;
 
 /**
  * Class BalanceSheetService
@@ -312,6 +308,8 @@ class BalanceSheetService
                 $q->whereNull('settle_date')
                   ->orWhereDate('settle_date', '>=', $this->periodStart->toDateString());
             })
+            // Eager-load payments so getRemainingBalanceAttribute() avoids N+1 queries.
+            ->with('payments')
             ->get();
 
         return $this->debts;
@@ -372,80 +370,38 @@ class BalanceSheetService
     }
 
     // ----------------------------------------------------------
-    // DEBT: Heuristics using remaining_balance (no payments table)
+    // DEBT: Payment aggregation via debt_payments event table
     // ----------------------------------------------------------
 
     /**
      * Compute total debt paid during the current period for the user.
-     *
-     * Strategy:
-     *  - If a `debt_payments` table exists, use it (accurate).
-     *  - Else compute per-debt using heuristics based on issue_date, settle_date, amount, remaining_balance.
+     * Uses the debt_payments event table for accurate per-month figures.
      *
      * @return float
      */
     protected function getDebtPaidTotalForPeriod(): float
     {
-        if (Schema::hasTable('debt_payments')) {
-            return (float) DB::table('debt_payments')
-                ->where('user_id', $this->userId)
-                ->whereBetween('paid_at', [$this->periodStart->toDateTimeString(), $this->periodEnd->toDateTimeString()])
-                ->sum('amount');
-        }
-
-        // Heuristic: sum per-debt computed paid amount
-        $total = 0.0;
-        foreach ($this->getDebts() as $debt) {
-            $total += $this->getDebtPaidForDebtInPeriod($debt, $this->periodStart, $this->periodEnd);
-        }
-
-        return round($total, 2);
+        return (float) DB::table('debt_payments')
+            ->where('user_id', $this->userId)
+            ->whereBetween('paid_at', [$this->periodStart->toDateTimeString(), $this->periodEnd->toDateTimeString()])
+            ->sum('amount');
     }
 
     /**
-     * Compute amount paid for a single debt during the period using heuristics.
+     * Compute amount paid for a single debt during the given period.
+     * Queries debt_payments directly for accurate per-debt, per-period figures.
      *
-     * Heuristic logic (no payments table):
-     * 1) If the debt was issued within the period:
-     *      paid = max(0, amount - remaining_balance)
-     * 2) Else if the debt was settled within the period:
-     *      paid = amount (we assume final payoff)
-     * 3) Else if we have a previous snapshot of debts (not available by default),
-     *      we would compute previousRemaining - currentRemaining.
-     * 4) Otherwise return 0 (conservative).
-     *
-     * NOTE: This method is conservative by design to avoid over-counting without per-debt history.
-     *
-     * @param Debt $debt
+     * @param Debt   $debt
      * @param Carbon $periodStart
      * @param Carbon $periodEnd
      * @return float
      */
     protected function getDebtPaidForDebtInPeriod(Debt $debt, Carbon $periodStart, Carbon $periodEnd): float
     {
-        // If there is a debt_payments table, prefer precise payments.
-        if (Schema::hasTable('debt_payments')) {
-            return (float) DB::table('debt_payments')
-                ->where('debt_id', $debt->id)
-                ->whereBetween('paid_at', [$periodStart->toDateTimeString(), $periodEnd->toDateTimeString()])
-                ->sum('amount');
-        }
-
-        // 1) Issued in this period: difference between amount and current remaining (if any)
-        if ($debt->issue_date && DateTimeService::isBetween($debt->issue_date, $periodStart, $periodEnd)) {
-            $paid = max(0.0, (float)$debt->amount - (float)$debt->remaining_balance);
-            return round($paid, 2);
-        }
-
-        // 2) Settled in this period: the remaining balance was paid off this period.
-        if ($debt->settle_date && DateTimeService::isBetween($debt->settle_date, $periodStart, $periodEnd)) {
-            return round(max(0.0, (float) $debt->remaining_balance), 2);
-        }
-
-        // 3) If there's a previous month snapshot of debts stored elsewhere, we could compute:
-        //    previousRemaining - currentRemaining. Not available by default.
-        //    Because you opted not to persist per-debt snapshots, return 0 here to be conservative.
-        return 0.0;
+        return (float) DB::table('debt_payments')
+            ->where('debt_id', $debt->id)
+            ->whereBetween('paid_at', [$periodStart->toDateTimeString(), $periodEnd->toDateTimeString()])
+            ->sum('amount');
     }
 
     // ----------------------------------------------------------

@@ -19,6 +19,7 @@ class Purchase extends Model
         'date',
         'attachment_path',
         'url',
+        'recurring_purchase_id',
     ];
 
     protected $casts = [
@@ -34,5 +35,10 @@ class Purchase extends Model
     public function category()
     {
         return $this->belongsTo(PurchaseCategory::class, 'category_id');
+    }
+
+    public function recurringPurchase()
+    {
+        return $this->belongsTo(RecurringPurchase::class, 'recurring_purchase_id');
     }
 }

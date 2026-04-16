@@ -12,7 +12,7 @@ class DebtCategorySeeder extends Seeder
     {
         $user = User::first();
 
-        $categories = ['Personal', 'Monthly', 'Subscription'];
+        $categories = ['Personal', 'Loan', 'Payment Plan'];
 
         foreach ($categories as $name) {
             DebtCategory::firstOrCreate(

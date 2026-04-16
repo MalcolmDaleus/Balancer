@@ -71,4 +71,12 @@ class User extends Authenticatable
     public function balanceSheets() {
          return $this->hasMany(BalanceSheetTotal::class); 
     }
+
+    public function debtPayments() {
+        return $this->hasMany(DebtPayment::class);
+    }
+
+    public function recurringPurchases() {
+        return $this->hasMany(RecurringPurchase::class);
+    }
 }
