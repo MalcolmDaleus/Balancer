@@ -1,6 +1,4 @@
-import AppLogoIcon from '@/components/app-logo-icon';
-import { home } from '@/routes';
-import { Link } from '@inertiajs/react';
+import AppearanceToggleDropdown from '@/components/appearance-dropdown';
 import { type PropsWithChildren } from 'react';
 
 interface AuthLayoutProps {
@@ -11,23 +9,22 @@ interface AuthLayoutProps {
 
 export default function AuthSimpleLayout({ children, title, description }: PropsWithChildren<AuthLayoutProps>) {
     return (
-        <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
-            <div className="w-full max-w-sm">
-                <div className="flex flex-col gap-8">
-                    <div className="flex flex-col items-center gap-4">
-                        <Link href={home()} className="flex flex-col items-center gap-2 font-medium">
-                            <div className="mb-1 flex h-9 w-9 items-center justify-center rounded-md">
-                                <AppLogoIcon className="size-9 fill-current text-[var(--foreground)] dark:text-white" />
-                            </div>
-                            <span className="sr-only">{title}</span>
-                        </Link>
+        <div
+            className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] flex min-h-svh flex-col items-center justify-center bg-slate-200 bg-cover bg-center bg-no-repeat px-6 py-10 dark:bg-slate-900"
+        >
+            <AppearanceToggleDropdown className="fixed top-4 left-4 z-20" />
 
-                        <div className="space-y-2 text-center">
-                            <h1 className="text-xl font-medium">{title}</h1>
-                            <p className="text-center text-sm text-muted-foreground">{description}</p>
+            <div className="w-full max-w-sm">
+                <div className="flex flex-col gap-6">
+                    {/* Card */}
+                    <div className="rounded-2xl bg-white px-8 py-8 shadow-[0_4px_32px_rgba(0,0,0,0.10)] dark:bg-slate-800 dark:shadow-[0_4px_40px_rgba(0,0,0,0.60)] dark:ring-1 dark:ring-slate-700/60">
+                        <div className="mb-6 space-y-1 text-center">
+                            {title && <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">{title}</h1>}
+                            {description && <p className="text-sm text-slate-500 dark:text-slate-400">{description}</p>}
                         </div>
+
+                        {children}
                     </div>
-                    {children}
                 </div>
             </div>
         </div>
