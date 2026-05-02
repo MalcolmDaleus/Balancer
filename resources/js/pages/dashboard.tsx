@@ -1,4 +1,5 @@
 import DashboardHeader from '@/components/dashboard-header';
+import CreatorSuiteCard from '@/components/creator-suite';
 import { type SharedData } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -357,6 +358,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
 export default function Dashboard() {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
+        if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
         return <ModuleCard title={title} subtitle={subtitle} className={className} />;
     };
 
@@ -431,11 +433,7 @@ export default function Dashboard() {
                             subtitle="All your purchases"
                             className="col-span-4 min-h-80"
                         />
-                        <ModuleCard
-                            title="Creator Suite"
-                            subtitle="Add and manage entries"
-                            className="col-span-8 min-h-80"
-                        />
+                        <CreatorSuiteCard className="col-span-8 h-[42rem]" />
 
                     </div>
                 </div>
