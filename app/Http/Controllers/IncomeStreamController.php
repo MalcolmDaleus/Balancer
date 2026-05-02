@@ -16,6 +16,7 @@ class IncomeStreamController extends Controller
         $this->authorize('viewAny', IncomeStream::class);
 
         $streams = IncomeStream::where('user_id', auth()->id())
+            ->userVisible()
             ->with('category')
             ->orderBy('name')
             ->get();

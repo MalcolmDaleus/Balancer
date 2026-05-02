@@ -272,21 +272,25 @@ class DevDataSeeder extends Seeder
         }
 
         // ------------------------------------------------------------------
-        // 6. Savings
+        // 6. Savings (deposits + one withdrawal to demonstrate netting)
         // ------------------------------------------------------------------
         $this->command->line('  → Savings');
 
         Saving::firstOrCreate(
-            ['user_id' => $user->id, 'month' => $twoAgo->toDateString()],
-            ['amount' => 250.00]
+            ['user_id' => $user->id, 'month' => $twoAgo->toDateString(), 'type' => 'deposit'],
+            ['amount' => 250.00, 'notes' => 'Monthly savings transfer']
         );
         Saving::firstOrCreate(
-            ['user_id' => $user->id, 'month' => $lastMonth->toDateString()],
-            ['amount' => 300.00]
+            ['user_id' => $user->id, 'month' => $lastMonth->toDateString(), 'type' => 'deposit'],
+            ['amount' => 300.00, 'notes' => 'Monthly savings transfer']
         );
         Saving::firstOrCreate(
-            ['user_id' => $user->id, 'month' => $thisMonth->toDateString()],
-            ['amount' => 150.00]
+            ['user_id' => $user->id, 'month' => $lastMonth->toDateString(), 'type' => 'withdrawal'],
+            ['amount' => 50.00, 'notes' => 'Emergency withdrawal']
+        );
+        Saving::firstOrCreate(
+            ['user_id' => $user->id, 'month' => $thisMonth->toDateString(), 'type' => 'deposit'],
+            ['amount' => 150.00, 'notes' => 'Monthly savings transfer']
         );
 
         // ------------------------------------------------------------------

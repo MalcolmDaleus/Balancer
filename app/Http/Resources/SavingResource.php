@@ -13,6 +13,8 @@ class SavingResource extends JsonResource
             'id'         => $this->id,
             'user_id'    => $this->user_id,
             'amount'     => (float) $this->amount,
+            'type'       => $this->type ?? 'deposit',
+            'notes'      => $this->notes,
             'month'      => $this->month?->toDateString(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

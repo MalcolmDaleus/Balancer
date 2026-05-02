@@ -27,6 +27,7 @@ class SavingController extends Controller
         $this->authorize('create', Saving::class);
 
         $saving = Saving::create(array_merge(
+            ['type' => 'deposit'],
             $request->validated(),
             ['user_id' => auth()->id()]
         ));

@@ -22,6 +22,8 @@ class StoreSavingRequest extends FormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'type'   => ['sometimes', 'string', 'in:deposit,withdrawal'],
+            'notes'  => ['nullable', 'string', 'max:500'],
             'month'  => ['required', 'date'],
         ];
     }

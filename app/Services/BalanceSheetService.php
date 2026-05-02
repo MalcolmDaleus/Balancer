@@ -171,15 +171,21 @@ class BalanceSheetService
 
         // Savings
         $savingsRows = $savings->map(fn($s) => [
-            'id' => $s->id,
+            'id'     => $s->id,
             'amount' => (float) $s->amount,
-            'month' => DateTimeService::formatForUI($s->month, 'monthDayYear'),
+            'type'   => $s->type ?? 'deposit',
+            'notes'  => $s->notes,
+            'month'  => DateTimeService::formatForUI($s->month, 'monthDayYear'),
         ])->values();
 
-        $savingsMonthlyTotal = MoneyService::sum($savingsRows->pluck('amount')->toArray());
+        $savingsDeposits     = $savingsRows->where('type', 'deposit')->sum('amount');
+        $savingsWithdrawals  = $savingsRows->where('type', 'withdrawal')->sum('amount');
+        $savingsMonthlyTotal = max(0.0, (float) $savingsDeposits - (float) $savingsWithdrawals);
+
         $savingsGrandTotal = (float) Saving::where('user_id', $this->userId)
             ->whereDate('month', '<=', $this->month->toDateString())
-            ->sum('amount');
+            ->selectRaw("SUM(CASE WHEN type = 'deposit' THEN amount ELSE -amount END) as net")
+            ->value('net') ?? 0.0;
 
         // Recurring payment entries active this month
         $recurringEntries   = $this->getRecurringEntries();
@@ -235,9 +241,11 @@ class BalanceSheetService
                 'streams' => $recurringGrouped,
             ],
             'savings' => [
-                'monthly_total' => round($savingsMonthlyTotal, 2),
-                'grand_total'   => round($savingsGrandTotal, 2),
-                'rows'          => $savingsRows,
+                'monthly_total'    => round($savingsMonthlyTotal, 2),
+                'monthly_deposits' => round((float) $savingsDeposits, 2),
+                'monthly_withdrawals' => round((float) $savingsWithdrawals, 2),
+                'grand_total'      => round($savingsGrandTotal, 2),
+                'rows'             => $savingsRows,
             ],
             'roll_over' => [
                 'total' => round($rollover, 2),
@@ -416,15 +424,17 @@ class BalanceSheetService
     }
 
     /**
-     * Get savings total for the month (snapshot).
+     * Get net savings total for the month (deposits minus withdrawals).
      *
      * @return float
      */
     protected function getSavingsTotal(): float
     {
-        return (float) Saving::where('user_id', $this->userId)
-            ->forPeriod($this->month, 'month', 'month')
-            ->sum('amount');
+        $rows = $this->getSavingsRows();
+        $deposits    = $rows->where('type', 'deposit')->sum('amount');
+        $withdrawals = $rows->where('type', 'withdrawal')->sum('amount');
+
+        return max(0.0, (float) $deposits - (float) $withdrawals);
     }
 
     /**

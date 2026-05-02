@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             IncomeCategorySeeder::class,
             DebtCategorySeeder::class,
             RecurringPaymentCategorySeeder::class,
+            DevDataSeeder::class,
         ]);
     }
 }

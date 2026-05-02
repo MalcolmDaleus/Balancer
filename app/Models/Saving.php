@@ -12,15 +12,20 @@ class Saving extends Model
 {
     use HasFactory, UserScopable, DateScopeable, MonthLockable;
 
+    protected string $monthLockColumn = 'month';
+
     protected $fillable = [
         'user_id',
         'amount',
+        'type',
+        'notes',
         'month',
     ];
 
     protected $casts = [
-        'month' => 'date',
+        'month'  => 'date',
         'amount' => 'decimal:2',
+        'type'   => 'string',
     ];
 
     public function user()
