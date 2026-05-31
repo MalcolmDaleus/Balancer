@@ -3,7 +3,7 @@ import {
     ApiError, ConfirmModal, Debt, DebtCategory, DebtPayment,
     EmptyRows, Field, FormActions, LoadingRows,
     RowActions, SplitPane, StatusChip, SubTabBar,
-    apiFetch, apiFetchList, inputCls, selectCls, todayStr,
+    apiFetch, apiFetchList, dateCls, inputCls, selectCls, todayStr, useIsMobile,
 } from './shared';
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function DebtsTab_({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [debts, setDebts]       = useState<Debt[]>([]);
     const [cats, setCats]         = useState<DebtCategory[]>([]);
     const [loading, setLoading]   = useState(false);
@@ -20,6 +21,7 @@ function DebtsTab_({ active }: { active: boolean }) {
     const [forgiving, setForgiving] = useState<Debt | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     const blank = { description: '', category_id: '', amount: '', issue_date: todayStr(), notes: '' };
     const [form, setForm] = useState(blank);
@@ -42,8 +44,9 @@ function DebtsTab_({ active }: { active: boolean }) {
         setSelected(d);
         setForm({ description: d.description, category_id: String(d.category_id ?? ''), amount: String(d.amount), issue_date: d.issue_date, notes: d.notes ?? '' });
         setError(null);
+        if (isMobile) setSheetOpen(true);
     };
-    const reset = () => { setSelected(null); setForm(blank); setError(null); };
+    const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -89,11 +92,40 @@ function DebtsTab_({ active }: { active: boolean }) {
         return <StatusChip label="Open" color="green" />;
     };
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Description">
+                <input type="text" required maxLength={255} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </Field>
+            <Field label="Category (optional)">
+                <select className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+                </select>
+            </Field>
+            <Field label="Total Amount">
+                <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </Field>
+            <Field label="Issue Date">
+                <input type="date" required className={dateCls} value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
+            </Field>
+            <Field label="Notes (optional)">
+                <textarea rows={2} maxLength={1000} className={`${inputCls} h-auto resize-none`} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm   && <ConfirmModal message={`Delete debt "${confirm.description}"?`}   onConfirm={() => handleDelete(confirm)}  onCancel={() => setConfirm(null)} />}
             {forgiving && <ConfirmModal message={`Mark "${forgiving.description}" as forgiven? Remaining balance will be written off.`} onConfirm={() => handleForgive(forgiving)} onCancel={() => setForgiving(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Debt' : 'New Debt'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -115,7 +147,7 @@ function DebtsTab_({ active }: { active: boolean }) {
                                                 onDelete={() => setConfirm(d)}
                                                 extra={
                                                     <button onClick={e => { e.stopPropagation(); setForgiving(d); }}
-                                                        className="rounded px-2 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30">
+                                                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-100 dark:bg-amber-600 dark:text-amber-50 dark:hover:bg-amber-500">
                                                         Forgive
                                                     </button>
                                                 }
@@ -127,31 +159,7 @@ function DebtsTab_({ active }: { active: boolean }) {
                         })}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Debt' : 'New Debt'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Description">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                        </Field>
-                        <Field label="Category (optional)">
-                            <select className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                                <option value="">— none —</option>
-                                {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Total Amount">
-                            <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-                        </Field>
-                        <Field label="Issue Date">
-                            <input type="date" required className={inputCls} value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
-                        </Field>
-                        <Field label="Notes (optional)">
-                            <textarea rows={2} maxLength={1000} className={`${inputCls} h-auto resize-none`} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
@@ -162,17 +170,18 @@ function DebtsTab_({ active }: { active: boolean }) {
 // ---------------------------------------------------------------------------
 
 function PaymentsTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [debts, setDebts]       = useState<Debt[]>([]);
     const [payments, setPayments] = useState<DebtPayment[]>([]);
     const [debtId, setDebtId]     = useState<number | null>(null);
     const [loading, setLoading]   = useState(false);
     const [payLoading, setPayLoading] = useState(false);
     const [fetched, setFetched]   = useState(false);
-    const [payFetched, setPayFetched] = useState(false);
     const [selected, setSelected] = useState<DebtPayment | null>(null);
     const [confirm, setConfirm]   = useState<DebtPayment | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     const blank = { amount: '', paid_at: todayStr(), notes: '' };
     const [form, setForm] = useState(blank);
@@ -185,8 +194,8 @@ function PaymentsTab({ active }: { active: boolean }) {
 
     useEffect(() => {
         if (!debtId) { setPayments([]); return; }
-        setPayLoading(true); setPayFetched(false);
-        apiFetchList<DebtPayment>(`/api/v1/debts/${debtId}/payments`).then(p => { setPayments(p); setPayFetched(true); }).catch(e => setError(e.message)).finally(() => setPayLoading(false));
+        setPayLoading(true);
+        apiFetchList<DebtPayment>(`/api/v1/debts/${debtId}/payments`).then(p => { setPayments(p); }).catch(e => setError(e.message)).finally(() => setPayLoading(false));
     }, [debtId]);
 
     const reloadPayments = () => {
@@ -199,8 +208,9 @@ function PaymentsTab({ active }: { active: boolean }) {
         setSelected(p);
         setForm({ amount: String(p.amount), paid_at: p.paid_at, notes: p.notes ?? '' });
         setError(null);
+        if (isMobile) setSheetOpen(true);
     };
-    const reset = () => { setSelected(null); setForm(blank); setError(null); };
+    const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         if (!debtId) return;
@@ -230,11 +240,28 @@ function PaymentsTab({ active }: { active: boolean }) {
     const selectedDebt = debts.find(d => d.id === debtId);
     const closed = selectedDebt ? (selectedDebt.is_settled || selectedDebt.is_forgiven || selectedDebt.is_closed) : false;
 
+    const paymentForm = closed ? (
+        <p className="text-xs text-slate-400">This debt is {selectedDebt?.is_forgiven ? 'forgiven' : 'settled'} — no new payments.</p>
+    ) : (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Amount">
+                <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </Field>
+                    <Field label="Paid At">
+                        <input type="date" required className={dateCls} value={form.paid_at} onChange={e => setForm(f => ({ ...f, paid_at: e.target.value }))} />
+            </Field>
+            <Field label="Notes (optional)">
+                <input type="text" maxLength={1000} className={inputCls} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Delete payment of $${confirm.amount}?`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
-                {/* Debt selector */}
                 <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Debt</label>
                     {loading ? <LoadingRows /> : (
@@ -246,6 +273,10 @@ function PaymentsTab({ active }: { active: boolean }) {
                 </div>
                 {debtId && (
                     <SplitPane
+                        sheetOpen={sheetOpen}
+                        onSheetOpenChange={setSheetOpen}
+                        sheetTitle={selected ? 'Edit Payment' : 'New Payment'}
+                        onAddClick={closed ? undefined : () => { reset(); setSheetOpen(true); }}
                         list={
                             <div className="space-y-1">
                                 {payLoading && <LoadingRows />}
@@ -262,26 +293,7 @@ function PaymentsTab({ active }: { active: boolean }) {
                                 ))}
                             </div>
                         }
-                        form={
-                            closed ? (
-                                <p className="text-xs text-slate-400">This debt is {selectedDebt?.is_forgiven ? 'forgiven' : 'settled'} — no new payments.</p>
-                            ) : (
-                                <form onSubmit={handleSubmit} className="space-y-3">
-                                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Payment' : 'New Payment'}</p>
-                                    {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                                    <Field label="Amount">
-                                        <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-                                    </Field>
-                                    <Field label="Paid At">
-                                        <input type="date" required className={inputCls} value={form.paid_at} onChange={e => setForm(f => ({ ...f, paid_at: e.target.value }))} />
-                                    </Field>
-                                    <Field label="Notes (optional)">
-                                        <input type="text" maxLength={1000} className={inputCls} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-                                    </Field>
-                                    <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                                </form>
-                            )
-                        }
+                        form={paymentForm}
                     />
                 )}
             </div>
@@ -294,6 +306,7 @@ function PaymentsTab({ active }: { active: boolean }) {
 // ---------------------------------------------------------------------------
 
 function DebtCategoriesTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [cats, setCats]         = useState<DebtCategory[]>([]);
     const [loading, setLoading]   = useState(false);
     const [fetched, setFetched]   = useState(false);
@@ -301,6 +314,7 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
     const [confirm, setConfirm]   = useState<DebtCategory | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [form, setForm]         = useState({ category_name: '' });
 
     const load = async () => {
@@ -312,8 +326,13 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
 
     useEffect(() => { if (active && !fetched) load(); }, [active, fetched]);
 
-    const selectRow = (c: DebtCategory) => { setSelected(c); setForm({ category_name: c.category_name }); setError(null); };
-    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); };
+    const selectRow = (c: DebtCategory) => {
+        setSelected(c);
+        setForm({ category_name: c.category_name });
+        setError(null);
+        if (isMobile) setSheetOpen(true);
+    };
+    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -338,10 +357,24 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
         setConfirm(null);
     };
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Name">
+                <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Delete debt category "${confirm.category_name}"?`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Category' : 'New Category'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -354,16 +387,7 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
                         ))}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Category' : 'New Category'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Name">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
@@ -381,9 +405,9 @@ export function DebtsTab({ active }: { active: boolean }) {
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
             <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={t => setSub(t as SubTab)} />
-            {sub === 'Debts'      && <DebtsTab_     active={active} />}
-            {sub === 'Payments'   && <PaymentsTab   active={active} />}
-            {sub === 'Categories' && <DebtCategoriesTab active={active} />}
+            {sub === 'Debts'      && <DebtsTab_         active={active} />}
+            {sub === 'Payments'   && <PaymentsTab        active={active} />}
+            {sub === 'Categories' && <DebtCategoriesTab  active={active} />}
         </div>
     );
 }

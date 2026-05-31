@@ -3,7 +3,7 @@ import {
     ApiError, ConfirmModal, EmptyRows, Field,
     FormActions, IncomeCategory, IncomeEntry, IncomeStream,
     LoadingRows, RowActions, SplitPane, StatusChip, SubTabBar,
-    apiFetch, apiFetchList, inputCls, selectCls, thisMonthStr,
+    apiFetch, apiFetchList, dateCls, inputCls, selectCls, thisMonthStr, useIsMobile,
 } from './shared';
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function EntriesTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [entries, setEntries]   = useState<IncomeEntry[]>([]);
     const [streams, setStreams]   = useState<IncomeStream[]>([]);
     const [loading, setLoading]   = useState(false);
@@ -19,8 +20,8 @@ function EntriesTab({ active }: { active: boolean }) {
     const [confirm, setConfirm]   = useState<IncomeEntry | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
-    // form state
     const blank = { income_stream_id: '', amount: '', month: thisMonthStr() };
     const [form, setForm] = useState(blank);
 
@@ -51,9 +52,10 @@ function EntriesTab({ active }: { active: boolean }) {
             month: entry.month?.slice(0, 7) ?? thisMonthStr(),
         });
         setError(null);
+        if (isMobile) setSheetOpen(true);
     };
 
-    const reset = () => { setSelected(null); setForm(blank); setError(null); };
+    const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -92,6 +94,32 @@ function EntriesTab({ active }: { active: boolean }) {
 
     const streamName = (id: number) => streams.find(s => s.id === id)?.name ?? '—';
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Stream">
+                <select
+                    required
+                    className={selectCls}
+                    value={form.income_stream_id}
+                    onChange={e => setForm(f => ({ ...f, income_stream_id: e.target.value }))}
+                >
+                    <option value="">— select stream —</option>
+                    {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+            </Field>
+            <Field label="Amount">
+                <input type="number" step="0.01" min="0.01" required className={inputCls}
+                    value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </Field>
+            <Field label="Month (YYYY-MM)">
+                <input type="month" required className={dateCls}
+                    value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && (
@@ -102,6 +130,10 @@ function EntriesTab({ active }: { active: boolean }) {
                 />
             )}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Entry' : 'New Entry'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -131,34 +163,7 @@ function EntriesTab({ active }: { active: boolean }) {
                         ))}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                            {selected ? 'Edit Entry' : 'New Entry'}
-                        </p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Stream">
-                            <select
-                                required
-                                className={selectCls}
-                                value={form.income_stream_id}
-                                onChange={e => setForm(f => ({ ...f, income_stream_id: e.target.value }))}
-                            >
-                                <option value="">— select stream —</option>
-                                {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Amount">
-                            <input type="number" step="0.01" min="0.01" required className={inputCls}
-                                value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-                        </Field>
-                        <Field label="Month (YYYY-MM)">
-                            <input type="month" required className={inputCls}
-                                value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
@@ -169,6 +174,7 @@ function EntriesTab({ active }: { active: boolean }) {
 // ---------------------------------------------------------------------------
 
 function StreamsTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [streams, setStreams]   = useState<IncomeStream[]>([]);
     const [cats, setCats]         = useState<IncomeCategory[]>([]);
     const [loading, setLoading]   = useState(false);
@@ -177,6 +183,7 @@ function StreamsTab({ active }: { active: boolean }) {
     const [confirm, setConfirm]   = useState<IncomeStream | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     const blank = { name: '', category_id: '', description: '' };
     const [form, setForm] = useState(blank);
@@ -201,9 +208,10 @@ function StreamsTab({ active }: { active: boolean }) {
         setSelected(s);
         setForm({ name: s.name, category_id: String(s.category_id ?? ''), description: s.description ?? '' });
         setError(null);
+        if (isMobile) setSheetOpen(true);
     };
 
-    const reset = () => { setSelected(null); setForm(blank); setError(null); };
+    const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -229,10 +237,33 @@ function StreamsTab({ active }: { active: boolean }) {
         setConfirm(null);
     };
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Name">
+                <input type="text" required maxLength={255} className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </Field>
+            <Field label="Category (optional)">
+                <select className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+                </select>
+            </Field>
+            <Field label="Description (optional)">
+                <input type="text" maxLength={1000} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Deactivate stream "${confirm.name}"?`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Stream' : 'New Stream'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -253,25 +284,7 @@ function StreamsTab({ active }: { active: boolean }) {
                         ))}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Stream' : 'New Stream'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Name">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                        </Field>
-                        <Field label="Category (optional)">
-                            <select className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                                <option value="">— none —</option>
-                                {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Description (optional)">
-                            <input type="text" maxLength={1000} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
@@ -282,6 +295,7 @@ function StreamsTab({ active }: { active: boolean }) {
 // ---------------------------------------------------------------------------
 
 function CategoriesTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [cats, setCats]         = useState<IncomeCategory[]>([]);
     const [loading, setLoading]   = useState(false);
     const [fetched, setFetched]   = useState(false);
@@ -289,6 +303,7 @@ function CategoriesTab({ active }: { active: boolean }) {
     const [confirm, setConfirm]   = useState<IncomeCategory | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [form, setForm]         = useState({ category_name: '' });
 
     const load = async () => {
@@ -300,8 +315,13 @@ function CategoriesTab({ active }: { active: boolean }) {
 
     useEffect(() => { if (active && !fetched) load(); }, [active, fetched]);
 
-    const selectRow = (c: IncomeCategory) => { setSelected(c); setForm({ category_name: c.category_name }); setError(null); };
-    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); };
+    const selectRow = (c: IncomeCategory) => {
+        setSelected(c);
+        setForm({ category_name: c.category_name });
+        setError(null);
+        if (isMobile) setSheetOpen(true);
+    };
+    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -326,10 +346,24 @@ function CategoriesTab({ active }: { active: boolean }) {
         setConfirm(null);
     };
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Name">
+                <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Delete category "${confirm.category_name}"?`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Category' : 'New Category'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -342,16 +376,7 @@ function CategoriesTab({ active }: { active: boolean }) {
                         ))}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Category' : 'New Category'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Name">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );

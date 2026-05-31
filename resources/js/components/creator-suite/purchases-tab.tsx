@@ -3,7 +3,7 @@ import {
     ApiError, ConfirmModal, EmptyRows, Field,
     FormActions, LoadingRows, Purchase, PurchaseCategory,
     RowActions, SplitPane, StatusChip, SubTabBar,
-    apiFetch, apiFetchList, inputCls, selectCls, todayStr,
+    apiFetch, apiFetchList, dateCls, inputCls, selectCls, todayStr, useIsMobile,
 } from './shared';
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function ItemsTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [cats, setCats]           = useState<PurchaseCategory[]>([]);
     const [loading, setLoading]     = useState(false);
@@ -20,6 +21,7 @@ function ItemsTab({ active }: { active: boolean }) {
     const [refundConfirm, setRefundConfirm] = useState<Purchase | null>(null);
     const [saving, setSaving]       = useState(false);
     const [error, setError]         = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
 
     const blank = { category_id: '', description: '', amount: '', date: todayStr() };
     const [form, setForm] = useState(blank);
@@ -32,7 +34,7 @@ function ItemsTab({ active }: { active: boolean }) {
                 apiFetchList<PurchaseCategory>('/api/v1/categories/purchases'),
             ]);
             setPurchases(p);
-            setCats(c.filter(c => !c.deleted_at)); // active only for the form selector
+            setCats(c.filter(c => !c.deleted_at));
             setFetched(true);
         } catch (err: any) { setError(err.message); }
         finally { setLoading(false); }
@@ -44,8 +46,9 @@ function ItemsTab({ active }: { active: boolean }) {
         setSelected(p);
         setForm({ category_id: String(p.category_id), description: p.description, amount: String(p.amount), date: p.date });
         setError(null);
+        if (isMobile) setSheetOpen(true);
     };
-    const reset = () => { setSelected(null); setForm(blank); setError(null); };
+    const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,11 +84,37 @@ function ItemsTab({ active }: { active: boolean }) {
 
     const catName = (id: number) => cats.find(c => c.id === id)?.category_name ?? '—';
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Description">
+                <input type="text" required maxLength={255} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </Field>
+            <Field label="Category">
+                <select required className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
+                    <option value="">— select —</option>
+                    {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+                </select>
+            </Field>
+            <Field label="Amount">
+                <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            </Field>
+            <Field label="Date">
+                <input type="date" required className={dateCls} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Delete purchase "${confirm.description}"? This cannot be undone if the month has passed.`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             {refundConfirm && <ConfirmModal message={`Mark "${refundConfirm.description}" as refunded? This will add a matching income entry.`} onConfirm={() => handleRefund(refundConfirm)} onCancel={() => setRefundConfirm(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Purchase' : 'New Purchase'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -107,7 +136,7 @@ function ItemsTab({ active }: { active: boolean }) {
                                             onDelete={locked ? undefined : () => setConfirm(p)}
                                             extra={!p.is_refunded ? (
                                                 <button onClick={e => { e.stopPropagation(); setRefundConfirm(p); }}
-                                                    className="rounded px-2 py-0.5 text-[10px] font-medium text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                                                    className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-medium text-indigo-500 hover:bg-indigo-100 dark:bg-indigo-700 dark:text-indigo-50 dark:hover:bg-indigo-600">
                                                     Refund
                                                 </button>
                                             ) : undefined}
@@ -118,28 +147,7 @@ function ItemsTab({ active }: { active: boolean }) {
                         })}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Purchase' : 'New Purchase'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Description">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                        </Field>
-                        <Field label="Category">
-                            <select required className={selectCls} value={form.category_id} onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}>
-                                <option value="">— select —</option>
-                                {cats.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
-                            </select>
-                        </Field>
-                        <Field label="Amount">
-                            <input type="number" step="0.01" min="0.01" required className={inputCls} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
-                        </Field>
-                        <Field label="Date">
-                            <input type="date" required className={inputCls} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
@@ -150,6 +158,7 @@ function ItemsTab({ active }: { active: boolean }) {
 // ---------------------------------------------------------------------------
 
 function CategoriesTab({ active }: { active: boolean }) {
+    const isMobile = useIsMobile();
     const [cats, setCats]         = useState<PurchaseCategory[]>([]);
     const [loading, setLoading]   = useState(false);
     const [fetched, setFetched]   = useState(false);
@@ -157,6 +166,7 @@ function CategoriesTab({ active }: { active: boolean }) {
     const [confirm, setConfirm]   = useState<PurchaseCategory | null>(null);
     const [saving, setSaving]     = useState(false);
     const [error, setError]       = useState<string | null>(null);
+    const [sheetOpen, setSheetOpen] = useState(false);
     const [form, setForm]         = useState({ category_name: '' });
 
     const load = async () => {
@@ -168,8 +178,13 @@ function CategoriesTab({ active }: { active: boolean }) {
 
     useEffect(() => { if (active && !fetched) load(); }, [active, fetched]);
 
-    const selectRow = (c: PurchaseCategory) => { setSelected(c); setForm({ category_name: c.category_name }); setError(null); };
-    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); };
+    const selectRow = (c: PurchaseCategory) => {
+        setSelected(c);
+        setForm({ category_name: c.category_name });
+        setError(null);
+        if (isMobile) setSheetOpen(true);
+    };
+    const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(false); };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -194,10 +209,24 @@ function CategoriesTab({ active }: { active: boolean }) {
         setConfirm(null);
     };
 
+    const formContent = (
+        <form onSubmit={handleSubmit} className="space-y-3">
+            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
+            <Field label="Name">
+                <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
+            </Field>
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+        </form>
+    );
+
     return (
         <>
             {confirm && <ConfirmModal message={`Remove category "${confirm.category_name}"? It will be unlisted if purchases reference it.`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <SplitPane
+                sheetOpen={sheetOpen}
+                onSheetOpenChange={setSheetOpen}
+                sheetTitle={selected ? 'Edit Category' : 'New Category'}
+                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
                     <div className="space-y-1">
                         {loading && <LoadingRows />}
@@ -214,16 +243,7 @@ function CategoriesTab({ active }: { active: boolean }) {
                         ))}
                     </div>
                 }
-                form={
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{selected ? 'Edit Category' : 'New Category'}</p>
-                        {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                        <Field label="Name">
-                            <input type="text" required maxLength={255} className={inputCls} value={form.category_name} onChange={e => setForm({ category_name: e.target.value })} />
-                        </Field>
-                        <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-                    </form>
-                }
+                form={formContent}
             />
         </>
     );
