@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
+import { MutableRefObject, useEffect, useRef, useState } from 'react';
 import {
-    ApiError, ConfirmModal, EmptyRows, Field,
-    FormActions, LoadingRows, Purchase, PurchaseCategory,
-    RowActions, SplitPane, StatusChip, SubTabBar,
-    apiFetch, apiFetchList, dateCls, inputCls, selectCls, todayStr, useIsMobile,
+    AddButton, ApiError, ConfirmModal, EmptyRows, Field,
+    FormActions, ListRow, ListStack, LoadingRows, Purchase, PurchaseCategory,
+    RowActions, SplitPane, StatusChip, SubTabBar, TabToolbar,
+    apiFetch, apiFetchList, dateCls, inputCls, rowAmountCls, rowDetailCls, rowTitleCls,
+    selectCls, todayStr, useIsMobile,
 } from './shared';
+
+const refundBtnCls = 'w-full rounded-full bg-indigo-50 px-3 py-1 text-center text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-700 dark:text-indigo-50 dark:hover:bg-indigo-600';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Items
 // ---------------------------------------------------------------------------
 
-function ItemsTab({ active }: { active: boolean }) {
+function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [cats, setCats]           = useState<PurchaseCategory[]>([]);
@@ -23,7 +26,7 @@ function ItemsTab({ active }: { active: boolean }) {
     const [error, setError]         = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
 
-    const blank = { category_id: '', description: '', amount: '', date: todayStr() };
+    const blank = { category_id: '', description: '', amount: '', date: todayStr(), url: '', attachment_path: '' };
     const [form, setForm] = useState(blank);
 
     const load = async () => {
@@ -44,17 +47,36 @@ function ItemsTab({ active }: { active: boolean }) {
 
     const selectRow = (p: Purchase) => {
         setSelected(p);
-        setForm({ category_id: String(p.category_id), description: p.description, amount: String(p.amount), date: p.date });
+        setForm({
+            category_id: String(p.category_id),
+            description: p.description,
+            amount: String(p.amount),
+            date: p.date,
+            url: p.url ?? '',
+            attachment_path: p.attachment_path ?? '',
+        });
         setError(null);
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
+    useEffect(() => {
+        if (addRef) { addRef.current = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(true); }; }
+        return () => { if (addRef) addRef.current = null; };
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true); setError(null);
         try {
-            const body = { category_id: Number(form.category_id), description: form.description, amount: Number(form.amount), date: form.date };
+            const body = {
+                category_id: Number(form.category_id),
+                description: form.description,
+                amount: Number(form.amount),
+                date: form.date,
+                url: form.url.trim() || null,
+                attachment_path: form.attachment_path.trim() || null,
+            };
             if (selected) {
                 await apiFetch(`/api/v1/purchases/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
             } else {
@@ -102,6 +124,12 @@ function ItemsTab({ active }: { active: boolean }) {
             <Field label="Date">
                 <input type="date" required className={dateCls} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </Field>
+            <Field label="Link (optional)">
+                <input type="url" maxLength={500} placeholder="https://…" className={inputCls} value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
+            </Field>
+            <Field label="Attachment path (optional)">
+                <input type="text" maxLength={500} placeholder="Receipt or file path" className={inputCls} value={form.attachment_path} onChange={e => setForm(f => ({ ...f, attachment_path: e.target.value }))} />
+            </Field>
             <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
         </form>
     );
@@ -114,38 +142,50 @@ function ItemsTab({ active }: { active: boolean }) {
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
                 sheetTitle={selected ? 'Edit Purchase' : 'New Purchase'}
-                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
-                    <div className="space-y-1">
+                    <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !purchases.length && <EmptyRows label="No purchases yet." />}
                         {purchases.map(p => {
                             const locked = p.is_refunded;
                             return (
-                                <div key={p.id} onClick={() => !locked && selectRow(p)}
-                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors ${locked ? 'cursor-default opacity-70' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40'} ${selected?.id === p.id ? 'bg-sky-50 dark:bg-sky-900/20' : ''}`}>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium text-slate-800 dark:text-slate-100">{p.description}</p>
-                                        <p className="text-slate-400">{p.date} · {catName(p.category_id)}</p>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-2 pl-2">
-                                        {p.is_refunded && <StatusChip label="Refunded" color="blue" />}
-                                        <span className="font-semibold text-rose-500">${p.amount.toFixed(2)}</span>
-                                        <RowActions
-                                            onEdit={locked ? undefined : () => selectRow(p)}
-                                            onDelete={locked ? undefined : () => setConfirm(p)}
-                                            extra={!p.is_refunded ? (
-                                                <button onClick={e => { e.stopPropagation(); setRefundConfirm(p); }}
-                                                    className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-medium text-indigo-500 hover:bg-indigo-100 dark:bg-indigo-700 dark:text-indigo-50 dark:hover:bg-indigo-600">
+                                <ListRow
+                                    key={p.id}
+                                    selected={selected?.id === p.id}
+                                    disabled={locked}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <p className={rowTitleCls}>{p.description}</p>
+                                            <p className={`mt-1 ${rowAmountCls} text-rose-500 dark:text-rose-400`}>
+                                                ${p.amount.toFixed(2)}
+                                            </p>
+                                            <p className={`mt-0.5 truncate ${rowDetailCls}`}>
+                                                {p.date} · {catName(p.category_id)}
+                                            </p>
+                                        </div>
+                                        {locked ? (
+                                            <StatusChip label="Refunded" color="blue" />
+                                        ) : (
+                                            <div className="flex shrink-0 flex-col items-stretch gap-1">
+                                                <RowActions
+                                                    onEdit={() => selectRow(p)}
+                                                    onDelete={() => setConfirm(p)}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); setRefundConfirm(p); }}
+                                                    className={refundBtnCls}
+                                                >
                                                     Refund
                                                 </button>
-                                            ) : undefined}
-                                        />
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                </ListRow>
                             );
                         })}
-                    </div>
+                    </ListStack>
                 }
                 form={formContent}
             />
@@ -157,7 +197,7 @@ function ItemsTab({ active }: { active: boolean }) {
 // Sub-tab: Categories
 // ---------------------------------------------------------------------------
 
-function CategoriesTab({ active }: { active: boolean }) {
+function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const [cats, setCats]         = useState<PurchaseCategory[]>([]);
     const [loading, setLoading]   = useState(false);
@@ -185,6 +225,11 @@ function CategoriesTab({ active }: { active: boolean }) {
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(false); };
+
+    useEffect(() => {
+        if (addRef) { addRef.current = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(true); }; }
+        return () => { if (addRef) addRef.current = null; };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -226,22 +271,26 @@ function CategoriesTab({ active }: { active: boolean }) {
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
                 sheetTitle={selected ? 'Edit Category' : 'New Category'}
-                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
-                    <div className="space-y-1">
+                    <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !cats.length && <EmptyRows label="No purchase categories." />}
                         {cats.map(c => (
-                            <div key={c.id} onClick={() => !c.deleted_at && selectRow(c)}
-                                className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors ${c.deleted_at ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40'} ${selected?.id === c.id ? 'bg-sky-50 dark:bg-sky-900/20' : ''}`}>
-                                <span className="font-medium text-slate-800 dark:text-slate-100">{c.category_name}</span>
-                                <div className="flex items-center gap-2">
-                                    {c.deleted_at && <StatusChip label="Unlisted" color="amber" />}
-                                    {!c.deleted_at && <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />}
+                            <ListRow
+                                key={c.id}
+                                selected={selected?.id === c.id}
+                                disabled={!!c.deleted_at}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className={rowTitleCls}>{c.category_name}</span>
+                                    <div className="flex items-center gap-2">
+                                        {c.deleted_at && <StatusChip label="Unlisted" color="amber" />}
+                                        {!c.deleted_at && <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />}
+                                    </div>
                                 </div>
-                            </div>
+                            </ListRow>
                         ))}
-                    </div>
+                    </ListStack>
                 }
                 form={formContent}
             />
@@ -258,11 +307,15 @@ type SubTab = typeof SUBTABS[number];
 
 export function PurchasesTab({ active }: { active: boolean }) {
     const [sub, setSub] = useState<SubTab>('Items');
+    const addRef = useRef<(() => void) | null>(null);
     return (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={t => setSub(t as SubTab)} />
-            {sub === 'Items'      && <ItemsTab      active={active} />}
-            {sub === 'Categories' && <CategoriesTab active={active} />}
+        <div className="flex min-h-0 flex-1 flex-col">
+            <TabToolbar>
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={t => setSub(t as SubTab)} />
+                <AddButton onClick={() => addRef.current?.()} />
+            </TabToolbar>
+            {sub === 'Items'      && <ItemsTab      addRef={addRef} active={active} />}
+            {sub === 'Categories' && <CategoriesTab addRef={addRef} active={active} />}
         </div>
     );
 }

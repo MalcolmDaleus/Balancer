@@ -37,8 +37,8 @@ interface Props {
 }
 
 export default function CreatorSuiteCard({ className = '' }: Props) {
-    const [activeTab, setActiveTab] = useState<MainTab>('Income');
-    const [loaded, setLoaded] = useState<Set<MainTab>>(new Set(['Income']));
+    const [activeTab, setActiveTab] = useState<MainTab>('Purchases');
+    const [loaded, setLoaded] = useState<Set<MainTab>>(new Set(['Purchases']));
 
     const switchTab = (tab: MainTab) => {
         setActiveTab(tab);
@@ -58,7 +58,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
                         <button
                             key={tab}
                             onClick={() => switchTab(tab)}
-                            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-base font-medium transition-colors ${
                                 activeTab === tab
                                     ? TAB_ACTIVE[tab]
                                     : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
@@ -72,7 +72,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
             </div>
 
             {/* Tab content — lazy-mount: once loaded, always kept in DOM (hidden) to preserve state */}
-            <div className="min-h-0 flex-1 overflow-hidden p-4">
+            <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-2">
                 {loaded.has('Income')    && <div className={`h-full ${activeTab !== 'Income'    ? 'hidden' : 'flex flex-col'}`}><IncomeTab    active={activeTab === 'Income'}    /></div>}
                 {loaded.has('Purchases') && <div className={`h-full ${activeTab !== 'Purchases' ? 'hidden' : 'flex flex-col'}`}><PurchasesTab active={activeTab === 'Purchases'} /></div>}
                 {loaded.has('Debts')     && <div className={`h-full ${activeTab !== 'Debts'     ? 'hidden' : 'flex flex-col'}`}><DebtsTab     active={activeTab === 'Debts'}     /></div>}

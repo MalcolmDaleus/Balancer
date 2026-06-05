@@ -2,7 +2,8 @@ import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import { type SharedData } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 // ─── Shared card shell ────────────────────────────────────────────────────────
 function ModuleCard({
@@ -95,40 +96,41 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     const userCurrency = String((auth?.user as { currency?: string } | undefined)?.currency ?? 'USD');
     const [data, setData] = useState<BalanceSheetExpanded | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [openSection, setOpenSection] = useState<string | null>(null); // all collapsed by default
 
-    useEffect(() => {
-        let isMounted = true;
-
-        const loadBalanceSheet = async () => {
+    const loadBalanceSheet = useCallback(async (silent = false) => {
+        if (silent) {
+            setIsRefreshing(true);
+        } else {
             setIsLoading(true);
-            setError(null);
-            try {
-                const response = await fetch('/api/v1/balance-sheet', {
-                    method: 'GET',
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
-                });
+        }
+        setError(null);
+        try {
+            const response = await fetch('/api/v1/balance-sheet', {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
 
-                if (!response.ok) {
-                    throw new Error(`Failed to load balance sheet (${response.status})`);
-                }
-
-                const payload = (await response.json()) as BalanceSheetExpanded;
-                if (isMounted) setData(payload);
-            } catch (err) {
-                if (isMounted) setError(err instanceof Error ? err.message : 'Unable to load data.');
-            } finally {
-                if (isMounted) setIsLoading(false);
+            if (!response.ok) {
+                throw new Error(`Failed to load balance sheet (${response.status})`);
             }
-        };
 
-        void loadBalanceSheet();
-        return () => {
-            isMounted = false;
-        };
+            const payload = (await response.json()) as BalanceSheetExpanded;
+            setData(payload);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Unable to load data.');
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
     }, []);
+
+    useEffect(() => {
+        void loadBalanceSheet();
+    }, [loadBalanceSheet]);
 
     const formatter = useMemo(() => {
         try {
@@ -149,12 +151,26 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     const amount = (value: number) => formatter.format(value);
     const signed = (value: number, sign: '+' | '-') => `${sign}${amount(Math.abs(value))}`;
 
-    const pillBase = 'rounded-full px-3.5 py-1.5 text-xs font-medium';
+    const pillBase = 'rounded-full px-2.5 py-0.5 text-sm font-medium';
+    const sectionAmount = (
+        primary: ReactNode,
+        secondary: ReactNode,
+        primaryClassName = 'text-base font-semibold text-slate-800 dark:text-slate-100',
+    ) => (
+        <div className="text-right leading-tight">
+            <div className={primaryClassName}>{primary}</div>
+            <div className="text-sm text-slate-600 dark:text-slate-300">{secondary}</div>
+        </div>
+    );
     const statusClass = (debt: BalanceSheetExpanded['debt']['debts'][number]) => {
-        if (debt.is_forgiven) return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300';
-        if (debt.is_settled) return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300';
-        return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+        if (debt.is_forgiven) return 'bg-amber-100 text-amber-700 dark:bg-amber-600 dark:text-amber-50';
+        if (debt.is_settled) return 'bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-50';
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-100';
     };
+
+    const purchaseItemCount = data
+        ? data.spending.categories.reduce((n, c) => n + c.items.length, 0)
+        : 0;
 
     const sections = data
         ? [
@@ -162,20 +178,25 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   key: 'income',
                   label: 'Income',
                   pillClass: 'bg-emerald-300/25 text-emerald-600/80 dark:bg-emerald-400/15 dark:text-emerald-400/80',
-                  amountNode: <span className="text-base font-semibold text-slate-800 dark:text-slate-100">{signed(data.income.total, '+')}</span>,
+                  amountNode: sectionAmount(
+                      signed(data.income.total, '+'),
+                      data.income.income_entries.length
+                          ? `${data.income.income_entries.length} stream${data.income.income_entries.length === 1 ? '' : 's'}`
+                          : 'No entries',
+                  ),
                   content: data.income.income_entries.length ? (
                       <div className="space-y-2">
                           {data.income.income_entries.map((stream) => (
                               <div key={stream.income_stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{stream.name}</span>
-                                      <span className="text-xs text-slate-600 dark:text-slate-300">{signed(stream.total, '+')}</span>
+                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{stream.name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">{signed(stream.total, '+')}</span>
                                   </div>
-                                  <div className="mt-1 space-y-1">
+                                  <div className="mt-1.5 space-y-1">
                                       {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-300">
                                               <span>{entry.month}</span>
-                                              <span>{signed(entry.amount, '+')}</span>
+                                              <span className="font-medium text-slate-700 dark:text-slate-200">{signed(entry.amount, '+')}</span>
                                           </div>
                                       ))}
                                   </div>
@@ -183,80 +204,91 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           ))}
                       </div>
                   ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
                   ),
               },
               {
                   key: 'debt',
                   label: 'Debt',
                   pillClass: 'bg-rose-300/25 text-rose-600/80 dark:bg-rose-400/15 dark:text-rose-400/80',
-                  amountNode: (
-                      <div className="text-right leading-tight">
-                          <div className="text-base font-semibold text-rose-600 dark:text-rose-300">Paid {signed(data.debt.total, '-')}</div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400">Balance {amount(data.debt.balance_total)}</div>
-                      </div>
+                  amountNode: sectionAmount(
+                      <>Paid {signed(data.debt.total, '-')}</>,
+                      <>Balance {amount(data.debt.balance_total)}</>,
+                      'text-base font-semibold text-rose-600 dark:text-rose-300',
                   ),
                   content: data.debt.debts.length ? (
                       <div className="space-y-2">
                           {data.debt.debts.map((debt) => (
                               <div key={debt.id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
                                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                                      <span className="truncate text-xs font-medium text-slate-700 dark:text-slate-200">{debt.description}</span>
-                                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusClass(debt)}`}>
-                                          {debt.is_forgiven ? 'Forgiven' : debt.is_settled ? 'Settled' : 'Open'}
-                                      </span>
+                                      <span className="truncate text-base font-medium text-slate-800 dark:text-slate-100">{debt.description}</span>
+                                      {(debt.is_forgiven || debt.is_settled) && (
+                                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(debt)}`}>
+                                              {debt.is_forgiven ? 'Forgiven' : 'Settled'}
+                                          </span>
+                                      )}
                                   </div>
-                                  <div className="flex items-center justify-between text-[11px]">
-                                      <span className="text-rose-600 dark:text-rose-300">Paid {signed(debt.total_paid_in_period, '-')}</span>
-                                      <span className="text-slate-500 dark:text-slate-400">Remaining {amount(debt.remaining_balance)}</span>
+                                  <div className="flex items-center justify-between text-sm">
+                                      <span className="font-medium text-rose-600 dark:text-rose-300">Paid {signed(debt.total_paid_in_period, '-')}</span>
+                                      <span className="text-slate-600 dark:text-slate-300">Remaining {amount(debt.remaining_balance)}</span>
                                   </div>
                               </div>
                           ))}
                       </div>
                   ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
                   ),
               },
               {
                   key: 'spending',
                   label: 'Purchases',
                   pillClass: 'bg-yellow-300/30 text-yellow-600/80 dark:bg-yellow-400/15 dark:text-yellow-400/80',
-                  amountNode: <span className="text-base font-semibold text-slate-800 dark:text-slate-100">{signed(data.spending.total, '-')}</span>,
+                  amountNode: sectionAmount(
+                      signed(data.spending.total, '-'),
+                      purchaseItemCount
+                          ? `${purchaseItemCount} item${purchaseItemCount === 1 ? '' : 's'}`
+                          : 'No entries',
+                  ),
                   content: data.spending.categories.length ? (
                       <div className="space-y-2">
                           {data.spending.categories.map((category) => (
                               <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{category.category_name}</span>
-                                      <span className="text-xs text-slate-600 dark:text-slate-300">{signed(category.amount, '-')}</span>
+                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{category.category_name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">{signed(category.amount, '-')}</span>
                                   </div>
                               </div>
                           ))}
                       </div>
                   ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
                   ),
               },
               {
                   key: 'recurring',
                   label: 'Recurring',
                   pillClass: 'bg-orange-300/25 text-orange-600/80 dark:bg-orange-400/15 dark:text-orange-400/80',
-                  amountNode: <span className="text-base font-semibold text-slate-800 dark:text-slate-100">{signed(data.recurring_payments.total, '-')}</span>,
+                  amountNode: sectionAmount(
+                      signed(data.recurring_payments.total, '-'),
+                      data.recurring_payments.streams.length
+                          ? `${data.recurring_payments.streams.length} stream${data.recurring_payments.streams.length === 1 ? '' : 's'}`
+                          : 'No entries',
+                  ),
                   content: data.recurring_payments.streams.length ? (
                       <div className="space-y-2">
                           {data.recurring_payments.streams.map((stream) => (
                               <div key={stream.stream_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{stream.stream_name}</span>
-                                      <span className="text-xs text-slate-600 dark:text-slate-300">
+                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{stream.stream_name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">
                                           {signed(stream.entries.reduce((sum, e) => sum + e.amount, 0), '-')}
                                       </span>
                                   </div>
-                                  <div className="mt-1 space-y-1">
+                                  <div className="mt-1.5 space-y-1">
                                       {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-300">
                                               <span className="capitalize">{entry.frequency}</span>
-                                              <span>{signed(entry.amount, '-')}</span>
+                                              <span className="font-medium text-slate-700 dark:text-slate-200">{signed(entry.amount, '-')}</span>
                                           </div>
                                       ))}
                                   </div>
@@ -264,18 +296,21 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           ))}
                       </div>
                   ) : (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
                   ),
               },
               {
                   key: 'savings',
                   label: 'Savings',
                   pillClass: 'bg-sky-300/25 text-sky-600/80 dark:bg-sky-400/15 dark:text-sky-400/80',
-                  amountNode: <span className="text-base font-semibold text-slate-800 dark:text-slate-100">{amount(data.savings.grand_total)}</span>,
+                  amountNode: sectionAmount(
+                      amount(data.savings.grand_total),
+                      <>This month {amount(data.savings.monthly_total)}</>,
+                  ),
                   content: (
                       <div className="space-y-2">
-                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 text-xs dark:bg-slate-900/40">
-                              <span className="text-slate-600 dark:text-slate-300">This month</span>
+                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 text-sm dark:bg-slate-900/40">
+                              <span className="text-slate-700 dark:text-slate-200">This month</span>
                               <div className="flex items-center gap-2">
                                   {data.savings.monthly_deposits > 0 && (
                                       <span className="text-emerald-600 dark:text-emerald-400">+{amount(data.savings.monthly_deposits)}</span>
@@ -283,25 +318,25 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                   {data.savings.monthly_withdrawals > 0 && (
                                       <span className="text-rose-500 dark:text-rose-400">-{amount(data.savings.monthly_withdrawals)}</span>
                                   )}
-                                  <span className="font-medium text-slate-700 dark:text-slate-200">{amount(data.savings.monthly_total)}</span>
+                                  <span className="font-medium text-slate-800 dark:text-slate-100">{amount(data.savings.monthly_total)}</span>
                               </div>
                           </div>
                           {data.savings.rows.length ? (
                               data.savings.rows.map((row) => (
-                                  <div key={row.id} className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                                      <div className="flex items-center gap-1.5">
-                                          <span className={`rounded-full px-1.5 py-0.5 font-medium ${row.type === 'deposit' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400'}`}>
+                                  <div key={row.id} className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
+                                      <div className="flex min-w-0 items-center gap-2">
+                                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${row.type === 'deposit' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-700 dark:text-emerald-50' : 'bg-rose-100 text-rose-600 dark:bg-rose-700 dark:text-rose-50'}`}>
                                               {row.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
                                           </span>
-                                          {row.notes && <span className="truncate max-w-[8rem]">{row.notes}</span>}
+                                          {row.notes && <span className="truncate">{row.notes}</span>}
                                       </div>
-                                      <span className={row.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}>
+                                      <span className={`shrink-0 font-medium ${row.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
                                           {row.type === 'deposit' ? '+' : '-'}{amount(row.amount)}
                                       </span>
                                   </div>
                               ))
                           ) : (
-                              <p className="text-xs text-slate-500 dark:text-slate-400">No entries this month</p>
+                              <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
                           )}
                       </div>
                   ),
@@ -311,18 +346,35 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
 
     return (
         <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-slate-800 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
-            <div className="mb-3">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Balance Sheet</h2>
-                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{data?.month ?? 'Loading month...'}</p>
+            <div className="mb-3 flex items-start justify-between gap-2">
+                <div>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Balance Sheet</h2>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-300">{data?.month ?? 'Loading month...'}</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void loadBalanceSheet(true)}
+                    disabled={isLoading || isRefreshing}
+                    aria-label="Refresh balance sheet"
+                    className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                >
+                    <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoading && <p className="text-xs text-slate-500 dark:text-slate-400">Loading balance sheet...</p>}
+                {isLoading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading balance sheet...</p>}
 
-                {!isLoading && error && <p className="text-xs text-rose-600 dark:text-rose-300">{error}</p>}
+                {!isLoading && error && !data && (
+                    <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
+                )}
 
-                {!isLoading && !error && data && (
-                    <div className="space-y-2">
+                {!isLoading && data && (
+                    <>
+                        {error && (
+                            <p className="mb-2 text-sm text-rose-600 dark:text-rose-300">{error}</p>
+                        )}
+                        <div className="space-y-2">
                         {sections.map((section) => {
                             const isOpen = openSection === section.key;
                             return (
@@ -340,13 +392,14 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                 </div>
                             );
                         })}
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
 
             <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
                 <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Roll over</span>
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Roll over</span>
                     <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{amount(data?.roll_over.total ?? 0)}</span>
                 </div>
             </div>

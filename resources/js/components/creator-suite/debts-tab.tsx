@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
+import { MutableRefObject, useEffect, useRef, useState } from 'react';
 import {
-    ApiError, ConfirmModal, Debt, DebtCategory, DebtPayment,
-    EmptyRows, Field, FormActions, LoadingRows,
-    RowActions, SplitPane, StatusChip, SubTabBar,
-    apiFetch, apiFetchList, dateCls, inputCls, selectCls, todayStr, useIsMobile,
+    AddButton, ApiError, ConfirmModal, Debt, DebtCategory, DebtPayment,
+    EmptyRows, Field, FormActions, ListRow, ListStack, LoadingRows,
+    RowActionBar, RowActions, SplitPane, StatusChip, SubTabBar, TabToolbar,
+    apiFetch, apiFetchList, dateCls, inputCls, rowDetailCls, rowTitleCls, selectCls, todayStr, useIsMobile,
 } from './shared';
+
+const forgiveBtnCls = 'w-full rounded-full bg-amber-50 px-3 py-1 text-center text-sm font-medium text-amber-600 hover:bg-amber-100 dark:bg-amber-600 dark:text-amber-50 dark:hover:bg-amber-500';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Debts
 // ---------------------------------------------------------------------------
 
-function DebtsTab_({ active }: { active: boolean }) {
+function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const [debts, setDebts]       = useState<Debt[]>([]);
     const [cats, setCats]         = useState<DebtCategory[]>([]);
@@ -47,6 +49,11 @@ function DebtsTab_({ active }: { active: boolean }) {
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
+
+    useEffect(() => {
+        if (addRef) { addRef.current = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(true); }; }
+        return () => { if (addRef) addRef.current = null; };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -88,8 +95,8 @@ function DebtsTab_({ active }: { active: boolean }) {
 
     const statusChip = (d: Debt) => {
         if (d.is_forgiven) return <StatusChip label="Forgiven" color="amber" />;
-        if (d.is_settled)  return <StatusChip label="Settled"  color="blue" />;
-        return <StatusChip label="Open" color="green" />;
+        if (d.is_settled) return <StatusChip label="Settled" color="blue" />;
+        return null;
     };
 
     const formContent = (
@@ -125,39 +132,47 @@ function DebtsTab_({ active }: { active: boolean }) {
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
                 sheetTitle={selected ? 'Edit Debt' : 'New Debt'}
-                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
-                    <div className="space-y-1">
+                    <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !debts.length && <EmptyRows label="No debts yet." />}
                         {debts.map(d => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
                             return (
-                                <div key={d.id} onClick={() => !closed && selectRow(d)}
-                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors ${closed ? 'cursor-default opacity-70' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40'} ${selected?.id === d.id ? 'bg-sky-50 dark:bg-sky-900/20' : ''}`}>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium text-slate-800 dark:text-slate-100">{d.description}</p>
-                                        <p className="text-slate-400">Balance: ${d.remaining_balance.toFixed(2)} / ${d.amount.toFixed(2)}</p>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-2 pl-2">
-                                        {statusChip(d)}
-                                        {!closed && (
-                                            <RowActions
-                                                onEdit={() => selectRow(d)}
-                                                onDelete={() => setConfirm(d)}
-                                                extra={
-                                                    <button onClick={e => { e.stopPropagation(); setForgiving(d); }}
-                                                        className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-medium text-amber-600 hover:bg-amber-100 dark:bg-amber-600 dark:text-amber-50 dark:hover:bg-amber-500">
-                                                        Forgive
-                                                    </button>
-                                                }
-                                            />
+                                <ListRow
+                                    key={d.id}
+                                    selected={selected?.id === d.id}
+                                    disabled={closed}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <p className={rowTitleCls}>{d.description}</p>
+                                            <p className={`mt-1 ${rowDetailCls}`}>
+                                                Balance: ${d.remaining_balance.toFixed(2)} / ${d.amount.toFixed(2)}
+                                            </p>
+                                        </div>
+                                        {!closed ? (
+                                            <div className="flex shrink-0 flex-col items-stretch gap-1">
+                                                <RowActions
+                                                    onEdit={() => selectRow(d)}
+                                                    onDelete={() => setConfirm(d)}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={e => { e.stopPropagation(); setForgiving(d); }}
+                                                    className={forgiveBtnCls}
+                                                >
+                                                    Forgive
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            statusChip(d)
                                         )}
                                     </div>
-                                </div>
+                                </ListRow>
                             );
                         })}
-                    </div>
+                    </ListStack>
                 }
                 form={formContent}
             />
@@ -169,7 +184,7 @@ function DebtsTab_({ active }: { active: boolean }) {
 // Sub-tab: Payments
 // ---------------------------------------------------------------------------
 
-function PaymentsTab({ active }: { active: boolean }) {
+function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const [debts, setDebts]       = useState<Debt[]>([]);
     const [payments, setPayments] = useState<DebtPayment[]>([]);
@@ -212,6 +227,11 @@ function PaymentsTab({ active }: { active: boolean }) {
     };
     const reset = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(false); };
 
+    useEffect(() => {
+        if (addRef) { addRef.current = () => { setSelected(null); setForm(blank); setError(null); setSheetOpen(true); }; }
+        return () => { if (addRef) addRef.current = null; };
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         if (!debtId) return;
         e.preventDefault();
@@ -241,7 +261,7 @@ function PaymentsTab({ active }: { active: boolean }) {
     const closed = selectedDebt ? (selectedDebt.is_settled || selectedDebt.is_forgiven || selectedDebt.is_closed) : false;
 
     const paymentForm = closed ? (
-        <p className="text-xs text-slate-400">This debt is {selectedDebt?.is_forgiven ? 'forgiven' : 'settled'} — no new payments.</p>
+        <p className="text-sm text-slate-400">This debt is {selectedDebt?.is_forgiven ? 'forgiven' : 'settled'} — no new payments.</p>
     ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
@@ -263,7 +283,7 @@ function PaymentsTab({ active }: { active: boolean }) {
             {confirm && <ConfirmModal message={`Delete payment of $${confirm.amount}?`} onConfirm={() => handleDelete(confirm)} onCancel={() => setConfirm(null)} />}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
                 <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Debt</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-600 dark:text-slate-400">Debt</label>
                     {loading ? <LoadingRows /> : (
                         <select className={selectCls} value={debtId ?? ''} onChange={e => { setDebtId(e.target.value ? Number(e.target.value) : null); reset(); }}>
                             <option value="">— select a debt —</option>
@@ -276,22 +296,30 @@ function PaymentsTab({ active }: { active: boolean }) {
                         sheetOpen={sheetOpen}
                         onSheetOpenChange={setSheetOpen}
                         sheetTitle={selected ? 'Edit Payment' : 'New Payment'}
-                        onAddClick={closed ? undefined : () => { reset(); setSheetOpen(true); }}
                         list={
-                            <div className="space-y-1">
+                            <ListStack>
                                 {payLoading && <LoadingRows />}
                                 {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
                                 {payments.map(p => (
-                                    <div key={p.id} onClick={() => !closed && selectRow(p)}
-                                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs transition-colors ${closed ? 'cursor-default opacity-70' : 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40'} ${selected?.id === p.id ? 'bg-sky-50 dark:bg-sky-900/20' : ''}`}>
-                                        <div>
-                                            <p className="font-medium text-slate-800 dark:text-slate-100">${p.amount.toFixed(2)}</p>
-                                            <p className="text-slate-400">{p.paid_at}{p.notes ? ` · ${p.notes}` : ''}</p>
+                                    <ListRow
+                                        key={p.id}
+                                        selected={selected?.id === p.id}
+                                        disabled={closed}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <p className={rowTitleCls}>${p.amount.toFixed(2)}</p>
                                         </div>
-                                        {!closed && <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />}
-                                    </div>
+                                        <p className={`mt-2 truncate ${rowDetailCls}`}>
+                                            {p.paid_at}{p.notes ? ` · ${p.notes}` : ''}
+                                        </p>
+                                        {!closed && (
+                                            <RowActionBar>
+                                                <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />
+                                            </RowActionBar>
+                                        )}
+                                    </ListRow>
                                 ))}
-                            </div>
+                            </ListStack>
                         }
                         form={paymentForm}
                     />
@@ -305,7 +333,7 @@ function PaymentsTab({ active }: { active: boolean }) {
 // Sub-tab: Categories
 // ---------------------------------------------------------------------------
 
-function DebtCategoriesTab({ active }: { active: boolean }) {
+function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const [cats, setCats]         = useState<DebtCategory[]>([]);
     const [loading, setLoading]   = useState(false);
@@ -333,6 +361,11 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(false); };
+
+    useEffect(() => {
+        if (addRef) { addRef.current = () => { setSelected(null); setForm({ category_name: '' }); setError(null); setSheetOpen(true); }; }
+        return () => { if (addRef) addRef.current = null; };
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -374,18 +407,19 @@ function DebtCategoriesTab({ active }: { active: boolean }) {
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
                 sheetTitle={selected ? 'Edit Category' : 'New Category'}
-                onAddClick={() => { reset(); setSheetOpen(true); }}
                 list={
-                    <div className="space-y-1">
+                    <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !cats.length && <EmptyRows label="No debt categories." />}
                         {cats.map(c => (
-                            <div key={c.id} onClick={() => selectRow(c)} className={`flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/40 ${selected?.id === c.id ? 'bg-sky-50 dark:bg-sky-900/20' : ''}`}>
-                                <span className="font-medium text-slate-800 dark:text-slate-100">{c.category_name}</span>
-                                <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />
-                            </div>
+                            <ListRow key={c.id} selected={selected?.id === c.id}>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className={rowTitleCls}>{c.category_name}</span>
+                                    <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />
+                                </div>
+                            </ListRow>
                         ))}
-                    </div>
+                    </ListStack>
                 }
                 form={formContent}
             />
@@ -402,12 +436,16 @@ type SubTab = typeof SUBTABS[number];
 
 export function DebtsTab({ active }: { active: boolean }) {
     const [sub, setSub] = useState<SubTab>('Debts');
+    const addRef = useRef<(() => void) | null>(null);
     return (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={t => setSub(t as SubTab)} />
-            {sub === 'Debts'      && <DebtsTab_         active={active} />}
-            {sub === 'Payments'   && <PaymentsTab        active={active} />}
-            {sub === 'Categories' && <DebtCategoriesTab  active={active} />}
+        <div className="flex min-h-0 flex-1 flex-col">
+            <TabToolbar>
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={t => setSub(t as SubTab)} />
+                <AddButton onClick={() => addRef.current?.()} />
+            </TabToolbar>
+            {sub === 'Debts'      && <DebtsTab_         addRef={addRef} active={active} />}
+            {sub === 'Payments'   && <PaymentsTab        addRef={addRef} active={active} />}
+            {sub === 'Categories' && <DebtCategoriesTab  addRef={addRef} active={active} />}
         </div>
     );
 }
