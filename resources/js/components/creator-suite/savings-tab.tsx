@@ -160,7 +160,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                 <TabToolbar>
                     {!loading && savings.length > 0 ? (
                         <span className={rowDetailCls}>
-                            Total: <span className="font-semibold text-slate-800 dark:text-slate-100">${grandTotal.toFixed(2)}</span>
+                            Total: <span className="font-semibold text-slate-800 dark:text-neutral-100">${grandTotal.toFixed(2)}</span>
                         </span>
                     ) : (
                         <span />
@@ -189,7 +189,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                                             {s.notes ? (
                                                 <p className={rowTitleCls}>{s.notes}</p>
                                             ) : (
-                                                <p className={`${rowTitleCls} italic text-slate-400 dark:text-slate-500`}>No notes</p>
+                                                <p className={`${rowTitleCls} italic text-slate-400 dark:text-neutral-400`}>No notes</p>
                                             )}
                                             <div className="mt-1 flex flex-wrap items-center gap-2">
                                                 <StatusChip

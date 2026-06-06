@@ -1,5 +1,6 @@
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
+import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
 import { type SharedData } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import { RefreshCw } from 'lucide-react';
@@ -19,13 +20,13 @@ function ModuleCard({
 }) {
     return (
         <div
-            className={`flex flex-col rounded-2xl bg-white p-6 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-slate-800 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+            className={`flex flex-col rounded-2xl bg-white p-6 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
         >
             <div className="mb-4">
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">{title}</h2>
-                {subtitle && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
+                <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{title}</h2>
+                {subtitle && <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">{subtitle}</p>}
             </div>
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-300 dark:text-slate-600">
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-300 dark:text-neutral-500">
                 {children ?? 'Coming soon'}
             </div>
         </div>
@@ -155,17 +156,17 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     const sectionAmount = (
         primary: ReactNode,
         secondary: ReactNode,
-        primaryClassName = 'text-base font-semibold text-slate-800 dark:text-slate-100',
+        primaryClassName = 'text-base font-semibold text-slate-800 dark:text-neutral-100',
     ) => (
         <div className="text-right leading-tight">
             <div className={primaryClassName}>{primary}</div>
-            <div className="text-sm text-slate-600 dark:text-slate-300">{secondary}</div>
+            <div className="text-sm text-slate-600 dark:text-neutral-200">{secondary}</div>
         </div>
     );
     const statusClass = (debt: BalanceSheetExpanded['debt']['debts'][number]) => {
-        if (debt.is_forgiven) return 'bg-amber-100 text-amber-700 dark:bg-amber-600 dark:text-amber-50';
-        if (debt.is_settled) return 'bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-50';
-        return 'bg-slate-100 text-slate-700 dark:bg-slate-600 dark:text-slate-100';
+        if (debt.is_forgiven) return tintChip.amber;
+        if (debt.is_settled) return tintChip.emerald;
+        return tintChip.slate;
     };
 
     const purchaseItemCount = data
@@ -177,7 +178,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
               {
                   key: 'income',
                   label: 'Income',
-                  pillClass: 'bg-emerald-300/25 text-emerald-600/80 dark:bg-emerald-400/15 dark:text-emerald-400/80',
+                  pillClass: tintSectionPill.emerald,
                   amountNode: sectionAmount(
                       signed(data.income.total, '+'),
                       data.income.income_entries.length
@@ -187,16 +188,16 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   content: data.income.income_entries.length ? (
                       <div className="space-y-2">
                           {data.income.income_entries.map((stream) => (
-                              <div key={stream.income_stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
+                              <div key={stream.income_stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{stream.name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">{signed(stream.total, '+')}</span>
+                                      <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(stream.total, '+')}</span>
                                   </div>
                                   <div className="mt-1.5 space-y-1">
                                       {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-300">
+                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-neutral-200">
                                               <span>{entry.month}</span>
-                                              <span className="font-medium text-slate-700 dark:text-slate-200">{signed(entry.amount, '+')}</span>
+                                              <span className="font-medium text-slate-700 dark:text-neutral-200">{signed(entry.amount, '+')}</span>
                                           </div>
                                       ))}
                                   </div>
@@ -204,24 +205,24 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                   ),
               },
               {
                   key: 'debt',
                   label: 'Debt',
-                  pillClass: 'bg-rose-300/25 text-rose-600/80 dark:bg-rose-400/15 dark:text-rose-400/80',
+                  pillClass: tintSectionPill.red,
                   amountNode: sectionAmount(
                       <>Paid {signed(data.debt.total, '-')}</>,
                       <>Balance {amount(data.debt.balance_total)}</>,
-                      'text-base font-semibold text-rose-600 dark:text-rose-300',
+                      'text-base font-semibold text-red-600 dark:text-red-300',
                   ),
                   content: data.debt.debts.length ? (
                       <div className="space-y-2">
                           {data.debt.debts.map((debt) => (
-                              <div key={debt.id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
+                              <div key={debt.id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
                                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                                      <span className="truncate text-base font-medium text-slate-800 dark:text-slate-100">{debt.description}</span>
+                                      <span className="truncate text-base font-medium text-slate-800 dark:text-neutral-100">{debt.description}</span>
                                       {(debt.is_forgiven || debt.is_settled) && (
                                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(debt)}`}>
                                               {debt.is_forgiven ? 'Forgiven' : 'Settled'}
@@ -229,20 +230,20 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                       )}
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                      <span className="font-medium text-rose-600 dark:text-rose-300">Paid {signed(debt.total_paid_in_period, '-')}</span>
-                                      <span className="text-slate-600 dark:text-slate-300">Remaining {amount(debt.remaining_balance)}</span>
+                                      <span className="font-medium text-red-600 dark:text-red-300">Paid {signed(debt.total_paid_in_period, '-')}</span>
+                                      <span className="text-slate-600 dark:text-neutral-200">Remaining {amount(debt.remaining_balance)}</span>
                                   </div>
                               </div>
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                   ),
               },
               {
                   key: 'spending',
                   label: 'Purchases',
-                  pillClass: 'bg-yellow-300/30 text-yellow-600/80 dark:bg-yellow-400/15 dark:text-yellow-400/80',
+                  pillClass: tintSectionPill.yellow,
                   amountNode: sectionAmount(
                       signed(data.spending.total, '-'),
                       purchaseItemCount
@@ -252,22 +253,22 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   content: data.spending.categories.length ? (
                       <div className="space-y-2">
                           {data.spending.categories.map((category) => (
-                              <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
+                              <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{category.category_name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">{signed(category.amount, '-')}</span>
+                                      <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{category.category_name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(category.amount, '-')}</span>
                                   </div>
                               </div>
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                   ),
               },
               {
                   key: 'recurring',
                   label: 'Recurring',
-                  pillClass: 'bg-orange-300/25 text-orange-600/80 dark:bg-orange-400/15 dark:text-orange-400/80',
+                  pillClass: tintSectionPill.orange,
                   amountNode: sectionAmount(
                       signed(data.recurring_payments.total, '-'),
                       data.recurring_payments.streams.length
@@ -277,18 +278,18 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   content: data.recurring_payments.streams.length ? (
                       <div className="space-y-2">
                           {data.recurring_payments.streams.map((stream) => (
-                              <div key={stream.stream_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-slate-900/40">
+                              <div key={stream.stream_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
                                   <div className="flex items-center justify-between">
-                                      <span className="text-base font-medium text-slate-800 dark:text-slate-100">{stream.stream_name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-slate-200">
+                                      <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.stream_name}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">
                                           {signed(stream.entries.reduce((sum, e) => sum + e.amount, 0), '-')}
                                       </span>
                                   </div>
                                   <div className="mt-1.5 space-y-1">
                                       {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-300">
+                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-neutral-200">
                                               <span className="capitalize">{entry.frequency}</span>
-                                              <span className="font-medium text-slate-700 dark:text-slate-200">{signed(entry.amount, '-')}</span>
+                                              <span className="font-medium text-slate-700 dark:text-neutral-200">{signed(entry.amount, '-')}</span>
                                           </div>
                                       ))}
                                   </div>
@@ -296,21 +297,21 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                   ),
               },
               {
                   key: 'savings',
                   label: 'Savings',
-                  pillClass: 'bg-sky-300/25 text-sky-600/80 dark:bg-sky-400/15 dark:text-sky-400/80',
+                  pillClass: tintSectionPill.sky,
                   amountNode: sectionAmount(
                       amount(data.savings.grand_total),
                       <>This month {amount(data.savings.monthly_total)}</>,
                   ),
                   content: (
                       <div className="space-y-2">
-                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 text-sm dark:bg-slate-900/40">
-                              <span className="text-slate-700 dark:text-slate-200">This month</span>
+                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 text-sm dark:bg-neutral-950/50">
+                              <span className="text-slate-700 dark:text-neutral-200">This month</span>
                               <div className="flex items-center gap-2">
                                   {data.savings.monthly_deposits > 0 && (
                                       <span className="text-emerald-600 dark:text-emerald-400">+{amount(data.savings.monthly_deposits)}</span>
@@ -318,14 +319,14 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                   {data.savings.monthly_withdrawals > 0 && (
                                       <span className="text-rose-500 dark:text-rose-400">-{amount(data.savings.monthly_withdrawals)}</span>
                                   )}
-                                  <span className="font-medium text-slate-800 dark:text-slate-100">{amount(data.savings.monthly_total)}</span>
+                                  <span className="font-medium text-slate-800 dark:text-neutral-100">{amount(data.savings.monthly_total)}</span>
                               </div>
                           </div>
                           {data.savings.rows.length ? (
                               data.savings.rows.map((row) => (
-                                  <div key={row.id} className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
+                                  <div key={row.id} className="flex items-center justify-between text-sm text-slate-600 dark:text-neutral-200">
                                       <div className="flex min-w-0 items-center gap-2">
-                                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${row.type === 'deposit' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-700 dark:text-emerald-50' : 'bg-rose-100 text-rose-600 dark:bg-rose-700 dark:text-rose-50'}`}>
+                                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${row.type === 'deposit' ? tintChip.emerald : tintChip.rose}`}>
                                               {row.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
                                           </span>
                                           {row.notes && <span className="truncate">{row.notes}</span>}
@@ -336,7 +337,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                   </div>
                               ))
                           ) : (
-                              <p className="text-sm text-slate-500 dark:text-slate-300">No entries this month</p>
+                              <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                           )}
                       </div>
                   ),
@@ -345,25 +346,25 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         : [];
 
     return (
-        <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-slate-800 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
+        <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
             <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Balance Sheet</h2>
-                    <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-300">{data?.month ?? 'Loading month...'}</p>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Balance Sheet</h2>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{data?.month ?? 'Loading month...'}</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => void loadBalanceSheet(true)}
                     disabled={isLoading || isRefreshing}
                     aria-label="Refresh balance sheet"
-                    className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                    className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                 >
                     <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading balance sheet...</p>}
+                {isLoading && <p className="text-sm text-slate-500 dark:text-neutral-300">Loading balance sheet...</p>}
 
                 {!isLoading && error && !data && (
                     <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
@@ -378,7 +379,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                         {sections.map((section) => {
                             const isOpen = openSection === section.key;
                             return (
-                                <div key={section.key} className="rounded-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:bg-slate-700/50 dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]">
+                                <div key={section.key} className="rounded-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:bg-neutral-800/50 dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]">
                                     <button
                                         type="button"
                                         onClick={() => setOpenSection(isOpen ? null : section.key)}
@@ -388,7 +389,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                         {section.amountNode}
                                     </button>
 
-                                    {isOpen && <div className="border-t border-slate-100 px-3 py-2.5 dark:border-slate-600/60">{section.content}</div>}
+                                    {isOpen && <div className="border-t border-slate-100 px-3 py-2.5 dark:border-neutral-700/60">{section.content}</div>}
                                 </div>
                             );
                         })}
@@ -397,10 +398,10 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                 )}
             </div>
 
-            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Roll over</span>
-                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{amount(data?.roll_over.total ?? 0)}</span>
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-neutral-200">Roll over</span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-neutral-100">{amount(data?.roll_over.total ?? 0)}</span>
                 </div>
             </div>
         </div>
@@ -435,7 +436,7 @@ export default function Dashboard() {
             <Head title="Dashboard" />
             <DashboardHeader />
 
-            <div className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] min-h-screen bg-slate-200 bg-cover bg-center bg-no-repeat pt-20 dark:bg-slate-900">
+            <div className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] min-h-screen bg-slate-200 bg-cover bg-center bg-no-repeat pt-20 dark:bg-neutral-950">
 
                 {/* ── Mobile: horizontal scroll-snap carousel ──────────────── */}
                 <div className="flex h-[calc(100vh-5rem)] flex-col md:hidden">
@@ -447,7 +448,7 @@ export default function Dashboard() {
                         {MODULES.map((mod) => (
                             <div key={mod.id} className="w-[calc(100vw-2rem)] shrink-0 snap-start">
                                 {renderModule(mod.id, mod.title, mod.subtitle, 'h-full')}
-                            </div>
+                    </div>
                         ))}
                     </div>
 
@@ -460,8 +461,8 @@ export default function Dashboard() {
                                 aria-label={`Go to slide ${i + 1}`}
                                 className={`h-2 rounded-full transition-all duration-300 ${
                                     i === activeIndex
-                                        ? 'w-6 bg-slate-700 dark:bg-slate-200'
-                                        : 'w-2 bg-slate-400/50 dark:bg-slate-600'
+                                        ? 'w-6 bg-slate-700 dark:bg-neutral-200'
+                                        : 'w-2 bg-slate-400/50 dark:bg-neutral-700'
                                 }`}
                             />
                         ))}

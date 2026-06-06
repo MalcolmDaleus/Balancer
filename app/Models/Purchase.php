@@ -8,7 +8,7 @@ use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Purchase extends Model
 {
@@ -38,6 +38,48 @@ class Purchase extends Model
         'is_refunded' => 'boolean',
     ];
 
+    protected $appends = [
+        'refunded_total',
+        'remaining_refundable',
+        'refund_status',
+    ];
+
+    /**
+     * Total amount refunded across all linked income entries.
+     */
+    public function getRefundedTotalAttribute(): float
+    {
+        $paid = $this->relationLoaded('refundIncomeEntries')
+            ? $this->refundIncomeEntries->sum('amount')
+            : $this->refundIncomeEntries()->sum('amount');
+
+        return round((float) $paid, 2);
+    }
+
+    /**
+     * Amount of the original purchase still eligible for refund.
+     */
+    public function getRemainingRefundableAttribute(): float
+    {
+        return max(0.0, round((float) $this->amount - $this->refunded_total, 2));
+    }
+
+    /**
+     * Refund lifecycle: none → partial → full.
+     */
+    public function getRefundStatusAttribute(): string
+    {
+        if ($this->is_refunded || $this->remaining_refundable <= 0) {
+            return 'full';
+        }
+
+        if ($this->refunded_total > 0) {
+            return 'partial';
+        }
+
+        return 'none';
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -53,8 +95,9 @@ class Purchase extends Model
         return $this->belongsTo(RecurringPaymentEntry::class, 'recurring_payment_entry_id');
     }
 
-    public function refundIncomeEntry()
+    /** Refund income entries linked to this purchase (may be multiple for partial refunds). */
+    public function refundIncomeEntries()
     {
-        return $this->hasOne(IncomeEntry::class, 'purchase_id');
+        return $this->hasMany(IncomeEntry::class, 'purchase_id');
     }
 }

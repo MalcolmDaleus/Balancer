@@ -23,6 +23,7 @@ import {
     rowAmountCls,
     rowDetailCls,
     rowTitleCls,
+    secondaryBtnCls,
     selectCls,
     todayStr,
     useIsMobile,
@@ -210,17 +211,17 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
             </form>
 
             {selected && !selected.deleted_at && (
-                <div className="border-t border-slate-100 pt-3 dark:border-slate-700">
+                <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
                     {!showPriceUpdate ? (
                         <button
                             onClick={() => setShowPriceUpdate(true)}
-                            className="rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-500 hover:bg-indigo-100 dark:bg-indigo-700 dark:text-indigo-50 dark:hover:bg-indigo-600"
+                            className={secondaryBtnCls}
                         >
                             + Update subscription price
                         </button>
                     ) : (
                         <form onSubmit={handlePriceUpdate} className="space-y-3">
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Update Price</p>
+                            <p className="text-sm font-semibold text-slate-600 dark:text-neutral-300">Update Price</p>
                             {error && showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
                             <Field label="New Amount">
                                 <input
@@ -299,11 +300,7 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                         {loading && <LoadingRows />}
                         {!loading && !streams.length && <EmptyRows label="No recurring streams yet." />}
                         {streams.map((s) => (
-                            <ListRow
-                                key={s.id}
-                                selected={selected?.id === s.id}
-                                disabled={!!s.deleted_at}
-                            >
+                            <ListRow key={s.id} selected={selected?.id === s.id} disabled={!!s.deleted_at}>
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                         <p className={rowTitleCls}>{s.name}</p>
@@ -314,7 +311,7 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                                     ) : (
                                         <div className="flex shrink-0 flex-col items-stretch gap-1">
                                             {activeAmount(s) && (
-                                                <span className={`${rowAmountCls} text-right text-slate-800 dark:text-slate-100`}>
+                                                <span className={`${rowAmountCls} text-right text-slate-800 dark:text-neutral-100`}>
                                                     {activeAmount(s)}
                                                 </span>
                                             )}
@@ -456,11 +453,7 @@ function RecurringCategoriesTab({ active, addRef }: { active: boolean; addRef?: 
                         {loading && <LoadingRows />}
                         {!loading && !cats.length && <EmptyRows label="No recurring categories." />}
                         {cats.map((c) => (
-                            <ListRow
-                                key={c.id}
-                                selected={selected?.id === c.id}
-                                disabled={!!c.deleted_at}
-                            >
+                            <ListRow key={c.id} selected={selected?.id === c.id} disabled={!!c.deleted_at}>
                                 <div className="flex items-center justify-between gap-3">
                                     <span className={rowTitleCls}>{c.name}</span>
                                     <div className="flex items-center gap-2">

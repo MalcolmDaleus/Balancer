@@ -139,6 +139,14 @@ function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
 
     const streamName = (id: number) => streams.find((s) => s.id === id)?.name ?? '—';
 
+    const entryLabel = (entry: IncomeEntry) => {
+        if (entry.purchase_id) {
+            const desc = entry.purchase_description?.trim();
+            return desc ? `Refund - ${desc}` : 'Refund';
+        }
+        return streamName(entry.income_stream_id);
+    };
+
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
@@ -204,7 +212,7 @@ function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                                 selected={selected?.id === entry.id}
                             >
                                 <div className="flex items-start justify-between gap-3">
-                                    <p className={rowTitleCls}>{streamName(entry.income_stream_id)}</p>
+                                    <p className={rowTitleCls}>{entryLabel(entry)}</p>
                                     <span className={`${rowAmountCls} text-emerald-600 dark:text-emerald-400`}>
                                         ${entry.amount.toFixed(2)}
                                     </span>

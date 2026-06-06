@@ -16,7 +16,7 @@ class IncomeEntryController extends Controller
         $this->authorize('viewAny', IncomeEntry::class);
 
         $entries = IncomeEntry::where('user_id', auth()->id())
-            ->with('stream')
+            ->with(['stream', 'sourcePurchase'])
             ->latest('month')
             ->get();
 
@@ -32,14 +32,14 @@ class IncomeEntryController extends Controller
             ['user_id' => auth()->id()]
         ));
 
-        return new IncomeEntryResource($entry->load('stream'));
+        return new IncomeEntryResource($entry->load(['stream', 'sourcePurchase']));
     }
 
     public function show(IncomeEntry $incomeEntry): IncomeEntryResource
     {
         $this->authorize('view', $incomeEntry);
 
-        return new IncomeEntryResource($incomeEntry->load('stream'));
+        return new IncomeEntryResource($incomeEntry->load(['stream', 'sourcePurchase']));
     }
 
     public function update(UpdateIncomeEntryRequest $request, IncomeEntry $incomeEntry): IncomeEntryResource
@@ -48,7 +48,7 @@ class IncomeEntryController extends Controller
 
         $incomeEntry->update($request->validated());
 
-        return new IncomeEntryResource($incomeEntry->fresh()->load('stream'));
+        return new IncomeEntryResource($incomeEntry->fresh()->load(['stream', 'sourcePurchase']));
     }
 
     public function destroy(IncomeEntry $incomeEntry): JsonResponse

@@ -28,6 +28,7 @@ export interface IncomeEntry {
     amount: number;
     month: string;
     purchase_id: number | null;
+    purchase_description?: string | null;
     stream?: IncomeStream;
 }
 
@@ -43,6 +44,9 @@ export interface Purchase {
     description: string;
     date: string;
     is_refunded: boolean;
+    refunded_total: number;
+    remaining_refundable: number;
+    refund_status: 'none' | 'partial' | 'full';
     attachment_path?: string | null;
     url?: string | null;
     category?: PurchaseCategory;
@@ -156,9 +160,44 @@ export function fmt(amount: number, currency = 'USD') {
 // ---------------------------------------------------------------------------
 
 /** Row typography — use consistently across CS list items */
-export const rowTitleCls = 'text-base font-medium leading-snug text-slate-900 dark:text-slate-50';
-export const rowDetailCls = 'text-sm leading-snug text-slate-500 dark:text-slate-300';
+export const rowTitleCls = 'text-base font-medium leading-snug text-slate-900 dark:text-neutral-50';
+export const rowDetailCls = 'text-sm leading-snug text-slate-500 dark:text-neutral-200';
 export const rowAmountCls = 'shrink-0 text-lg font-semibold tabular-nums';
+
+/** Translucent chip/tab tints — dark mode uses a lighter fill and brighter text */
+export const tintChip = {
+    emerald: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300',
+    sky: 'bg-sky-500/15 text-sky-700 dark:bg-sky-400/10 dark:text-sky-300',
+    red: 'bg-red-500/15 text-red-700 dark:bg-red-400/10 dark:text-red-300',
+    rose: 'bg-rose-500/15 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300',
+    amber: 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
+    orange: 'bg-orange-400/15 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300',
+    violet: 'bg-violet-500/15 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300',
+    slate: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
+} as const;
+
+/** Balance sheet section header pills — slightly softer fill in dark mode */
+export const tintSectionPill = {
+    emerald: 'bg-emerald-300/25 text-emerald-600/80 dark:bg-emerald-400/10 dark:text-emerald-300',
+    red: 'bg-red-300/25 text-red-600/80 dark:bg-red-400/10 dark:text-red-300',
+    rose: 'bg-rose-300/25 text-rose-600/80 dark:bg-rose-400/10 dark:text-rose-300',
+    yellow: 'bg-yellow-300/30 text-yellow-600/80 dark:bg-yellow-400/10 dark:text-yellow-300',
+    orange: 'bg-orange-300/25 text-orange-600/80 dark:bg-orange-400/10 dark:text-orange-300',
+    sky: 'bg-sky-300/25 text-sky-600/80 dark:bg-sky-400/10 dark:text-sky-300',
+} as const;
+
+/** Inactive tab label — readable on dark surfaces without a fill */
+export const tabInactiveCls =
+    'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-neutral-300 dark:hover:bg-white/5 dark:hover:text-neutral-100';
+
+/** Opaque row action buttons — same look in light and dark mode */
+export const editBtnCls =
+    'rounded-full bg-sky-700 px-3 py-1 text-sm font-medium text-sky-50 hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40';
+export const deleteBtnCls =
+    'rounded-full bg-rose-700 px-3 py-1 text-sm font-medium text-rose-50 hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-40';
+export const secondaryBtnCls =
+    'rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40';
+export const secondaryBtnFullCls = `${secondaryBtnCls} w-full text-center`;
 
 /** Vertical stack for list items */
 export function ListStack({ children }: { children: ReactNode }) {
@@ -189,11 +228,9 @@ export function ListRow({
         <div
             onClick={interactive ? onClick : undefined}
             className={`rounded-xl px-3 py-3.5 transition-colors ${
-                disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-700/50' : ''
+                disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50' : ''
             } ${
-                selected
-                    ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-700/60 dark:ring-slate-600'
-                    : 'bg-slate-50/70 dark:bg-slate-700/30'
+                selected ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-neutral-800/60 dark:ring-neutral-700' : 'bg-slate-50/70 dark:bg-neutral-800/40'
             } ${className}`}
         >
             {children}
@@ -214,7 +251,7 @@ export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; lab
     return (
         <button
             onClick={onClick}
-            className="shrink-0 whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 active:scale-95 dark:bg-emerald-700 dark:hover:bg-emerald-600 md:hidden"
+            className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-emerald-700 active:scale-95 md:hidden dark:bg-emerald-700 dark:hover:bg-emerald-600"
         >
             + {label}
         </button>
@@ -231,15 +268,9 @@ export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: 
                 <button
                     key={tab}
                     onClick={() => onChange(tab)}
-                    className={`whitespace-nowrap rounded-full font-medium transition-colors ${
-                        compact
-                            ? 'px-2 py-0.5 text-xs md:px-3 md:py-1 md:text-sm'
-                            : 'px-3 py-1 text-sm'
-                    } ${
-                        active === tab
-                            ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900'
-                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100'
-                    }`}
+                    className={`rounded-full font-medium whitespace-nowrap transition-colors ${
+                        compact ? 'px-2 py-0.5 text-xs md:px-3 md:py-1 md:text-sm' : 'px-3 py-1 text-sm'
+                    } ${active === tab ? 'bg-slate-800 text-white dark:bg-white/10 dark:text-neutral-100' : tabInactiveCls}`}
                 >
                     {tab}
                 </button>
@@ -250,9 +281,7 @@ export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: 
 
 /** Returns true when the viewport is narrower than the md breakpoint (768 px). */
 export function useIsMobile(): boolean {
-    const [mobile, setMobile] = useState(() =>
-        typeof window !== 'undefined' ? window.innerWidth < 768 : false,
-    );
+    const [mobile, setMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
     useEffect(() => {
         const mq = window.matchMedia('(max-width: 767px)');
         const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
@@ -275,13 +304,7 @@ export interface SplitPaneProps {
 }
 
 /** Split pane: 60 % list + 40 % form on desktop; list-only + bottom sheet on mobile. */
-export function SplitPane({
-    list,
-    form,
-    sheetOpen = false,
-    onSheetOpenChange,
-    sheetTitle,
-}: SplitPaneProps) {
+export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, sheetTitle }: SplitPaneProps) {
     return (
         <>
             <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
@@ -291,26 +314,17 @@ export function SplitPane({
                 </div>
 
                 {/* Desktop form panel — hidden on mobile */}
-                <div className="hidden border-l border-slate-100 pl-4 dark:border-slate-700 md:block md:w-[40%]">
-                    {sheetTitle && (
-                        <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-400">{sheetTitle}</p>
-                    )}
+                <div className="hidden border-l border-slate-100 pl-4 md:block md:w-[40%] dark:border-neutral-800 dark:bg-neutral-950/40">
+                    {sheetTitle && <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-neutral-300">{sheetTitle}</p>}
                     <div className="overflow-y-auto">{form}</div>
                 </div>
             </div>
 
             {/* Mobile bottom sheet */}
             <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
-                <SheetContent
-                    side="bottom"
-                    className="rounded-t-2xl bg-white dark:bg-slate-800 md:hidden"
-                >
-                    <div className="overflow-y-auto px-5 pb-8 pt-6">
-                        {sheetTitle && (
-                            <p className="mb-4 text-base font-semibold text-slate-800 dark:text-slate-100">
-                                {sheetTitle}
-                            </p>
-                        )}
+                <SheetContent side="bottom" className="rounded-t-2xl bg-white md:hidden dark:bg-neutral-900">
+                    <div className="overflow-y-auto px-5 pt-6 pb-8">
+                        {sheetTitle && <p className="mb-4 text-base font-semibold text-slate-800 dark:text-neutral-100">{sheetTitle}</p>}
                         {form}
                     </div>
                 </SheetContent>
@@ -322,12 +336,12 @@ export function SplitPane({
 /** Status chip for debt/stream/category states */
 export function StatusChip({ label, color }: { label: string; color: 'green' | 'blue' | 'red' | 'amber' | 'slate' | 'violet' }) {
     const map: Record<string, string> = {
-        green:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-700 dark:text-emerald-50',
-        blue:   'bg-sky-100 text-sky-700 dark:bg-sky-700 dark:text-sky-50',
-        red:    'bg-rose-100 text-rose-700 dark:bg-rose-700 dark:text-rose-50',
-        amber:  'bg-amber-100 text-amber-700 dark:bg-amber-600 dark:text-amber-50',
-        slate:  'bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-100',
-        violet: 'bg-violet-100 text-violet-700 dark:bg-violet-700 dark:text-violet-50',
+        green: tintChip.emerald,
+        blue: tintChip.sky,
+        red: tintChip.rose,
+        amber: tintChip.amber,
+        slate: tintChip.slate,
+        violet: tintChip.violet,
     };
     return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${map[color]}`}>{label}</span>;
 }
@@ -336,8 +350,8 @@ export function StatusChip({ label, color }: { label: string; color: 'green' | '
 export function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800">
-                <p className="mb-5 text-base text-slate-700 dark:text-slate-200">{message}</p>
+            <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900">
+                <p className="mb-5 text-base text-slate-700 dark:text-neutral-200">{message}</p>
                 <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="sm" className="rounded-full" onClick={onCancel}>
                         Cancel
@@ -369,7 +383,7 @@ export function ApiError({ message, onDismiss }: { message: string; onDismiss?: 
 export function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
     return (
         <div className="grid gap-1">
-            <label className="text-sm font-medium text-slate-600 dark:text-slate-400">{label}</label>
+            <label className="text-sm font-medium text-slate-600 dark:text-neutral-300">{label}</label>
             {children}
             {error && <span className="text-sm text-rose-500">{error}</span>}
         </div>
@@ -378,11 +392,11 @@ export function Field({ label, children, error }: { label: string; children: Rea
 
 /** Shared input class */
 export const inputCls =
-    'flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
+    'flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100';
 
 /** Same as inputCls but width fits the content — use for date / month inputs */
 export const dateCls =
-    'flex h-8 w-auto justify-self-start rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100';
+    'flex h-8 w-auto justify-self-start rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100';
 
 /** Shared select class */
 export const selectCls = inputCls;
@@ -418,7 +432,7 @@ export function RowActions({
                 <button
                     disabled={editDisabled}
                     onClick={onEdit}
-                    className="rounded-full bg-sky-50 px-3 py-1 text-sm font-medium text-sky-600 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-sky-700 dark:text-sky-50 dark:hover:bg-sky-600"
+                    className={editBtnCls}
                 >
                     Edit
                 </button>
@@ -427,7 +441,7 @@ export function RowActions({
                 <button
                     disabled={deleteDisabled}
                     onClick={onDelete}
-                    className="rounded-full bg-rose-50 px-3 py-1 text-sm font-medium text-rose-500 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-rose-700 dark:text-rose-50 dark:hover:bg-rose-600"
+                    className={deleteBtnCls}
                 >
                     Del
                 </button>
@@ -459,7 +473,7 @@ export function FormActions({ isEdit, saving, onCancel, saveLabel }: { isEdit: b
                 <button
                     type="button"
                     onClick={onCancel}
-                    className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                    className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
                 >
                     Cancel
                 </button>

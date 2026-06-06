@@ -107,7 +107,7 @@ export default function Register() {
                                     required
                                     tabIndex={6}
                                     defaultValue="USD"
-                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800"
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900"
                                 >
                                     <option value="USD">USD — US Dollar</option>
                                     <option value="EUR">EUR — Euro</option>
@@ -117,7 +117,7 @@ export default function Register() {
 
                             <Button
                                 type="submit"
-                                className="mt-2 w-full bg-slate-800 text-white shadow-sm hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                                className="mt-2 w-full bg-slate-800 text-white shadow-sm hover:bg-slate-700 dark:bg-slate-100 dark:text-neutral-900 dark:hover:bg-white"
                                 tabIndex={7}
                             >
                                 {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}

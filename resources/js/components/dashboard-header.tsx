@@ -10,7 +10,7 @@ export default function DashboardHeader() {
     };
 
     return (
-        <header className="fixed inset-x-0 top-3 z-30 mx-4 h-14 rounded-full bg-white/40 shadow-sm backdrop-blur-md dark:bg-slate-950/70 dark:shadow-slate-950/60 md:mx-8">
+        <header className="fixed inset-x-0 top-3 z-30 mx-4 h-14 rounded-full bg-white/40 shadow-sm backdrop-blur-md dark:bg-neutral-950/70 dark:shadow-neutral-950/60 md:mx-8">
             <div className="flex h-full items-center justify-between px-4">
                 {/* Left — theme toggle */}
                 <div className="flex w-24 items-center">
@@ -37,7 +37,7 @@ export default function DashboardHeader() {
                         variant="ghost"
                         size="sm"
                         onClick={handleLogout}
-                        className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                        className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-neutral-100"
                     >
                         <LogOut className="h-4 w-4" />
                         <span className="hidden sm:inline">Log out</span>
