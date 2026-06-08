@@ -29,6 +29,7 @@ import {
     thisMonthStr,
     useIsMobile,
 } from './shared';
+import { useLockedMonths } from './locked-months';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Entries
@@ -36,6 +37,7 @@ import {
 
 function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
+    const { isLocked } = useLockedMonths();
     const [entries, setEntries] = useState<IncomeEntry[]>([]);
     const [streams, setStreams] = useState<IncomeStream[]>([]);
     const [loading, setLoading] = useState(false);
@@ -206,7 +208,9 @@ function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                     <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !entries.length && <EmptyRows label="No income entries yet." />}
-                        {entries.map((entry) => (
+                        {entries.map((entry) => {
+                            const monthLocked = isLocked(entry.month);
+                            return (
                             <ListRow
                                 key={entry.id}
                                 selected={selected?.id === entry.id}
@@ -219,10 +223,13 @@ function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                                 </div>
                                 <div className="mt-2 flex items-center justify-between gap-3">
                                     <span className={rowDetailCls}>{entry.month?.slice(0, 7)}</span>
-                                    <RowActions onEdit={() => selectRow(entry)} onDelete={() => setConfirm(entry)} />
+                                    {!monthLocked && (
+                                        <RowActions onEdit={() => selectRow(entry)} onDelete={() => setConfirm(entry)} />
+                                    )}
                                 </div>
                             </ListRow>
-                        ))}
+                            );
+                        })}
                     </ListStack>
                 }
                 form={formContent}

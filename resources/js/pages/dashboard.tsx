@@ -1,9 +1,10 @@
+import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
 import { type SharedData } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 // ─── Shared card shell ────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ const MODULES = [
     { id: 'balance-sheet', title: 'Balance Sheet', subtitle: 'Monthly financial overview' },
     { id: 'creator-suite', title: 'Creator Suite', subtitle: 'Add and manage entries' },
     { id: 'statistics', title: 'Statistics', subtitle: 'Trends and insights' },
-    { id: 'purchase-history', title: 'Purchase History', subtitle: 'All your purchases' },
+    { id: 'sheet-history', title: 'Past Balance Sheets', subtitle: 'Closed monthly snapshots' },
     { id: 'settings', title: 'Settings', subtitle: 'Account preferences' },
 ];
 
@@ -408,16 +409,70 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     );
 }
 
+// ─── Auto-close toast ─────────────────────────────────────────────────────────
+function formatMonthLabel(ym: string): string {
+    const [year, month] = ym.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function formatClosedMonthsMessage(months: string[]): string {
+    if (months.length === 1) {
+        return `${formatMonthLabel(months[0])} was closed automatically.`;
+    }
+
+    const first = formatMonthLabel(months[0]);
+    const last = formatMonthLabel(months[months.length - 1]);
+
+    if (months.length === 2) {
+        return `${first} and ${last} were closed automatically.`;
+    }
+
+    return `${first} through ${last} (${months.length} months) were closed automatically.`;
+}
+
+function MonthClosedToast({ months, onDismiss }: { months: string[]; onDismiss: () => void }) {
+    useEffect(() => {
+        const timer = window.setTimeout(onDismiss, 6000);
+        return () => window.clearTimeout(timer);
+    }, [onDismiss]);
+
+    return (
+        <div
+            role="status"
+            className="fixed bottom-6 left-1/2 z-50 flex max-w-sm -translate-x-1/2 items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+        >
+            <p className="flex-1 text-sm text-slate-700 dark:text-neutral-200">{formatClosedMonthsMessage(months)}</p>
+            <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Dismiss"
+                className="shrink-0 rounded-md p-0.5 text-slate-400 transition-colors hover:text-slate-600 dark:text-neutral-500 dark:hover:text-neutral-300"
+            >
+                <X className="h-4 w-4" />
+            </button>
+        </div>
+    );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-export default function Dashboard() {
+interface DashboardProps {
+    closedMonths?: string[];
+}
+
+export default function Dashboard({ closedMonths = [] }: DashboardProps) {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
+        if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
         return <ModuleCard title={title} subtitle={subtitle} className={className} />;
     };
 
     const [activeIndex, setActiveIndex] = useState(0);
+    const [showClosedToast, setShowClosedToast] = useState(closedMonths.length > 0);
     const carouselRef = useRef<HTMLDivElement>(null);
+
+    const dismissClosedToast = useCallback(() => setShowClosedToast(false), []);
 
     const handleScroll = () => {
         const el = carouselRef.current;
@@ -481,18 +536,18 @@ export default function Dashboard() {
                         />
                         <BalanceSheetCard className="col-span-4 h-[32rem]" />
 
-                        {/* Row 2 — Purchase History (4) + Creator Suite (8) */}
-                        <ModuleCard
-                            title="Purchase History"
-                            subtitle="All your purchases"
-                            className="col-span-4 min-h-80"
-                        />
+                        {/* Row 2 — Past Balance Sheets (4) + Creator Suite (8) */}
+                        <BalanceSheetHistoryCard className="col-span-4 min-h-80" />
                         <CreatorSuiteCard className="col-span-8 h-[42rem]" />
 
                     </div>
                 </div>
 
             </div>
+
+            {showClosedToast && closedMonths.length > 0 && (
+                <MonthClosedToast months={closedMonths} onDismiss={dismissClosedToast} />
+            )}
         </>
     );
 }

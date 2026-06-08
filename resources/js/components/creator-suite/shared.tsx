@@ -173,7 +173,8 @@ export const tintChip = {
     amber: 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
     orange: 'bg-orange-400/15 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300',
     violet: 'bg-violet-500/15 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300',
-    slate: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
+    teal:   'bg-teal-500/15 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300',
+    slate:  'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
 } as const;
 
 /** Balance sheet section header pills — slightly softer fill in dark mode */
@@ -196,7 +197,7 @@ export const editBtnCls =
 export const deleteBtnCls =
     'rounded-full bg-rose-700 px-3 py-1 text-sm font-medium text-rose-50 hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-40';
 export const secondaryBtnCls =
-    'rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40';
+    'rounded-full bg-violet-500 px-3 py-1 text-sm font-medium text-violet-50 hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40';
 export const secondaryBtnFullCls = `${secondaryBtnCls} w-full text-center`;
 
 /** Vertical stack for list items */
@@ -260,17 +261,15 @@ export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; lab
 
 /** Secondary tab bar (pill style) used inside each main tab */
 export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
-    const compact = tabs.length >= 3;
-
     return (
-        <div className={`flex min-w-0 flex-1 flex-wrap ${compact ? 'gap-1' : 'gap-1.5'}`}>
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
             {tabs.map((tab) => (
                 <button
                     key={tab}
                     onClick={() => onChange(tab)}
-                    className={`rounded-full font-medium whitespace-nowrap transition-colors ${
-                        compact ? 'px-2 py-0.5 text-xs md:px-3 md:py-1 md:text-sm' : 'px-3 py-1 text-sm'
-                    } ${active === tab ? 'bg-slate-800 text-white dark:bg-white/10 dark:text-neutral-100' : tabInactiveCls}`}
+                    className={`rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors ${
+                        active === tab ? 'bg-slate-800 text-white dark:bg-white/10 dark:text-neutral-100' : tabInactiveCls
+                    }`}
                 >
                     {tab}
                 </button>
@@ -334,7 +333,7 @@ export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, sh
 }
 
 /** Status chip for debt/stream/category states */
-export function StatusChip({ label, color }: { label: string; color: 'green' | 'blue' | 'red' | 'amber' | 'slate' | 'violet' }) {
+export function StatusChip({ label, color }: { label: string; color: 'green' | 'blue' | 'red' | 'amber' | 'slate' | 'violet' | 'teal' }) {
     const map: Record<string, string> = {
         green: tintChip.emerald,
         blue: tintChip.sky,
@@ -342,6 +341,7 @@ export function StatusChip({ label, color }: { label: string; color: 'green' | '
         amber: tintChip.amber,
         slate: tintChip.slate,
         violet: tintChip.violet,
+        teal: tintChip.teal,
     };
     return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${map[color]}`}>{label}</span>;
 }
@@ -455,6 +455,11 @@ export const todayStr = () => new Date().toISOString().slice(0, 10);
 
 /** Utility: current month as YYYY-MM */
 export const thisMonthStr = () => new Date().toISOString().slice(0, 7);
+
+/** Normalize a date (YYYY-MM-DD) or month (YYYY-MM) to YYYY-MM */
+export function monthKey(dateOrMonth: string): string {
+    return dateOrMonth.slice(0, 7);
+}
 
 /** Reusable "Save / Cancel" button row at the bottom of forms */
 export function FormActions({ isEdit, saving, onCancel, saveLabel }: { isEdit: boolean; saving: boolean; onCancel: () => void; saveLabel?: string }) {

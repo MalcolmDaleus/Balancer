@@ -21,20 +21,20 @@ test('unauthenticated user cannot access balance sheet', function () {
 // ---------------------------------------------------------------------------
 
 test('user can get simplified balance sheet for a month', function () {
-    $user   = User::factory()->create();
+    $user = User::factory()->create();
     $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     IncomeEntry::factory()->create([
-        'user_id'          => $user->id,
+        'user_id' => $user->id,
         'income_stream_id' => $stream->id,
-        'amount'           => 3000.00,
-        'month'            => '2026-04-01',
+        'amount' => 3000.00,
+        'month' => '2026-04-01',
     ]);
 
     Purchase::factory()->create([
         'user_id' => $user->id,
-        'amount'  => 500.00,
-        'date'    => '2026-04-15',
+        'amount' => 500.00,
+        'date' => '2026-04-15',
     ]);
 
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/summary?month=2026-04');
@@ -95,42 +95,89 @@ test('close month requires month field', function () {
 });
 
 // ---------------------------------------------------------------------------
+// Locked months
+// ---------------------------------------------------------------------------
+
+test('user can get locked months list', function () {
+    $user = User::factory()->create();
+    $other = User::factory()->create();
+
+    BalanceSheetTotal::create([
+        'user_id' => $user->id,
+        'month' => '2026-03-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
+        'total_recurring' => 0,
+        'savings_snapshot' => 0,
+        'roll_over' => 0,
+    ]);
+
+    BalanceSheetTotal::create([
+        'user_id' => $user->id,
+        'month' => '2026-04-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
+        'total_recurring' => 0,
+        'savings_snapshot' => 0,
+        'roll_over' => 0,
+    ]);
+
+    BalanceSheetTotal::create([
+        'user_id' => $other->id,
+        'month' => '2026-03-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
+        'total_recurring' => 0,
+        'savings_snapshot' => 0,
+        'roll_over' => 0,
+    ]);
+
+    $this->actingAs($user)->getJson('/api/v1/balance-sheet/locked-months')
+        ->assertOk()
+        ->assertJsonPath('months', ['2026-03', '2026-04']);
+});
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 
 test('user can get balance sheet history', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
 
     // Create 5 known snapshots within the last 12 months for the user
     foreach (range(1, 5) as $i) {
         BalanceSheetTotal::create([
-            'user_id'          => $user->id,
-            'month'            => now()->subMonths($i)->startOfMonth()->toDateString(),
-            'total_income'     => 0,
-            'total_debt_paid'  => 0,
-            'total_spending'   => 0,
-            'total_recurring'  => 0,
+            'user_id' => $user->id,
+            'month' => now()->subMonths($i)->startOfMonth()->toDateString(),
+            'total_income' => 0,
+            'total_debt_paid' => 0,
+            'total_spending' => 0,
+            'total_recurring' => 0,
             'savings_snapshot' => 0,
-            'roll_over'        => 0,
+            'roll_over' => 0,
         ]);
     }
 
     // Other user's snapshots should not appear
     BalanceSheetTotal::create([
-        'user_id'          => $other->id,
-        'month'            => now()->subMonths(1)->startOfMonth()->toDateString(),
-        'total_income'     => 0,
-        'total_debt_paid'  => 0,
-        'total_spending'   => 0,
-        'total_recurring'  => 0,
+        'user_id' => $other->id,
+        'month' => now()->subMonths(1)->startOfMonth()->toDateString(),
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
+        'total_recurring' => 0,
         'savings_snapshot' => 0,
-        'roll_over'        => 0,
+        'roll_over' => 0,
     ]);
 
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/history?months=12');
 
     $response->assertOk()->assertJsonCount(5, 'data');
+    $response->assertJsonStructure(['data' => [['total_recurring']]]);
 });
 
 // ---------------------------------------------------------------------------
@@ -158,7 +205,7 @@ test('compare requires both month params', function () {
 // ---------------------------------------------------------------------------
 
 test('user can delete a snapshot to unlock a month', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $snapshot = BalanceSheetTotal::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/balance-sheet/{$snapshot->id}")
@@ -168,8 +215,8 @@ test('user can delete a snapshot to unlock a month', function () {
 });
 
 test('user cannot delete another user\'s snapshot', function () {
-    $user     = User::factory()->create();
-    $other    = User::factory()->create();
+    $user = User::factory()->create();
+    $other = User::factory()->create();
     $snapshot = BalanceSheetTotal::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/balance-sheet/{$snapshot->id}")

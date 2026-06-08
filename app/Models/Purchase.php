@@ -7,14 +7,15 @@ use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Purchase extends Model
 {
-    use HasFactory, UserScopable, DateScopeable, MonthLockable;
+    use DateScopeable, HasFactory, MonthLockable, UserScopable;
 
     protected string $monthLockColumn = 'date';
+
+    /** Refund flag updates are allowed on locked months (income posts to current month). */
+    protected array $monthLockExemptAttributes = ['is_refunded'];
 
     protected $attributes = [
         'is_refunded' => false,
@@ -33,8 +34,8 @@ class Purchase extends Model
     ];
 
     protected $casts = [
-        'date'        => 'datetime',
-        'amount'      => 'decimal:2',
+        'date' => 'datetime',
+        'amount' => 'decimal:2',
         'is_refunded' => 'boolean',
     ];
 

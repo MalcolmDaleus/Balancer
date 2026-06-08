@@ -29,8 +29,7 @@ class MonthLockService
     /**
      * Returns true if a BalanceSheetTotal exists for the given user + month.
      *
-     * @param int              $userId
-     * @param Carbon|string    $month   Any value parseable by DateTimeService::normalizeMonth()
+     * @param  Carbon|string  $month  Any value parseable by DateTimeService::normalizeMonth()
      */
     public static function isLocked(int $userId, Carbon|string $month): bool
     {
@@ -40,11 +39,24 @@ class MonthLockService
     }
 
     /**
+     * All locked months for a user as YYYY-MM strings (oldest first).
+     *
+     * @return list<string>
+     */
+    public static function lockedMonthKeys(int $userId): array
+    {
+        return BalanceSheetTotal::where('user_id', $userId)
+            ->orderBy('month')
+            ->get()
+            ->map(fn (BalanceSheetTotal $row) => DateTimeService::normalizeMonth($row->month)->format('Y-m'))
+            ->values()
+            ->all();
+    }
+
+    /**
      * Throws MonthLockedException (HTTP 423) if the month is locked.
      * Call this at the start of any write operation that touches month data.
      *
-     * @param int           $userId
-     * @param Carbon|string $month
      *
      * @throws MonthLockedException
      */
@@ -60,8 +72,7 @@ class MonthLockService
      * Useful when the model stores a datetime (e.g. debt_payments.paid_at)
      * and we need to derive the month lock check from it.
      *
-     * @param Carbon|string $datetime
-     * @return Carbon  First day of the month at UTC midnight
+     * @return Carbon First day of the month at UTC midnight
      */
     public static function monthOf(Carbon|string $datetime): Carbon
     {

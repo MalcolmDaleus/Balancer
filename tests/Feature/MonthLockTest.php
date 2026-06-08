@@ -5,7 +5,6 @@ use App\Models\BalanceSheetTotal;
 use App\Models\Debt;
 use App\Models\DebtCategory;
 use App\Models\DebtPayment;
-use App\Models\IncomeCategory;
 use App\Models\IncomeEntry;
 use App\Models\IncomeStream;
 use App\Models\Purchase;
@@ -27,13 +26,13 @@ function userWithLockedMonth(): array
     $month = '2025-01-01';
 
     BalanceSheetTotal::create([
-        'user_id'        => $user->id,
-        'month'          => $month,
-        'total_income'   => 0,
-        'total_debt_paid'=> 0,
+        'user_id' => $user->id,
+        'month' => $month,
+        'total_income' => 0,
+        'total_debt_paid' => 0,
         'total_spending' => 0,
         'savings_snapshot' => 0,
-        'roll_over'      => 0,
+        'roll_over' => 0,
     ]);
 
     return [$user, $month];
@@ -48,11 +47,11 @@ test('creating a purchase in a locked month throws MonthLockedException', functi
     $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     expect(fn () => Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 50.00,
+        'amount' => 50.00,
         'description' => 'Locked purchase',
-        'date'        => $month,
+        'date' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
@@ -61,11 +60,11 @@ test('creating a purchase in an unlocked month succeeds', function () {
     $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $purchase = Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 20.00,
+        'amount' => 20.00,
         'description' => 'Free month',
-        'date'        => '2025-03-15',
+        'date' => '2025-03-15',
     ]);
 
     expect($purchase->exists)->toBeTrue();
@@ -76,11 +75,11 @@ test('updating a purchase in a locked month throws MonthLockedException', functi
     $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $purchase = Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 20.00,
+        'amount' => 20.00,
         'description' => 'Will be locked',
-        'date'        => '2025-02-10',
+        'date' => '2025-02-10',
     ]);
 
     // Now lock that month
@@ -94,16 +93,40 @@ test('updating a purchase in a locked month throws MonthLockedException', functi
         ->toThrow(MonthLockedException::class);
 });
 
+test('marking a purchase as refunded in a locked month is allowed', function () {
+    $user = User::factory()->create();
+    $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
+
+    $purchase = Purchase::create([
+        'user_id' => $user->id,
+        'category_id' => $cat->id,
+        'amount' => 20.00,
+        'description' => 'Will be locked',
+        'date' => '2025-02-10',
+        'is_refunded' => false,
+    ]);
+
+    BalanceSheetTotal::create([
+        'user_id' => $user->id, 'month' => '2025-02-01',
+        'total_income' => 0, 'total_debt_paid' => 0,
+        'total_spending' => 0, 'savings_snapshot' => 0, 'roll_over' => 0,
+    ]);
+
+    $purchase->update(['is_refunded' => true]);
+
+    expect($purchase->fresh()->is_refunded)->toBeTrue();
+});
+
 test('deleting a purchase in a locked month throws MonthLockedException', function () {
     $user = User::factory()->create();
     $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $purchase = Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 10.00,
+        'amount' => 10.00,
         'description' => 'Will be locked',
-        'date'        => '2025-04-05',
+        'date' => '2025-04-05',
     ]);
 
     BalanceSheetTotal::create([
@@ -124,10 +147,10 @@ test('creating an income entry in a locked month throws MonthLockedException', f
     $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     expect(fn () => IncomeEntry::create([
-        'user_id'          => $user->id,
+        'user_id' => $user->id,
         'income_stream_id' => $stream->id,
-        'amount'           => 1000.00,
-        'month'            => $month,
+        'amount' => 1000.00,
+        'month' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
@@ -136,10 +159,10 @@ test('deleting an income entry in a locked month throws MonthLockedException', f
     $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     $entry = IncomeEntry::create([
-        'user_id'          => $user->id,
+        'user_id' => $user->id,
         'income_stream_id' => $stream->id,
-        'amount'           => 500.00,
-        'month'            => '2025-06-01',
+        'amount' => 500.00,
+        'month' => '2025-06-01',
     ]);
 
     BalanceSheetTotal::create([
@@ -160,8 +183,8 @@ test('creating a saving in a locked month throws MonthLockedException', function
 
     expect(fn () => Saving::create([
         'user_id' => $user->id,
-        'amount'  => 200.00,
-        'month'   => $month,
+        'amount' => 200.00,
+        'month' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
@@ -170,8 +193,8 @@ test('deleting a saving in a locked month throws MonthLockedException', function
 
     $saving = Saving::create([
         'user_id' => $user->id,
-        'amount'  => 150.00,
-        'month'   => '2025-05-01',
+        'amount' => 150.00,
+        'month' => '2025-05-01',
     ]);
 
     BalanceSheetTotal::create([
@@ -189,38 +212,38 @@ test('deleting a saving in a locked month throws MonthLockedException', function
 
 test('creating a debt payment in a locked month throws MonthLockedException', function () {
     [$user, $month] = userWithLockedMonth();
-    $cat  = DebtCategory::factory()->create(['user_id' => $user->id]);
+    $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
     $debt = Debt::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 500.00,
+        'amount' => 500.00,
         'description' => 'Old debt',
-        'issue_date'  => '2024-11-01',
+        'issue_date' => '2024-11-01',
     ]);
 
     expect(fn () => DebtPayment::create([
         'user_id' => $user->id,
         'debt_id' => $debt->id,
-        'amount'  => 50.00,
+        'amount' => 50.00,
         'paid_at' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
 test('deleting a debt payment in a locked month throws MonthLockedException', function () {
     $user = User::factory()->create();
-    $cat  = DebtCategory::factory()->create(['user_id' => $user->id]);
+    $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
     $debt = Debt::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 500.00,
+        'amount' => 500.00,
         'description' => 'Debt',
-        'issue_date'  => '2024-11-01',
+        'issue_date' => '2024-11-01',
     ]);
 
     $payment = DebtPayment::create([
         'user_id' => $user->id,
         'debt_id' => $debt->id,
-        'amount'  => 25.00,
+        'amount' => 25.00,
         'paid_at' => '2025-07-15',
     ]);
 
@@ -242,24 +265,24 @@ test('creating a debt in a locked month throws MonthLockedException', function (
     $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
 
     expect(fn () => Debt::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 300.00,
+        'amount' => 300.00,
         'description' => 'Locked debt',
-        'issue_date'  => $month,
+        'issue_date' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
 test('deleting a debt whose issue_date is in a locked month throws MonthLockedException', function () {
     $user = User::factory()->create();
-    $cat  = DebtCategory::factory()->create(['user_id' => $user->id]);
+    $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
 
     $debt = Debt::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 100.00,
+        'amount' => 100.00,
         'description' => 'Will lock',
-        'issue_date'  => '2025-08-01',
+        'issue_date' => '2025-08-01',
     ]);
 
     BalanceSheetTotal::create([
@@ -277,15 +300,15 @@ test('deleting a debt whose issue_date is in a locked month throws MonthLockedEx
 
 test('moving a purchase from an unlocked month into a locked month is blocked', function () {
     $user = User::factory()->create();
-    $cat  = PurchaseCategory::factory()->create(['user_id' => $user->id]);
+    $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     // Purchase in an unlocked month
     $purchase = Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 30.00,
+        'amount' => 30.00,
         'description' => 'Free month purchase',
-        'date'        => '2025-09-10',
+        'date' => '2025-09-10',
     ]);
 
     // Lock a different (target) month
@@ -301,14 +324,14 @@ test('moving a purchase from an unlocked month into a locked month is blocked', 
 
 test('moving a purchase out of a locked month is also blocked', function () {
     $user = User::factory()->create();
-    $cat  = PurchaseCategory::factory()->create(['user_id' => $user->id]);
+    $cat = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $purchase = Purchase::create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $cat->id,
-        'amount'      => 30.00,
+        'amount' => 30.00,
         'description' => 'Locked month purchase',
-        'date'        => '2025-11-10',
+        'date' => '2025-11-10',
     ]);
 
     BalanceSheetTotal::create([

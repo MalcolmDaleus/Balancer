@@ -84,6 +84,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
     // ---------------------------------------------------------------
     Route::prefix('balance-sheet')->name('balance-sheet.')->group(function () {
         Route::get('/', [BalanceSheetTotalController::class, 'expanded'])->name('expanded');
+        Route::get('/locked-months', [BalanceSheetTotalController::class, 'lockedMonths'])->name('locked-months');
         Route::get('/summary', [BalanceSheetTotalController::class, 'summary'])->name('summary');
         Route::post('/close', [BalanceSheetTotalController::class, 'close'])->name('close');
         Route::get('/history', [BalanceSheetTotalController::class, 'history'])->name('history');

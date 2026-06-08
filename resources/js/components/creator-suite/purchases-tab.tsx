@@ -30,6 +30,7 @@ import {
     todayStr,
     useIsMobile,
 } from './shared';
+import { useLockedMonths } from './locked-months';
 
 type RefundStep = 'choose' | 'partial' | 'confirm-full' | 'confirm-payoff';
 
@@ -202,6 +203,7 @@ function RefundModal({
 
 function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
+    const { isLocked } = useLockedMonths();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [cats, setCats] = useState<PurchaseCategory[]>([]);
     const [loading, setLoading] = useState(false);
@@ -421,6 +423,9 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                         {purchases.map((p) => {
                             const fullyRefunded = p.refund_status === 'full' || p.is_refunded;
                             const partiallyRefunded = p.refund_status === 'partial';
+                            const monthLocked = isLocked(p.date);
+                            const canEdit = !partiallyRefunded && !monthLocked;
+                            const refundOnly = !canEdit && !partiallyRefunded;
                             return (
                                 <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded}>
                                     <div className="flex items-start justify-between gap-3">
@@ -434,9 +439,11 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                                         {fullyRefunded ? (
                                             <StatusChip label="Refunded" color="blue" />
                                         ) : (
-                                            <div className="flex shrink-0 flex-col items-stretch gap-2.5">
-                                                {partiallyRefunded && <StatusChip label="Partially Refunded" color="violet" />}
-                                                {!partiallyRefunded && <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />}
+                                            <div
+                                                className={`flex shrink-0 flex-col items-stretch gap-2.5 ${refundOnly ? 'self-center' : ''}`}
+                                            >
+                                                {partiallyRefunded && <StatusChip label="Partially Refunded" color="teal" />}
+                                                {canEdit && <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />}
                                                 <button
                                                     type="button"
                                                     onClick={() => {

@@ -24,9 +24,11 @@ import {
     thisMonthStr,
     useIsMobile,
 } from './shared';
+import { useLockedMonths } from './locked-months';
 
 export function SavingsTab({ active }: { active: boolean }) {
     const isMobile = useIsMobile();
+    const { isLocked } = useLockedMonths();
     const [savings, setSavings] = useState<Saving[]>([]);
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
@@ -182,7 +184,9 @@ export function SavingsTab({ active }: { active: boolean }) {
                         <ListStack>
                             {loading && <LoadingRows />}
                             {!loading && !savings.length && <EmptyRows label="No savings transactions yet." />}
-                            {savings.map((s) => (
+                            {savings.map((s) => {
+                                const monthLocked = isLocked(s.month);
+                                return (
                                 <ListRow key={s.id} selected={selected?.id === s.id}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
@@ -205,11 +209,14 @@ export function SavingsTab({ active }: { active: boolean }) {
                                             >
                                                 {s.type === 'deposit' ? '+' : '-'}${s.amount.toFixed(2)}
                                             </span>
-                                            <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />
+                                            {!monthLocked && (
+                                                <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />
+                                            )}
                                         </div>
                                     </div>
                                 </ListRow>
-                            ))}
+                                );
+                            })}
                         </ListStack>
                     }
                     form={formContent}

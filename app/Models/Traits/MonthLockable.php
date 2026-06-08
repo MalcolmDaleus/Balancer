@@ -3,6 +3,7 @@
 namespace App\Models\Traits;
 
 use App\Services\MonthLockService;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Trait MonthLockable
@@ -40,6 +41,10 @@ trait MonthLockable
         });
 
         static::updating(function ($model) {
+            if (static::isMonthLockExemptUpdate($model)) {
+                return;
+            }
+
             $column = $model->getMonthLockColumn();
 
             // Always guard the month the record currently/will live in.
@@ -73,5 +78,25 @@ trait MonthLockable
         return property_exists($this, 'monthLockColumn')
             ? $this->monthLockColumn
             : 'month';
+    }
+
+    /**
+     * Skip lock checks when an update only touches exempt attributes
+     * (e.g. marking a purchase as refunded after month close).
+     */
+    protected static function isMonthLockExemptUpdate(Model $model): bool
+    {
+        $exempt = property_exists($model, 'monthLockExemptAttributes')
+            ? $model->monthLockExemptAttributes
+            : [];
+
+        if ($exempt === []) {
+            return false;
+        }
+
+        $dirty = array_keys($model->getDirty());
+        $significant = array_diff($dirty, ['updated_at', 'created_at']);
+
+        return $significant !== [] && array_diff($significant, $exempt) === [];
     }
 }

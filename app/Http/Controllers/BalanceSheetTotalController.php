@@ -7,6 +7,7 @@ use App\Http\Resources\BalanceSheetTotalResource;
 use App\Models\BalanceSheetTotal;
 use App\Services\BalanceSheetService;
 use App\Services\DateTimeService;
+use App\Services\MonthLockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -27,6 +28,20 @@ class BalanceSheetTotalController extends Controller
         $svc = new BalanceSheetService(auth()->id(), $month);
 
         return response()->json($svc->getExpanded());
+    }
+
+    /**
+     * GET /api/v1/balance-sheet/locked-months
+     *
+     * Returns all closed (locked) months for the authenticated user as YYYY-MM strings.
+     */
+    public function lockedMonths(): JsonResponse
+    {
+        $this->authorize('viewAny', BalanceSheetTotal::class);
+
+        return response()->json([
+            'months' => MonthLockService::lockedMonthKeys(auth()->id()),
+        ]);
     }
 
     /**

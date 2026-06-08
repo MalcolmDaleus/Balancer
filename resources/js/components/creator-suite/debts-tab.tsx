@@ -29,6 +29,7 @@ import {
     todayStr,
     useIsMobile,
 } from './shared';
+import { useLockedMonths } from './locked-months';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Debts
@@ -36,6 +37,7 @@ import {
 
 function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
+    const { isLocked } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
     const [cats, setCats] = useState<DebtCategory[]>([]);
     const [loading, setLoading] = useState(false);
@@ -236,6 +238,8 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                         {!loading && !debts.length && <EmptyRows label="No debts yet." />}
                         {debts.map((d) => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
+                            const monthLocked = isLocked(d.issue_date);
+                            const canModify = !closed && !monthLocked;
                             return (
                                 <ListRow key={d.id} selected={selected?.id === d.id} disabled={closed}>
                                     <div className="flex items-start justify-between gap-3">
@@ -245,7 +249,9 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                                                 Balance: ${d.remaining_balance.toFixed(2)} / ${d.amount.toFixed(2)}
                                             </p>
                                         </div>
-                                        {!closed ? (
+                                        {closed ? (
+                                            statusChip(d)
+                                        ) : canModify ? (
                                             <div className="flex shrink-0 flex-col items-stretch gap-2.5">
                                                 <RowActions onEdit={() => selectRow(d)} onDelete={() => setConfirm(d)} />
                                                 <button
@@ -259,9 +265,7 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                                                     Forgive
                                                 </button>
                                             </div>
-                                        ) : (
-                                            statusChip(d)
-                                        )}
+                                        ) : null}
                                     </div>
                                 </ListRow>
                             );
@@ -280,6 +284,7 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
 
 function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
+    const { isLocked } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
     const [payments, setPayments] = useState<DebtPayment[]>([]);
     const [debtId, setDebtId] = useState<number | null>(null);
@@ -471,7 +476,9 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                             <ListStack>
                                 {payLoading && <LoadingRows />}
                                 {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
-                                {payments.map((p) => (
+                                {payments.map((p) => {
+                                    const paymentLocked = isLocked(p.paid_at);
+                                    return (
                                     <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed}>
                                         <div className="flex items-start justify-between gap-3">
                                             <p className={rowTitleCls}>${p.amount.toFixed(2)}</p>
@@ -480,13 +487,14 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                                             {p.paid_at}
                                             {p.notes ? ` · ${p.notes}` : ''}
                                         </p>
-                                        {!closed && (
+                                        {!closed && !paymentLocked && (
                                             <RowActionBar>
                                                 <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />
                                             </RowActionBar>
                                         )}
                                     </ListRow>
-                                ))}
+                                    );
+                                })}
                             </ListStack>
                         }
                         form={paymentForm}

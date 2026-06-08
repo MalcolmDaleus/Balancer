@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\DateScopeable;
+use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Traits\UserScopable;
-use App\Models\Traits\DateScopeable;
 
 class BalanceSheetTotal extends Model
 {
-    use HasFactory, UserScopable, DateScopeable;
+    use DateScopeable, HasFactory, UserScopable;
 
     protected $fillable = [
         'user_id',
@@ -17,6 +17,7 @@ class BalanceSheetTotal extends Model
         'total_income',
         'total_debt_paid',
         'total_spending',
+        'total_recurring',
         'savings_snapshot',
         'roll_over',
     ];
@@ -26,6 +27,7 @@ class BalanceSheetTotal extends Model
         'total_income' => 'decimal:2',
         'total_debt_paid' => 'decimal:2',
         'total_spending' => 'decimal:2',
+        'total_recurring' => 'decimal:2',
         'savings_snapshot' => 'decimal:2',
         'roll_over' => 'decimal:2',
     ];

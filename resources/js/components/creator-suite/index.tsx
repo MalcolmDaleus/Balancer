@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DebtsTab } from './debts-tab';
 import { IncomeTab } from './income-tab';
+import { LockedMonthsProvider } from './locked-months';
 import { PurchasesTab } from './purchases-tab';
 import { RecurringTab } from './recurring-tab';
 import { SavingsTab } from './savings-tab';
@@ -47,9 +48,10 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
     };
 
     return (
-        <div
-            className={`flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
-        >
+        <LockedMonthsProvider>
+            <div
+                className={`flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+            >
             {/* Card header */}
             <div className="shrink-0 border-b border-slate-100 px-4 pt-4 pb-3 dark:border-neutral-800">
                 <h2 className="mb-3 text-base font-semibold text-slate-900 dark:text-neutral-50">Creator Suite</h2>
@@ -103,6 +105,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
                     </div>
                 )}
             </div>
-        </div>
+            </div>
+        </LockedMonthsProvider>
     );
 }

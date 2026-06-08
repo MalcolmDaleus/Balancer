@@ -15,6 +15,7 @@ use App\Models\RecurringPaymentEntry;
 use App\Models\RecurringPaymentStream;
 use App\Models\Saving;
 use App\Models\User;
+use App\Services\BalanceSheetService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -25,7 +26,7 @@ use Illuminate\Database\Seeder;
  * immediately hit the balance-sheet endpoint and see real-looking JSON.
  *
  * Safe to re-run: uses firstOrCreate where possible.
- * Does NOT touch locked months — inserts only into current + last 2 months.
+ * Does NOT lock the current month — closes the two prior months as snapshots.
  *
  * Run with:
  *   php artisan db:seed --class=DevDataSeeder
@@ -42,42 +43,49 @@ class DevDataSeeder extends Seeder
 
         if (! $user) {
             $this->command->error('DevDataSeeder: no user found. Run db:seed first to create the user.');
+
             return;
         }
 
         $this->command->info("Seeding dev data for: {$user->email}");
 
-        $now        = Carbon::now();
-        $thisMonth  = $now->copy()->startOfMonth();
-        $lastMonth  = $now->copy()->subMonth()->startOfMonth();
-        $twoAgo     = $now->copy()->subMonths(2)->startOfMonth();
+        $now = Carbon::now();
+        $thisMonth = $now->copy()->startOfMonth();
+        $lastMonth = $now->copy()->subMonth()->startOfMonth();
+        $twoAgo = $now->copy()->subMonths(2)->startOfMonth();
 
         // ------------------------------------------------------------------
         // 1. Income Streams (persistent definitions)
         // ------------------------------------------------------------------
         $this->command->line('  → Income streams');
 
-        $empCat      = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Employment')->first();
+        $empCat = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Employment')->first();
         $contractCat = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Contract')->first();
-        $giftCat     = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Gift')->first();
+        $giftCat = IncomeCategory::where('user_id', $user->id)->where('category_name', 'Gift')->first();
 
         $salarStream = IncomeStream::withTrashed()->firstOrCreate(
             ['user_id' => $user->id, 'name' => 'Main Salary'],
             ['category_id' => $empCat?->id, 'description' => 'Primary full-time employment income', 'is_system' => false]
         );
-        if ($salarStream->trashed()) $salarStream->restore();
+        if ($salarStream->trashed()) {
+            $salarStream->restore();
+        }
 
         $freelanceStream = IncomeStream::withTrashed()->firstOrCreate(
             ['user_id' => $user->id, 'name' => 'Freelance'],
             ['category_id' => $contractCat?->id, 'description' => 'Side contract work', 'is_system' => false]
         );
-        if ($freelanceStream->trashed()) $freelanceStream->restore();
+        if ($freelanceStream->trashed()) {
+            $freelanceStream->restore();
+        }
 
         $giftStream = IncomeStream::withTrashed()->firstOrCreate(
             ['user_id' => $user->id, 'name' => 'Gift Income'],
             ['category_id' => $giftCat?->id, 'description' => 'One-time gifts received', 'is_system' => false]
         );
-        if ($giftStream->trashed()) $giftStream->restore();
+        if ($giftStream->trashed()) {
+            $giftStream->restore();
+        }
 
         // ------------------------------------------------------------------
         // 2. Income Entries (per-month amounts)
@@ -110,12 +118,12 @@ class DevDataSeeder extends Seeder
             ->get()
             ->keyBy('category_name');
 
-        $groceriesCat     = $cats->get('Groceries');
-        $diningCat        = $cats->get('Dining');
+        $groceriesCat = $cats->get('Groceries');
+        $diningCat = $cats->get('Dining');
         $entertainmentCat = $cats->get('Entertainment');
-        $adultingCat      = $cats->get('Adulting');
-        $miscCat          = $cats->get('Miscellaneous');
-        $clothesCat       = $cats->get('Clothes & Accesories');
+        $adultingCat = $cats->get('Adulting');
+        $miscCat = $cats->get('Miscellaneous');
+        $clothesCat = $cats->get('Clothes & Accesories');
 
         // Helper: create purchase only if description+date combo doesn't exist
         $mkPurchase = function (PurchaseCategory $cat, string $desc, float $amount, Carbon $date) use ($user) {
@@ -126,42 +134,42 @@ class DevDataSeeder extends Seeder
         };
 
         if ($groceriesCat) {
-            $mkPurchase($groceriesCat, 'Lidl weekly shop',         87.43, $twoAgo->copy()->addDays(3));
-            $mkPurchase($groceriesCat, 'Lidl weekly shop',         91.20, $twoAgo->copy()->addDays(10));
-            $mkPurchase($groceriesCat, 'Mercadona top-up',         34.60, $twoAgo->copy()->addDays(16));
-            $mkPurchase($groceriesCat, 'Lidl weekly shop',         79.90, $lastMonth->copy()->addDays(2));
-            $mkPurchase($groceriesCat, 'Mercadona weekly shop',    95.10, $lastMonth->copy()->addDays(9));
-            $mkPurchase($groceriesCat, 'Lidl top-up',              22.40, $lastMonth->copy()->addDays(15));
-            $mkPurchase($groceriesCat, 'Lidl weekly shop',         88.75, $thisMonth->copy()->addDays(3));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop', 87.43, $twoAgo->copy()->addDays(3));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop', 91.20, $twoAgo->copy()->addDays(10));
+            $mkPurchase($groceriesCat, 'Mercadona top-up', 34.60, $twoAgo->copy()->addDays(16));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop', 79.90, $lastMonth->copy()->addDays(2));
+            $mkPurchase($groceriesCat, 'Mercadona weekly shop', 95.10, $lastMonth->copy()->addDays(9));
+            $mkPurchase($groceriesCat, 'Lidl top-up', 22.40, $lastMonth->copy()->addDays(15));
+            $mkPurchase($groceriesCat, 'Lidl weekly shop', 88.75, $thisMonth->copy()->addDays(3));
         }
 
         if ($diningCat) {
-            $mkPurchase($diningCat, 'Dinner at La Pepita',    42.00, $twoAgo->copy()->addDays(6));
-            $mkPurchase($diningCat, 'Coffee & pastry',         8.50, $twoAgo->copy()->addDays(13));
-            $mkPurchase($diningCat, 'Lunch with colleagues',  28.00, $lastMonth->copy()->addDays(4));
-            $mkPurchase($diningCat, 'Pizza Friday',           19.80, $lastMonth->copy()->addDays(18));
-            $mkPurchase($diningCat, 'Date night dinner',      67.50, $thisMonth->copy()->addDays(5));
+            $mkPurchase($diningCat, 'Dinner at La Pepita', 42.00, $twoAgo->copy()->addDays(6));
+            $mkPurchase($diningCat, 'Coffee & pastry', 8.50, $twoAgo->copy()->addDays(13));
+            $mkPurchase($diningCat, 'Lunch with colleagues', 28.00, $lastMonth->copy()->addDays(4));
+            $mkPurchase($diningCat, 'Pizza Friday', 19.80, $lastMonth->copy()->addDays(18));
+            $mkPurchase($diningCat, 'Date night dinner', 67.50, $thisMonth->copy()->addDays(5));
         }
 
         if ($entertainmentCat) {
-            $mkPurchase($entertainmentCat, 'Cinema tickets x2',   18.00, $twoAgo->copy()->addDays(8));
-            $mkPurchase($entertainmentCat, 'Concert ticket',       55.00, $lastMonth->copy()->addDays(12));
+            $mkPurchase($entertainmentCat, 'Cinema tickets x2', 18.00, $twoAgo->copy()->addDays(8));
+            $mkPurchase($entertainmentCat, 'Concert ticket', 55.00, $lastMonth->copy()->addDays(12));
         }
 
         if ($adultingCat) {
-            $mkPurchase($adultingCat, 'Electricity bill',      62.30, $twoAgo->copy()->addDays(5));
-            $mkPurchase($adultingCat, 'Electricity bill',      58.90, $lastMonth->copy()->addDays(5));
-            $mkPurchase($adultingCat, 'Electricity bill',      54.40, $thisMonth->copy()->addDays(5));
-            $mkPurchase($adultingCat, 'Car service / ITV',    155.00, $lastMonth->copy()->addDays(20));
+            $mkPurchase($adultingCat, 'Electricity bill', 62.30, $twoAgo->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Electricity bill', 58.90, $lastMonth->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Electricity bill', 54.40, $thisMonth->copy()->addDays(5));
+            $mkPurchase($adultingCat, 'Car service / ITV', 155.00, $lastMonth->copy()->addDays(20));
         }
 
         if ($miscCat) {
-            $mkPurchase($miscCat, 'Amazon - USB hub',         24.99, $twoAgo->copy()->addDays(14));
-            $mkPurchase($miscCat, 'Pharmacist',               11.60, $lastMonth->copy()->addDays(7));
+            $mkPurchase($miscCat, 'Amazon - USB hub', 24.99, $twoAgo->copy()->addDays(14));
+            $mkPurchase($miscCat, 'Pharmacist', 11.60, $lastMonth->copy()->addDays(7));
         }
 
         if ($clothesCat) {
-            $mkPurchase($clothesCat, 'Zara jacket',          89.95, $lastMonth->copy()->addDays(22));
+            $mkPurchase($clothesCat, 'Zara jacket', 89.95, $lastMonth->copy()->addDays(22));
         }
 
         // ------------------------------------------------------------------
@@ -194,7 +202,7 @@ class DevDataSeeder extends Seeder
         // ------------------------------------------------------------------
         $this->command->line('  → Debts');
 
-        $loanCat     = DebtCategory::where('user_id', $user->id)->where('category_name', 'Loan')->first();
+        $loanCat = DebtCategory::where('user_id', $user->id)->where('category_name', 'Loan')->first();
         $personalCat = DebtCategory::where('user_id', $user->id)->where('category_name', 'Personal')->first();
 
         // Debt 1: partially paid laptop loan
@@ -202,9 +210,9 @@ class DevDataSeeder extends Seeder
             ['user_id' => $user->id, 'description' => 'Laptop loan from friend'],
             [
                 'category_id' => $personalCat?->id,
-                'amount'      => 600.00,
-                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
-                'notes'       => 'Interest-free, paying back gradually',
+                'amount' => 600.00,
+                'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes' => 'Interest-free, paying back gradually',
             ]
         );
 
@@ -213,16 +221,16 @@ class DevDataSeeder extends Seeder
             DebtPayment::create([
                 'user_id' => $user->id,
                 'debt_id' => $laptopDebt->id,
-                'amount'  => 200.00,
+                'amount' => 200.00,
                 'paid_at' => $lastMonth->copy()->addDays(15)->toDateTimeString(),
-                'notes'   => 'First instalment',
+                'notes' => 'First instalment',
             ]);
             DebtPayment::create([
                 'user_id' => $user->id,
                 'debt_id' => $laptopDebt->id,
-                'amount'  => 200.00,
+                'amount' => 200.00,
                 'paid_at' => $thisMonth->copy()->addDays(2)->toDateTimeString(),
-                'notes'   => 'Second instalment',
+                'notes' => 'Second instalment',
             ]);
         }
 
@@ -231,9 +239,9 @@ class DevDataSeeder extends Seeder
             ['user_id' => $user->id, 'description' => 'Bank micro-loan'],
             [
                 'category_id' => $loanCat?->id,
-                'amount'      => 300.00,
-                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
-                'notes'       => 'Short-term loan — now paid off',
+                'amount' => 300.00,
+                'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes' => 'Short-term loan — now paid off',
             ]
         );
 
@@ -241,15 +249,15 @@ class DevDataSeeder extends Seeder
             DebtPayment::create([
                 'user_id' => $user->id,
                 'debt_id' => $bankDebt->id,
-                'amount'  => 150.00,
+                'amount' => 150.00,
                 'paid_at' => $twoAgo->copy()->addDays(20)->toDateTimeString(),
             ]);
             DebtPayment::create([
                 'user_id' => $user->id,
                 'debt_id' => $bankDebt->id,
-                'amount'  => 150.00,
+                'amount' => 150.00,
                 'paid_at' => $lastMonth->copy()->addDays(5)->toDateTimeString(),
-                'notes'   => 'Final payment',
+                'notes' => 'Final payment',
             ]);
         }
 
@@ -258,9 +266,9 @@ class DevDataSeeder extends Seeder
             ['user_id' => $user->id, 'description' => 'Old gym debt (forgiven)'],
             [
                 'category_id' => $personalCat?->id,
-                'amount'      => 120.00,
-                'issue_date'  => $twoAgo->copy()->addDays(1)->toDateTimeString(),
-                'notes'       => 'Friend said forget it',
+                'amount' => 120.00,
+                'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+                'notes' => 'Friend said forget it',
             ]
         );
 
@@ -300,46 +308,46 @@ class DevDataSeeder extends Seeder
 
         $rpCats = RecurringPaymentCategory::where('user_id', $user->id)->get()->keyBy('name');
 
-        $subCat  = $rpCats->get('Online Subscription');
+        $subCat = $rpCats->get('Online Subscription');
         $rentCat = $rpCats->get('Rent / Mortgage');
-        $gymCat  = $rpCats->get('Gym / Health');
-        $phoneCat= $rpCats->get('Phone / Internet');
+        $gymCat = $rpCats->get('Gym / Health');
+        $phoneCat = $rpCats->get('Phone / Internet');
 
         $recurringDefs = [
             [
                 'stream_name' => 'Netflix',
-                'category'    => $subCat,
-                'amount'      => 15.99,
-                'frequency'   => 'monthly',
-                'day_of_month'=> 12,
+                'category' => $subCat,
+                'amount' => 15.99,
+                'frequency' => 'monthly',
+                'day_of_month' => 12,
             ],
             [
                 'stream_name' => 'Spotify',
-                'category'    => $subCat,
-                'amount'      => 10.99,
-                'frequency'   => 'monthly',
-                'day_of_month'=> 1,
+                'category' => $subCat,
+                'amount' => 10.99,
+                'frequency' => 'monthly',
+                'day_of_month' => 1,
             ],
             [
                 'stream_name' => 'Apartment Rent',
-                'category'    => $rentCat,
-                'amount'      => 750.00,
-                'frequency'   => 'monthly',
-                'day_of_month'=> 1,
+                'category' => $rentCat,
+                'amount' => 750.00,
+                'frequency' => 'monthly',
+                'day_of_month' => 1,
             ],
             [
                 'stream_name' => 'Gym Membership',
-                'category'    => $gymCat,
-                'amount'      => 35.00,
-                'frequency'   => 'monthly',
-                'day_of_month'=> 5,
+                'category' => $gymCat,
+                'amount' => 35.00,
+                'frequency' => 'monthly',
+                'day_of_month' => 5,
             ],
             [
                 'stream_name' => 'Phone Plan',
-                'category'    => $phoneCat,
-                'amount'      => 28.00,
-                'frequency'   => 'monthly',
-                'day_of_month'=> 18,
+                'category' => $phoneCat,
+                'amount' => 28.00,
+                'frequency' => 'monthly',
+                'day_of_month' => 18,
             ],
         ];
 
@@ -348,19 +356,21 @@ class DevDataSeeder extends Seeder
                 ['user_id' => $user->id, 'name' => $def['stream_name']],
                 ['recurring_payment_category_id' => $def['category']?->id]
             );
-            if ($stream->trashed()) $stream->restore();
+            if ($stream->trashed()) {
+                $stream->restore();
+            }
 
             // Create a current active entry if none exist
             if ($stream->entries()->where('active', true)->count() === 0) {
                 RecurringPaymentEntry::create([
-                    'user_id'                     => $user->id,
+                    'user_id' => $user->id,
                     'recurring_payment_stream_id' => $stream->id,
-                    'amount'                      => $def['amount'],
-                    'frequency'                   => $def['frequency'],
-                    'day_of_month'                => $def['day_of_month'] ?? null,
-                    'day_of_week'                 => $def['day_of_week']  ?? null,
-                    'start_date'                  => $twoAgo->toDateString(),
-                    'active'                      => true,
+                    'amount' => $def['amount'],
+                    'frequency' => $def['frequency'],
+                    'day_of_month' => $def['day_of_month'] ?? null,
+                    'day_of_week' => $def['day_of_week'] ?? null,
+                    'start_date' => $twoAgo->toDateString(),
+                    'active' => true,
                 ]);
             }
         }
@@ -373,24 +383,30 @@ class DevDataSeeder extends Seeder
             if ($oldEntry && is_null($oldEntry->end_date)) {
                 $oldEntry->update([
                     'end_date' => $lastMonth->copy()->endOfMonth()->toDateString(),
-                    'active'   => false,
+                    'active' => false,
                 ]);
                 RecurringPaymentEntry::create([
-                    'user_id'                     => $user->id,
+                    'user_id' => $user->id,
                     'recurring_payment_stream_id' => $netflixStream->id,
-                    'amount'                      => 17.99, // price increase
-                    'frequency'                   => 'monthly',
-                    'day_of_month'                => 12,
-                    'start_date'                  => $thisMonth->toDateString(),
-                    'active'                      => true,
+                    'amount' => 17.99, // price increase
+                    'frequency' => 'monthly',
+                    'day_of_month' => 12,
+                    'start_date' => $thisMonth->toDateString(),
+                    'active' => true,
                 ]);
             }
         }
 
         $this->command->info('✓ Dev data seeded successfully.');
         $this->command->line('');
-        $this->command->line('  Try: GET /api/v1/balance-sheet?month=' . $thisMonth->format('Y-m'));
-        $this->command->line('       GET /api/v1/balance-sheet?month=' . $lastMonth->format('Y-m'));
-        $this->command->line('       GET /api/v1/balance-sheet/compare?month_a=' . $lastMonth->format('Y-m') . '&month_b=' . $thisMonth->format('Y-m'));
+        $this->command->line('  → Closing past months (snapshots for history module)');
+        foreach ([$twoAgo, $lastMonth] as $closeMonth) {
+            (new BalanceSheetService($user->id, $closeMonth))->persistSnapshot();
+            $this->command->line('     Closed '.$closeMonth->format('F Y'));
+        }
+        $this->command->line('');
+        $this->command->line('  Try: GET /api/v1/balance-sheet?month='.$thisMonth->format('Y-m'));
+        $this->command->line('       GET /api/v1/balance-sheet/history?months=12');
+        $this->command->line('       GET /api/v1/balance-sheet/compare?month_a='.$lastMonth->format('Y-m').'&month_b='.$thisMonth->format('Y-m'));
     }
 }
