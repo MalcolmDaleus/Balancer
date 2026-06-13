@@ -239,7 +239,9 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                         {debts.map((d) => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
                             const monthLocked = isLocked(d.issue_date);
-                            const canModify = !closed && !monthLocked;
+                            const canEdit = !closed && !monthLocked;
+                            const canForgive = !closed;
+                            const forgiveOnly = canForgive && !canEdit;
                             return (
                                 <ListRow key={d.id} selected={selected?.id === d.id} disabled={closed}>
                                     <div className="flex items-start justify-between gap-3">
@@ -251,19 +253,25 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                                         </div>
                                         {closed ? (
                                             statusChip(d)
-                                        ) : canModify ? (
-                                            <div className="flex shrink-0 flex-col items-stretch gap-2.5">
-                                                <RowActions onEdit={() => selectRow(d)} onDelete={() => setConfirm(d)} />
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setForgiving(d);
-                                                    }}
-                                                    className={secondaryBtnFullCls}
-                                                >
-                                                    Forgive
-                                                </button>
+                                        ) : canEdit || canForgive ? (
+                                            <div
+                                                className={`flex shrink-0 flex-col items-stretch gap-2.5 ${forgiveOnly ? 'self-center' : ''}`}
+                                            >
+                                                {canEdit && (
+                                                    <RowActions onEdit={() => selectRow(d)} onDelete={() => setConfirm(d)} />
+                                                )}
+                                                {canForgive && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setForgiving(d);
+                                                        }}
+                                                        className={secondaryBtnFullCls}
+                                                    >
+                                                        Forgive
+                                                    </button>
+                                                )}
                                             </div>
                                         ) : null}
                                     </div>

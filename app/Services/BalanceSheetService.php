@@ -393,6 +393,7 @@ class BalanceSheetService
 
         $this->recurringEntries = RecurringPaymentEntry::where('user_id', $this->userId)
             ->activeForMonth($this->periodStart, $this->periodEnd)
+            ->whereHas('stream', fn ($q) => $q->where('active', true))
             ->with(['stream', 'stream.category'])
             ->get();
 

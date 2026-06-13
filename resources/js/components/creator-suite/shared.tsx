@@ -99,6 +99,10 @@ export interface RecurringStream {
     recurring_payment_category_id: number | null;
     name: string;
     description: string | null;
+    /** Live balance-sheet state. Only AutoMonthCloseService may write this. */
+    active: boolean;
+    /** Queued change for the next month boundary. null = no change pending. */
+    pending_active: boolean | null;
     deleted_at: string | null;
     category?: RecurringCategory;
     entries?: RecurringEntry[];
@@ -347,7 +351,24 @@ export function StatusChip({ label, color }: { label: string; color: 'green' | '
 }
 
 /** Delete confirmation modal */
-export function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+export function ConfirmModal({
+    message,
+    onConfirm,
+    onCancel,
+    confirmLabel = 'Delete',
+    confirmVariant = 'danger',
+}: {
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    confirmLabel?: string;
+    confirmVariant?: 'danger' | 'warning' | 'primary';
+}) {
+    const variantCls = {
+        danger: 'bg-rose-500 hover:bg-rose-600',
+        warning: 'bg-amber-500 hover:bg-amber-600',
+        primary: 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-500 dark:hover:bg-slate-400',
+    }[confirmVariant];
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900">
@@ -356,8 +377,8 @@ export function ConfirmModal({ message, onConfirm, onCancel }: { message: string
                     <Button variant="ghost" size="sm" className="rounded-full" onClick={onCancel}>
                         Cancel
                     </Button>
-                    <Button size="sm" className="rounded-full bg-rose-500 text-white hover:bg-rose-600" onClick={onConfirm}>
-                        Delete
+                    <Button size="sm" className={`rounded-full text-white ${variantCls}`} onClick={onConfirm}>
+                        {confirmLabel}
                     </Button>
                 </div>
             </div>

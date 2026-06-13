@@ -5,7 +5,7 @@ import { LockedMonthsProvider } from './locked-months';
 import { PurchasesTab } from './purchases-tab';
 import { RecurringTab } from './recurring-tab';
 import { SavingsTab } from './savings-tab';
-import { tabInactiveCls, tintChip } from './shared';
+import { tabInactiveCls, tintChip, tintSectionPill } from './shared';
 
 // ---------------------------------------------------------------------------
 // Main tab definitions
@@ -16,7 +16,7 @@ type MainTab = (typeof MAIN_TABS)[number];
 
 const TAB_COLORS: Record<MainTab, string> = {
     Income: 'bg-emerald-500',
-    Purchases: 'bg-amber-500',
+    Purchases: 'bg-yellow-500',
     Debts: 'bg-red-500',
     Recurring: 'bg-orange-400',
     Savings: 'bg-sky-500',
@@ -24,7 +24,7 @@ const TAB_COLORS: Record<MainTab, string> = {
 
 const TAB_ACTIVE: Record<MainTab, string> = {
     Income:    tintChip.emerald,
-    Purchases: tintChip.amber,
+    Purchases: tintSectionPill.yellow,
     Debts:     tintChip.red,
     Recurring: tintChip.orange,
     Savings:   tintChip.sky,

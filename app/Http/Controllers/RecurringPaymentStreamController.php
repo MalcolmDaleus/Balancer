@@ -6,6 +6,7 @@ use App\Http\Requests\Api\StoreRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentPriceRequest;
 use App\Http\Resources\RecurringPaymentStreamResource;
+use App\Models\BalanceSheetTotal;
 use App\Models\RecurringPaymentEntry;
 use App\Models\RecurringPaymentStream;
 use Carbon\Carbon;
@@ -15,12 +16,22 @@ use Illuminate\Support\Facades\DB;
 
 class RecurringPaymentStreamController extends Controller
 {
+    /**
+     * List active (non-archived) streams.
+     * Pass ?archived=1 to get soft-deleted streams instead.
+     */
     public function index(): AnonymousResourceCollection
     {
         $this->authorize('viewAny', RecurringPaymentStream::class);
 
-        $streams = RecurringPaymentStream::where('user_id', auth()->id())
-            ->with(['category', 'entries'])
+        $archived = request()->boolean('archived');
+
+        $query = $archived
+            ? RecurringPaymentStream::onlyTrashed()->where('user_id', auth()->id())
+            : RecurringPaymentStream::where('user_id', auth()->id());
+
+        $streams = $query
+            ->with(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')])
             ->orderBy('name')
             ->get();
 
@@ -31,12 +42,36 @@ class RecurringPaymentStreamController extends Controller
     {
         $this->authorize('create', RecurringPaymentStream::class);
 
-        $stream = RecurringPaymentStream::create(array_merge(
-            $request->validated(),
-            ['user_id' => auth()->id()]
-        ));
+        $data = $request->validated();
 
-        return new RecurringPaymentStreamResource($stream->load(['category', 'entries']));
+        $stream = DB::transaction(function () use ($data) {
+            $stream = RecurringPaymentStream::create([
+                'user_id'                       => auth()->id(),
+                'recurring_payment_category_id' => $data['recurring_payment_category_id'] ?? null,
+                'name'                          => $data['name'],
+                'description'                   => $data['description'] ?? null,
+                'active'                        => true,
+            ]);
+
+            RecurringPaymentEntry::create([
+                'user_id'                     => $stream->user_id,
+                'recurring_payment_stream_id'  => $stream->id,
+                'amount'                       => $data['amount'],
+                'frequency'                    => $data['frequency'],
+                'day_of_month'                 => $data['day_of_month'],
+                'start_date'                   => $data['start_date'],
+                'end_date'                     => null,
+                'active'                       => true,
+            ]);
+
+            return $stream;
+        });
+
+        $stream->refresh();
+
+        return new RecurringPaymentStreamResource(
+            $stream->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')])
+        );
     }
 
     public function show(RecurringPaymentStream $recurringPaymentStream): RecurringPaymentStreamResource
@@ -101,18 +136,94 @@ class RecurringPaymentStreamController extends Controller
             ]);
         });
 
-        return new RecurringPaymentStreamResource($recurringPaymentStream->fresh()->load(['category', 'entries']));
+        return new RecurringPaymentStreamResource($recurringPaymentStream->fresh()->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')]));
     }
 
     /**
-     * Streams are always soft-deleted once they exist — never hard-deleted.
-     * Hard deletion would orphan historical purchases linked to the stream's entries.
+     * Queue or cancel a pause/resume for this stream.
+     *
+     * - No pending change → queues the opposite of the current `active` state.
+     * - Pending change already queued → cancels it (sets pending_active back to null).
+     *
+     * The queued change is committed by AutoMonthCloseService when the current
+     * month closes, keeping each balance sheet snapshot internally consistent.
+     * The live `active` column (used by balance sheet queries) is not touched here.
+     */
+    public function toggle(RecurringPaymentStream $recurringPaymentStream): RecurringPaymentStreamResource
+    {
+        $this->authorize('update', $recurringPaymentStream);
+
+        if ($recurringPaymentStream->pending_active !== null) {
+            // Cancel the pending change — stream stays in its current live state
+            $recurringPaymentStream->update(['pending_active' => null]);
+        } else {
+            // Queue the opposite of the current live state
+            $recurringPaymentStream->update(['pending_active' => !$recurringPaymentStream->active]);
+        }
+
+        return new RecurringPaymentStreamResource(
+            $recurringPaymentStream->fresh()->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')])
+        );
+    }
+
+    /**
+     * Archive (soft-delete) a stream.
+     * Already-archived streams are silently ignored.
      */
     public function destroy(RecurringPaymentStream $recurringPaymentStream): JsonResponse
     {
         $this->authorize('delete', $recurringPaymentStream);
 
-        $recurringPaymentStream->delete(); // always soft delete
+        $recurringPaymentStream->delete();
+
+        return response()->json(null, 204);
+    }
+
+    /**
+     * Restore a soft-deleted (archived) stream.
+     */
+    public function restore(int $recurringPaymentStream): RecurringPaymentStreamResource
+    {
+        $stream = RecurringPaymentStream::withTrashed()->findOrFail($recurringPaymentStream);
+
+        $this->authorize('restore', $stream);
+
+        $stream->restore();
+
+        return new RecurringPaymentStreamResource($stream->fresh()->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')]));
+    }
+
+    /**
+     * Permanently delete an archived stream.
+     *
+     * Blocked if the stream has contributed to any locked (closed) balance sheet.
+     * A stream "contributed" if it has entries with a start_date before or during
+     * the most recently locked month — meaning it appeared in at least one snapshot.
+     */
+    public function hardDestroy(int $recurringPaymentStream): JsonResponse
+    {
+        $stream = RecurringPaymentStream::withTrashed()->findOrFail($recurringPaymentStream);
+
+        $this->authorize('delete', $stream);
+
+        // Determine if any entry was ever active during a locked month.
+        $latestLocked = BalanceSheetTotal::where('user_id', $stream->user_id)->max('month');
+
+        if ($latestLocked) {
+            $latestLockedEnd = Carbon::parse($latestLocked)->endOfMonth()->toDateString();
+            $hasLockedEntries = $stream->entries()->withTrashed()
+                ->where('start_date', '<=', $latestLockedEnd)
+                ->exists();
+
+            if ($hasLockedEntries) {
+                return response()->json([
+                    'error'   => 'locked_month',
+                    'message' => 'This stream has appeared in a closed balance sheet and cannot be permanently deleted.',
+                ], 423);
+            }
+        }
+
+        $stream->forceDelete();
 
         return response()->json(null, 204);
     }

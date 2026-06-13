@@ -2,7 +2,6 @@
 
 use App\Models\BalanceSheetTotal;
 use App\Models\Debt;
-use App\Models\DebtCategory;
 use App\Models\DebtPayment;
 use App\Models\User;
 
@@ -34,9 +33,9 @@ test('user can create a debt', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->postJson('/api/v1/debts', [
-        'amount'      => 1500.00,
+        'amount' => 1500.00,
         'description' => 'Car loan',
-        'issue_date'  => '2026-01-01',
+        'issue_date' => '2026-01-01',
     ]);
 
     $response->assertCreated()
@@ -61,9 +60,9 @@ test('store debt does not accept settle_date (set only via payments or forgive)'
 
     // settle_date is not a recognized field; it should be ignored and the debt created
     $response = $this->actingAs($user)->postJson('/api/v1/debts', [
-        'amount'      => 500.00,
+        'amount' => 500.00,
         'description' => 'Test',
-        'issue_date'  => '2026-04-01',
+        'issue_date' => '2026-04-01',
         'settle_date' => '2026-05-01', // should be ignored
     ]);
 
@@ -82,9 +81,9 @@ test('user can view their debt', function () {
 });
 
 test('user cannot view another user\'s debt', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
-    $debt  = Debt::factory()->create(['user_id' => $other->id]);
+    $debt = Debt::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->getJson("/api/v1/debts/{$debt->id}")
         ->assertStatus(403);
@@ -122,9 +121,9 @@ test('user can list payments for their debt', function () {
 });
 
 test('user cannot list payments for another user\'s debt', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
-    $debt  = Debt::factory()->create(['user_id' => $other->id]);
+    $debt = Debt::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->getJson("/api/v1/debts/{$debt->id}/payments")
         ->assertStatus(403);
@@ -135,7 +134,7 @@ test('user can add a payment to their debt', function () {
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
 
     $response = $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount'  => 250.00,
+        'amount' => 250.00,
         'paid_at' => '2026-04-15',
     ]);
 
@@ -145,19 +144,19 @@ test('user can add a payment to their debt', function () {
 });
 
 test('user cannot add payment to another user\'s debt', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
-    $debt  = Debt::factory()->create(['user_id' => $other->id, 'amount' => 1000]);
+    $debt = Debt::factory()->create(['user_id' => $other->id, 'amount' => 1000]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount'  => 100.00,
+        'amount' => 100.00,
         'paid_at' => '2026-04-15',
     ])->assertStatus(403);
 });
 
 test('user can update their payment', function () {
-    $user    = User::factory()->create();
-    $debt    = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
     $payment = DebtPayment::factory()->create(['user_id' => $user->id, 'debt_id' => $debt->id, 'amount' => 100]);
 
     $response = $this->actingAs($user)->putJson("/api/v1/debt-payments/{$payment->id}", [
@@ -167,9 +166,9 @@ test('user can update their payment', function () {
 });
 
 test('user cannot update another user\'s payment', function () {
-    $user    = User::factory()->create();
-    $other   = User::factory()->create();
-    $debt    = Debt::factory()->create(['user_id' => $other->id, 'amount' => 1000]);
+    $user = User::factory()->create();
+    $other = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $other->id, 'amount' => 1000]);
     $payment = DebtPayment::factory()->create(['user_id' => $other->id, 'debt_id' => $debt->id]);
 
     $this->actingAs($user)->putJson("/api/v1/debt-payments/{$payment->id}", [
@@ -178,8 +177,8 @@ test('user cannot update another user\'s payment', function () {
 });
 
 test('user can delete their payment', function () {
-    $user    = User::factory()->create();
-    $debt    = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
     $payment = DebtPayment::factory()->create(['user_id' => $user->id, 'debt_id' => $debt->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/debt-payments/{$payment->id}")
@@ -223,12 +222,39 @@ test('cannot forgive an already forgiven debt', function () {
 });
 
 test('user cannot forgive another user\'s debt', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
-    $debt  = Debt::factory()->create(['user_id' => $other->id, 'amount' => 500]);
+    $debt = Debt::factory()->create(['user_id' => $other->id, 'amount' => 500]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
         ->assertStatus(403);
+});
+
+test('user can forgive a debt whose issue_date is in a locked month', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create([
+        'user_id' => $user->id,
+        'amount' => 400,
+        'issue_date' => '2026-03-15',
+    ]);
+
+    BalanceSheetTotal::create([
+        'user_id' => $user->id,
+        'month' => '2026-03-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
+        'total_recurring' => 0,
+        'savings_snapshot' => 0,
+        'roll_over' => 0,
+    ]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertOk()
+        ->assertJsonPath('data.is_forgiven', true)
+        ->assertJsonPath('data.is_closed', true);
+
+    expect($debt->fresh()->is_forgiven)->toBeTrue();
 });
 
 test('debt is auto-settled when payments reach the full amount', function () {
@@ -236,7 +262,7 @@ test('debt is auto-settled when payments reach the full amount', function () {
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 200]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount'  => 200.00,
+        'amount' => 200.00,
         'paid_at' => '2026-04-15',
     ])->assertCreated();
 
@@ -253,18 +279,18 @@ test('payment on locked month returns 423', function () {
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
 
     BalanceSheetTotal::create([
-        'user_id'          => $user->id,
-        'month'            => '2026-03-01',
-        'total_income'     => 0,
-        'total_debt_paid'  => 0,
-        'total_spending'   => 0,
+        'user_id' => $user->id,
+        'month' => '2026-03-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
         'savings_snapshot' => 0,
-        'roll_over'        => 0,
+        'roll_over' => 0,
     ]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount'  => 100.00,
+        'amount' => 100.00,
         'paid_at' => '2026-03-10',
     ])->assertStatus(423)
-      ->assertJsonPath('error', 'month_locked');
+        ->assertJsonPath('error', 'month_locked');
 });

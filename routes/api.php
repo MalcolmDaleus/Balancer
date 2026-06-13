@@ -76,6 +76,12 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
         ->parameters(['streams' => 'recurringPaymentStream']);
     Route::post('recurring-payments/streams/{recurringPaymentStream}/update-price', [RecurringPaymentStreamController::class, 'updatePrice'])
         ->name('recurring-payments.streams.update-price');
+    Route::patch('recurring-payments/streams/{recurringPaymentStream}/toggle', [RecurringPaymentStreamController::class, 'toggle'])
+        ->name('recurring-payments.streams.toggle');
+    Route::patch('recurring-payments/streams/{id}/restore', [RecurringPaymentStreamController::class, 'restore'])
+        ->name('recurring-payments.streams.restore');
+    Route::delete('recurring-payments/streams/{id}/force', [RecurringPaymentStreamController::class, 'hardDestroy'])
+        ->name('recurring-payments.streams.force-delete');
     Route::apiResource('recurring-payments/entries', RecurringPaymentEntryController::class)
         ->parameters(['entries' => 'recurringPaymentEntry']);
 

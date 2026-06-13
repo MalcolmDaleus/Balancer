@@ -15,6 +15,8 @@ class RecurringPaymentStreamResource extends JsonResource
             'recurring_payment_category_id' => $this->recurring_payment_category_id,
             'name'                          => $this->name,
             'description'                   => $this->description,
+            'active'                        => (bool) $this->active,
+            'pending_active'                => $this->pending_active, // null | true | false
             'deleted_at'                    => $this->deleted_at,
             'category'                      => new RecurringPaymentCategoryResource($this->whenLoaded('category')),
             'entries'                       => RecurringPaymentEntryResource::collection($this->whenLoaded('entries')),

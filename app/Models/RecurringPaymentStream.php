@@ -16,6 +16,13 @@ class RecurringPaymentStream extends Model
         'recurring_payment_category_id',
         'name',
         'description',
+        'active',
+        'pending_active',
+    ];
+
+    protected $casts = [
+        'active'         => 'boolean',
+        'pending_active' => 'boolean',
     ];
 
     // ----------------------------------------------------------

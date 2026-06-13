@@ -10,9 +10,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Debt extends Model
 {
-    use HasFactory, UserScopable, DateScopeable, MonthLockable;
+    use DateScopeable, HasFactory, MonthLockable, UserScopable;
 
     protected string $monthLockColumn = 'issue_date';
+
+    /** Forgiveness updates are allowed on locked months — payments are month-scoped separately. */
+    protected array $monthLockExemptAttributes = ['is_forgiven', 'settle_date', 'notes'];
 
     protected $attributes = [
         'is_forgiven' => false,
@@ -30,8 +33,8 @@ class Debt extends Model
     ];
 
     protected $casts = [
-        'amount'      => 'decimal:2',
-        'issue_date'  => 'datetime',
+        'amount' => 'decimal:2',
+        'issue_date' => 'datetime',
         'settle_date' => 'datetime',
         'is_forgiven' => 'boolean',
     ];

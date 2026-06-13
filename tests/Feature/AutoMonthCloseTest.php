@@ -4,6 +4,7 @@ use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
 use App\Models\IncomeStream;
 use App\Models\Purchase;
+use App\Models\RecurringPaymentStream;
 use App\Models\User;
 use App\Services\AutoMonthCloseService;
 use Carbon\Carbon;
@@ -197,4 +198,67 @@ test('dashboard passes closed months to inertia when backlog is closed', functio
             ->has('closedMonths', 3)
             ->where('closedMonths', ['2026-03', '2026-04', '2026-05'])
         );
+});
+
+// ---------------------------------------------------------------------------
+// Pending toggle flush
+// ---------------------------------------------------------------------------
+
+test('closing months commits pending_active to active', function () {
+    Carbon::setTestNow('2026-06-05 12:00:00');
+
+    $user = User::factory()->create(['created_at' => '2026-05-01']);
+
+    // Stream with a pending pause queued
+    $stream = RecurringPaymentStream::factory()->create([
+        'user_id'        => $user->id,
+        'active'         => true,
+        'pending_active' => false,
+    ]);
+
+    (new AutoMonthCloseService)->closePendingMonths($user->id);
+
+    $stream->refresh();
+    expect($stream->active)->toBeFalse();
+    expect($stream->pending_active)->toBeNull();
+});
+
+test('pending_active is not flushed when no months are closed', function () {
+    Carbon::setTestNow('2026-06-05 12:00:00');
+
+    $user = User::factory()->create(['created_at' => '2026-06-01']);
+
+    // Already locked — nothing to close
+    BalanceSheetTotal::factory()->create(['user_id' => $user->id, 'month' => '2026-05-01']);
+
+    $stream = RecurringPaymentStream::factory()->create([
+        'user_id'        => $user->id,
+        'active'         => true,
+        'pending_active' => false,
+    ]);
+
+    (new AutoMonthCloseService)->closePendingMonths($user->id);
+
+    $stream->refresh();
+    // No months were closed, so pending change stays
+    expect($stream->active)->toBeTrue();
+    expect($stream->pending_active)->toBeFalse();
+});
+
+test('pending resume is committed after closing months', function () {
+    Carbon::setTestNow('2026-06-05 12:00:00');
+
+    $user = User::factory()->create(['created_at' => '2026-05-01']);
+
+    $stream = RecurringPaymentStream::factory()->create([
+        'user_id'        => $user->id,
+        'active'         => false,
+        'pending_active' => true,
+    ]);
+
+    (new AutoMonthCloseService)->closePendingMonths($user->id);
+
+    $stream->refresh();
+    expect($stream->active)->toBeTrue();
+    expect($stream->pending_active)->toBeNull();
 });

@@ -16,9 +16,8 @@ class UpdateRecurringPaymentEntryRequest extends FormRequest
     {
         return [
             'amount'       => ['sometimes', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'frequency'    => ['sometimes', 'string', Rule::in(['weekly', 'monthly', 'yearly'])],
-            'day_of_month' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:31'],
-            'day_of_week'  => ['sometimes', 'nullable', 'integer', 'min:0', 'max:6'],
+            'frequency'    => ['sometimes', 'string', Rule::in(['monthly', 'yearly'])],
+            'day_of_month' => ['sometimes', 'integer', 'min:1', 'max:31'],
             'start_date'   => ['sometimes', 'date'],
             'end_date'     => ['sometimes', 'nullable', 'date'],
             'active'       => ['sometimes', 'boolean'],
@@ -30,25 +29,15 @@ class UpdateRecurringPaymentEntryRequest extends FormRequest
         $validator->after(function (\Illuminate\Validation\Validator $validator): void {
             $entry = $this->route('recurringPaymentEntry');
 
-            $frequency    = $this->input('frequency',    $entry?->frequency);
-            $dayOfMonth   = $this->has('day_of_month')
+            $frequency  = $this->input('frequency', $entry?->frequency);
+            $dayOfMonth = $this->has('day_of_month')
                 ? $this->input('day_of_month')
                 : $entry?->day_of_month;
-            $dayOfWeek    = $this->has('day_of_week')
-                ? $this->input('day_of_week')
-                : $entry?->day_of_week;
 
             if (in_array($frequency, ['monthly', 'yearly'], true) && is_null($dayOfMonth)) {
                 $validator->errors()->add(
                     'day_of_month',
                     'The day of month field is required when frequency is monthly or yearly.'
-                );
-            }
-
-            if ($frequency === 'weekly' && is_null($dayOfWeek)) {
-                $validator->errors()->add(
-                    'day_of_week',
-                    'The day of week field is required when frequency is weekly.'
                 );
             }
         });

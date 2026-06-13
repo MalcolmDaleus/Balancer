@@ -10,6 +10,7 @@ import {
     ListStack,
     LoadingRows,
     RecurringCategory,
+    RecurringEntry,
     RecurringStream,
     RowActions,
     SplitPane,
@@ -30,8 +31,217 @@ import {
 } from './shared';
 
 // ---------------------------------------------------------------------------
-// Sub-tab: Streams
+// Helpers
 // ---------------------------------------------------------------------------
+
+function fmtAmount(n: number) {
+    return `$${n.toFixed(2)}`;
+}
+
+function fmtFreq(freq: string) {
+    if (freq === 'yearly') return 'Yearly';
+    return 'Monthly';
+}
+
+function fmtDate(d: string) {
+    return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Default day-of-month for new subscriptions (today's date). */
+function defaultDayOfMonth() {
+    return String(new Date().getDate());
+}
+
+/** Shared price/schedule fields used in create and update forms. */
+function PriceScheduleFields({
+    priceForm,
+    setPriceForm,
+    amountLabel = 'Amount',
+    startDateLabel = 'Starts on',
+}: {
+    priceForm: { amount: string; start_date: string; frequency: string; day_of_month: string };
+    setPriceForm: React.Dispatch<React.SetStateAction<typeof priceForm>>;
+    amountLabel?: string;
+    startDateLabel?: string;
+}) {
+    return (
+        <>
+            <Field label={amountLabel}>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    className={inputCls}
+                    value={priceForm.amount}
+                    onChange={(e) => setPriceForm((f) => ({ ...f, amount: e.target.value }))}
+                />
+            </Field>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Frequency">
+                    <select
+                        className={selectCls}
+                        value={priceForm.frequency}
+                        onChange={(e) => setPriceForm((f) => ({ ...f, frequency: e.target.value }))}
+                    >
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                </Field>
+                <Field label="Day of month">
+                    <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        required
+                        className={inputCls}
+                        value={priceForm.day_of_month}
+                        onChange={(e) => setPriceForm((f) => ({ ...f, day_of_month: e.target.value }))}
+                    />
+                </Field>
+            </div>
+            <Field label={startDateLabel}>
+                <input
+                    type="date"
+                    required
+                    className={dateCls}
+                    value={priceForm.start_date}
+                    onChange={(e) => setPriceForm((f) => ({ ...f, start_date: e.target.value }))}
+                />
+            </Field>
+        </>
+    );
+}
+
+/** Find the most recent / current active price entry for a stream. */
+function currentEntry(s: RecurringStream): RecurringEntry | null {
+    if (!s.entries?.length) return null;
+    return s.entries.find((e) => e.active && !e.end_date) ?? s.entries[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Price History — collapsible section inside the edit pane
+// ---------------------------------------------------------------------------
+
+function PriceHistory({ entries }: { entries: RecurringEntry[] }) {
+    const [open, setOpen] = useState(false);
+    if (!entries.length) return null;
+
+    return (
+        <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center justify-between text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-neutral-300 dark:hover:text-neutral-100"
+            >
+                <span>Price History ({entries.length})</span>
+                <span className="text-xs opacity-60">{open ? '▲ Hide' : '▼ Show'}</span>
+            </button>
+
+            {open && (
+                <div className="mt-2 space-y-1.5">
+                    {entries.map((e) => {
+                        const isCurrent = e.active && !e.end_date;
+                        return (
+                            <div
+                                key={e.id}
+                                className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-lg px-3 py-2 text-sm ${
+                                    isCurrent
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                                        : 'bg-slate-50 opacity-70 dark:bg-neutral-800/40'
+                                }`}
+                            >
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="font-semibold text-slate-800 dark:text-neutral-100">
+                                        {fmtAmount(e.amount)}
+                                    </span>
+                                    <span className="text-xs text-slate-500 dark:text-neutral-400">
+                                        {fmtFreq(e.frequency)}
+                                    </span>
+                                </div>
+                                <span className="text-xs text-slate-500 dark:text-neutral-400">
+                                    {fmtDate(e.start_date)}
+                                    {e.end_date ? ` → ${fmtDate(e.end_date)}` : ' → now'}
+                                </span>
+                                {isCurrent && (
+                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                        current
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Toggle switch used in both list row and edit pane
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the display state for a stream's toggle:
+ * - What the switch should show (derived from the live + pending state)
+ * - What label/badge to surface
+ */
+function toggleMeta(s: RecurringStream): {
+    switchOn: boolean;
+    badge: { label: string; color: 'amber' | 'teal' } | null;
+    pendingCancel: boolean;
+} {
+    if (s.pending_active !== null) {
+        // A change is queued — show the future state visually
+        return {
+            switchOn: s.pending_active,
+            badge: s.pending_active
+                ? { label: 'Resume pending', color: 'teal' }
+                : { label: 'Pause pending', color: 'amber' },
+            pendingCancel: true,
+        };
+    }
+    return { switchOn: s.active, badge: null, pendingCancel: false };
+}
+
+function ToggleSwitch({
+    on,
+    size = 'md',
+    disabled,
+    onClick,
+}: {
+    on: boolean;
+    size?: 'sm' | 'md';
+    disabled?: boolean;
+    onClick: (e: React.MouseEvent) => void;
+}) {
+    const track = size === 'sm' ? 'h-5 w-9' : 'h-6 w-11';
+    const thumb = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+    const thumbOn = size === 'sm' ? 'translate-x-[18px]' : 'translate-x-6';
+    const thumbOff = 'translate-x-0.5';
+
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            onClick={onClick}
+            className={`relative inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${track} ${
+                on ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-neutral-600'
+            }`}
+        >
+            <span
+                className={`inline-block transform rounded-full bg-white shadow transition-transform ${thumb} ${on ? thumbOn : thumbOff}`}
+            />
+        </button>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-tab: Streams (active)
+// ---------------------------------------------------------------------------
+
+type ToggleAction = { stream: RecurringStream; isCancel: boolean };
+type ArchiveTarget = RecurringStream;
 
 function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
@@ -40,15 +250,22 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<RecurringStream | null>(null);
-    const [confirm, setConfirm] = useState<RecurringStream | null>(null);
+    const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
+    const [toggleAction, setToggleAction] = useState<ToggleAction | null>(null);
     const [saving, setSaving] = useState(false);
+    const [toggling, setToggling] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
 
     const blankStream = { name: '', recurring_payment_category_id: '', description: '' };
     const [form, setForm] = useState(blankStream);
-    const blankPrice = { amount: '', start_date: todayStr(), frequency: 'monthly', day_of_month: '' };
-    const [priceForm, setPriceForm] = useState(blankPrice);
+    const blankPrice = () => ({
+        amount: '',
+        start_date: todayStr(),
+        frequency: 'monthly',
+        day_of_month: defaultDayOfMonth(),
+    });
+    const [priceForm, setPriceForm] = useState(blankPrice());
     const [showPriceUpdate, setShowPriceUpdate] = useState(false);
     const [savingPrice, setSavingPrice] = useState(false);
 
@@ -80,10 +297,11 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
         setError(null);
         if (isMobile) setSheetOpen(true);
     };
+
     const reset = () => {
         setSelected(null);
         setForm(blankStream);
-        setPriceForm(blankPrice);
+        setPriceForm(blankPrice());
         setShowPriceUpdate(false);
         setError(null);
         setSheetOpen(false);
@@ -94,7 +312,7 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
             addRef.current = () => {
                 setSelected(null);
                 setForm(blankStream);
-                setPriceForm(blankPrice);
+                setPriceForm(blankPrice());
                 setShowPriceUpdate(false);
                 setError(null);
                 setSheetOpen(true);
@@ -110,14 +328,23 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
         setSaving(true);
         setError(null);
         try {
-            const body = {
-                name: form.name,
-                recurring_payment_category_id: form.recurring_payment_category_id ? Number(form.recurring_payment_category_id) : null,
-                description: form.description || null,
-            };
             if (selected) {
+                const body = {
+                    name: form.name,
+                    recurring_payment_category_id: form.recurring_payment_category_id ? Number(form.recurring_payment_category_id) : null,
+                    description: form.description || null,
+                };
                 await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
             } else {
+                const body = {
+                    name: form.name,
+                    recurring_payment_category_id: form.recurring_payment_category_id ? Number(form.recurring_payment_category_id) : null,
+                    description: form.description || null,
+                    amount: Number(priceForm.amount),
+                    frequency: priceForm.frequency,
+                    day_of_month: Number(priceForm.day_of_month),
+                    start_date: priceForm.start_date,
+                };
                 await apiFetch('/api/v1/recurring-payments/streams', { method: 'POST', body: JSON.stringify(body) });
             }
             reset();
@@ -139,11 +366,11 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                 amount: Number(priceForm.amount),
                 start_date: priceForm.start_date,
                 frequency: priceForm.frequency,
+                day_of_month: Number(priceForm.day_of_month),
             };
-            if (priceForm.day_of_month) body.day_of_month = Number(priceForm.day_of_month);
             await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}/update-price`, { method: 'POST', body: JSON.stringify(body) });
             setShowPriceUpdate(false);
-            setPriceForm(blankPrice);
+            setPriceForm(blankPrice());
             setFetched(false);
         } catch (err: any) {
             setError(err.message);
@@ -152,7 +379,7 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
         }
     };
 
-    const handleDelete = async (s: RecurringStream) => {
+    const handleArchive = async (s: RecurringStream) => {
         try {
             await apiFetch(`/api/v1/recurring-payments/streams/${s.id}`, { method: 'DELETE' });
             if (selected?.id === s.id) reset();
@@ -160,16 +387,90 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
         } catch (err: any) {
             setError(err.message);
         }
-        setConfirm(null);
+        setArchiveTarget(null);
     };
 
-    const activeAmount = (s: RecurringStream) => {
-        const entry = s.entries?.find((e) => e.active && !e.end_date);
-        return entry ? `$${entry.amount.toFixed(2)}` : null;
+    /** Perform the toggle API call immediately (cancel) or after confirm (queue). */
+    const execToggle = async (s: RecurringStream) => {
+        setToggling(true);
+        setToggleAction(null);
+        try {
+            const res = await apiFetch<{ data: RecurringStream }>(`/api/v1/recurring-payments/streams/${s.id}/toggle`, { method: 'PATCH' });
+            const updated: RecurringStream = (res as any).data ?? res;
+            setStreams((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
+            if (selected?.id === s.id) setSelected(updated);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setToggling(false);
+        }
     };
+
+    /** Click on toggle: cancel immediately (no confirm) or show confirm to queue. */
+    const requestToggle = (s: RecurringStream, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (s.pending_active !== null) {
+            // Cancel pending — no confirm needed, this is a safe undo
+            execToggle(s);
+        } else {
+            setToggleAction({ stream: s, isCancel: false });
+        }
+    };
+
+    // -----------------------------------------------------------------------
+    // Edit pane content
+    // -----------------------------------------------------------------------
+
+    const entry = selected ? currentEntry(selected) : null;
+    const meta = selected ? toggleMeta(selected) : null;
 
     const formContent = (
         <div className="space-y-4">
+            {/* Current price summary — shown when editing an existing stream */}
+            {selected && (
+                <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-neutral-800/50">
+                    {entry ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p className="text-xl font-bold tracking-tight text-slate-800 dark:text-neutral-100">
+                                    {fmtAmount(entry.amount)}
+                                    <span className="ml-1 text-sm font-normal text-slate-500 dark:text-neutral-400">
+                                        / {fmtFreq(entry.frequency)}
+                                    </span>
+                                </p>
+                                {entry.day_of_month && (
+                                    <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
+                                        Day {entry.day_of_month} of each {entry.frequency === 'yearly' ? 'year' : 'month'}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Pause/resume toggle with pending state */}
+                            <div className="flex items-center gap-2.5">
+                                <div className="text-right">
+                                    <p className="text-sm font-medium text-slate-700 dark:text-neutral-200">
+                                        {meta!.pendingCancel
+                                            ? meta!.badge!.label
+                                            : selected.active
+                                              ? 'Active'
+                                              : 'Paused'}
+                                    </p>
+                                    <p className="text-xs text-slate-400 dark:text-neutral-500">
+                                        {meta!.pendingCancel ? 'Click to cancel' : 'Click to change'}
+                                    </p>
+                                </div>
+                                <ToggleSwitch
+                                    on={meta!.switchOn}
+                                    disabled={toggling}
+                                    onClick={(e) => requestToggle(selected, e)}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-slate-400 dark:text-neutral-500">No price set yet — add one below.</p>
+                    )}
+                </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-3">
                 {error && !showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
                 <Field label="Name">
@@ -207,90 +508,78 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                         onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                     />
                 </Field>
+
+                {/* Initial price — required when creating a new stream */}
+                {!selected && <PriceScheduleFields priceForm={priceForm} setPriceForm={setPriceForm} />}
+
                 <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
             </form>
 
-            {selected && !selected.deleted_at && (
-                <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
-                    {!showPriceUpdate ? (
-                        <button
-                            onClick={() => setShowPriceUpdate(true)}
-                            className={secondaryBtnCls}
-                        >
-                            + Update subscription price
-                        </button>
-                    ) : (
-                        <form onSubmit={handlePriceUpdate} className="space-y-3">
-                            <p className="text-sm font-semibold text-slate-600 dark:text-neutral-300">Update Price</p>
-                            {error && showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
-                            <Field label="New Amount">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    required
-                                    className={inputCls}
-                                    value={priceForm.amount}
-                                    onChange={(e) => setPriceForm((f) => ({ ...f, amount: e.target.value }))}
+            {/* Price update form + history — only when editing */}
+            {selected && (
+                <>
+                    <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
+                        {!showPriceUpdate ? (
+                            <button onClick={() => setShowPriceUpdate(true)} className={secondaryBtnCls}>
+                                + Update subscription price
+                            </button>
+                        ) : (
+                            <form onSubmit={handlePriceUpdate} className="space-y-3">
+                                <p className="text-sm font-semibold text-slate-600 dark:text-neutral-300">Update Price</p>
+                                {error && showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
+                                <PriceScheduleFields
+                                    priceForm={priceForm}
+                                    setPriceForm={setPriceForm}
+                                    amountLabel="New Amount"
+                                    startDateLabel="Effective From"
                                 />
-                            </Field>
-                            <Field label="Effective From">
-                                <input
-                                    type="date"
-                                    required
-                                    className={dateCls}
-                                    value={priceForm.start_date}
-                                    onChange={(e) => setPriceForm((f) => ({ ...f, start_date: e.target.value }))}
+                                <FormActions
+                                    isEdit={true}
+                                    saving={savingPrice}
+                                    onCancel={() => {
+                                        setShowPriceUpdate(false);
+                                        setPriceForm(blankPrice());
+                                    }}
+                                    saveLabel="Apply Price Change"
                                 />
-                            </Field>
-                            <Field label="Frequency">
-                                <select
-                                    className={selectCls}
-                                    value={priceForm.frequency}
-                                    onChange={(e) => setPriceForm((f) => ({ ...f, frequency: e.target.value }))}
-                                >
-                                    <option value="monthly">Monthly</option>
-                                    <option value="weekly">Weekly</option>
-                                    <option value="yearly">Yearly</option>
-                                </select>
-                            </Field>
-                            {priceForm.frequency !== 'weekly' && (
-                                <Field label="Day of month">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="31"
-                                        className={inputCls}
-                                        value={priceForm.day_of_month}
-                                        onChange={(e) => setPriceForm((f) => ({ ...f, day_of_month: e.target.value }))}
-                                    />
-                                </Field>
-                            )}
-                            <FormActions
-                                isEdit={true}
-                                saving={savingPrice}
-                                onCancel={() => {
-                                    setShowPriceUpdate(false);
-                                    setPriceForm(blankPrice);
-                                }}
-                                saveLabel="Apply Price Change"
-                            />
-                        </form>
-                    )}
-                </div>
+                            </form>
+                        )}
+                    </div>
+
+                    <PriceHistory entries={selected.entries ?? []} />
+                </>
             )}
         </div>
     );
 
     return (
         <>
-            {confirm && (
+            {/* Archive confirm */}
+            {archiveTarget && (
                 <ConfirmModal
-                    message={`Deactivate stream "${confirm.name}"?`}
-                    onConfirm={() => handleDelete(confirm)}
-                    onCancel={() => setConfirm(null)}
+                    message={`Archive "${archiveTarget.name}"? You can restore it later from the Archive tab.`}
+                    confirmLabel="Archive"
+                    confirmVariant="warning"
+                    onConfirm={() => handleArchive(archiveTarget)}
+                    onCancel={() => setArchiveTarget(null)}
                 />
             )}
+
+            {/* Toggle confirm — only shown when queuing a new change (not canceling) */}
+            {toggleAction && !toggleAction.isCancel && (
+                <ConfirmModal
+                    message={
+                        toggleAction.stream.active
+                            ? `Pause "${toggleAction.stream.name}"? It will be excluded from the balance sheet starting next month.`
+                            : `Resume "${toggleAction.stream.name}"? It will be included in the balance sheet starting next month.`
+                    }
+                    confirmLabel={toggleAction.stream.active ? 'Pause next month' : 'Resume next month'}
+                    confirmVariant={toggleAction.stream.active ? 'warning' : 'primary'}
+                    onConfirm={() => execToggle(toggleAction.stream)}
+                    onCancel={() => setToggleAction(null)}
+                />
+            )}
+
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
@@ -299,33 +588,182 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                     <ListStack>
                         {loading && <LoadingRows />}
                         {!loading && !streams.length && <EmptyRows label="No recurring streams yet." />}
-                        {streams.map((s) => (
-                            <ListRow key={s.id} selected={selected?.id === s.id} disabled={!!s.deleted_at}>
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        <p className={rowTitleCls}>{s.name}</p>
-                                        <p className={`mt-1 truncate ${rowDetailCls}`}>{s.category?.name ?? 'Uncategorized'}</p>
-                                    </div>
-                                    {s.deleted_at ? (
-                                        <StatusChip label="Inactive" color="amber" />
-                                    ) : (
-                                        <div className="flex shrink-0 flex-col items-stretch gap-1">
-                                            {activeAmount(s) && (
-                                                <span className={`${rowAmountCls} text-right text-slate-800 dark:text-neutral-100`}>
-                                                    {activeAmount(s)}
+                        {streams.map((s) => {
+                            const e = currentEntry(s);
+                            const m = toggleMeta(s);
+                            return (
+                                <ListRow key={s.id} selected={selected?.id === s.id}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        {/* Left: name + details */}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <p className={rowTitleCls}>{s.name}</p>
+                                                {m.badge && (
+                                                    <StatusChip label={m.badge.label} color={m.badge.color} />
+                                                )}
+                                                {!s.active && !m.badge && (
+                                                    <StatusChip label="Paused" color="amber" />
+                                                )}
+                                            </div>
+                                            <p className={`mt-0.5 truncate ${rowDetailCls}`}>
+                                                {s.category?.name ?? 'Uncategorized'}
+                                                {e ? ` · ${fmtFreq(e.frequency)}` : ''}
+                                            </p>
+                                        </div>
+
+                                        {/* Right: amount + toggle + actions */}
+                                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                            {e && (
+                                                <span className={`${rowAmountCls} text-slate-800 dark:text-neutral-100`}>
+                                                    {fmtAmount(e.amount)}
                                                 </span>
                                             )}
-                                            <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />
+                                            <div className="flex items-center gap-1.5">
+                                                <ToggleSwitch
+                                                    size="sm"
+                                                    on={m.switchOn}
+                                                    disabled={toggling}
+                                                    onClick={(ev) => requestToggle(s, ev)}
+                                                />
+                                                <RowActions onEdit={() => selectRow(s)} onDelete={() => setArchiveTarget(s)} />
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                            </ListRow>
-                        ))}
+                                    </div>
+                                </ListRow>
+                            );
+                        })}
                     </ListStack>
                 }
                 form={formContent}
             />
         </>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-tab: Archive (soft-deleted streams)
+// ---------------------------------------------------------------------------
+
+function ArchiveTab({ active }: { active: boolean }) {
+    const [streams, setStreams] = useState<RecurringStream[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [fetched, setFetched] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [restoring, setRestoring] = useState<number | null>(null);
+    const [hardDeleting, setHardDeleting] = useState<number | null>(null);
+    const [hardDeleteTarget, setHardDeleteTarget] = useState<RecurringStream | null>(null);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            setStreams(await apiFetchList<RecurringStream>('/api/v1/recurring-payments/streams?archived=1'));
+            setFetched(true);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (active && !fetched) load();
+    }, [active, fetched]);
+
+    const handleRestore = async (s: RecurringStream) => {
+        setRestoring(s.id);
+        try {
+            await apiFetch(`/api/v1/recurring-payments/streams/${s.id}/restore`, { method: 'PATCH' });
+            setStreams((prev) => prev.filter((x) => x.id !== s.id));
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setRestoring(null);
+        }
+    };
+
+    const handleHardDelete = async (s: RecurringStream) => {
+        setHardDeleting(s.id);
+        setHardDeleteTarget(null);
+        try {
+            const res = await fetch(`/api/v1/recurring-payments/streams/${s.id}/force`, {
+                method: 'DELETE',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+            });
+            if (res.status === 423) {
+                const body = await res.json();
+                setError(body.message ?? 'Cannot permanently delete this stream.');
+            } else if (res.ok || res.status === 204) {
+                setStreams((prev) => prev.filter((x) => x.id !== s.id));
+            } else {
+                const body = await res.json().catch(() => ({}));
+                setError(body.message ?? 'Something went wrong.');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setHardDeleting(null);
+        }
+    };
+
+    return (
+        <div className="flex min-h-0 flex-1 flex-col">
+            {error && (
+                <div className="mb-3">
+                    <ApiError message={error} onDismiss={() => setError(null)} />
+                </div>
+            )}
+
+            {hardDeleteTarget && (
+                <ConfirmModal
+                    message={`Permanently delete "${hardDeleteTarget.name}"? This cannot be undone.`}
+                    confirmLabel="Delete permanently"
+                    confirmVariant="danger"
+                    onConfirm={() => handleHardDelete(hardDeleteTarget)}
+                    onCancel={() => setHardDeleteTarget(null)}
+                />
+            )}
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                <ListStack>
+                    {loading && <LoadingRows />}
+                    {!loading && !streams.length && <EmptyRows label="No archived streams." />}
+                    {streams.map((s) => {
+                        const e = currentEntry(s);
+                        const isRestoring = restoring === s.id;
+                        const isDeleting = hardDeleting === s.id;
+                        return (
+                            <ListRow key={s.id} disabled>
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className={`${rowTitleCls} line-through opacity-60`}>{s.name}</p>
+                                        <p className={`mt-0.5 truncate ${rowDetailCls} opacity-60`}>
+                                            {s.category?.name ?? 'Uncategorized'}
+                                            {e ? ` · ${fmtFreq(e.frequency)} · ${fmtAmount(e.amount)}` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                                        <button
+                                            disabled={isRestoring || isDeleting}
+                                            onClick={() => handleRestore(s)}
+                                            className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+                                        >
+                                            {isRestoring ? 'Restoring…' : 'Restore'}
+                                        </button>
+                                        <button
+                                            disabled={isRestoring || isDeleting}
+                                            onClick={() => setHardDeleteTarget(s)}
+                                            className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 disabled:opacity-50 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
+                                        >
+                                            {isDeleting ? 'Deleting…' : 'Delete'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </ListRow>
+                        );
+                    })}
+                </ListStack>
+            </div>
+        </div>
     );
 }
 
@@ -475,20 +913,22 @@ function RecurringCategoriesTab({ active, addRef }: { active: boolean; addRef?: 
 // Main export
 // ---------------------------------------------------------------------------
 
-const SUBTABS = ['Streams', 'Categories'] as const;
+const SUBTABS = ['Streams', 'Categories', 'Archive'] as const;
 type SubTab = (typeof SUBTABS)[number];
 
 export function RecurringTab({ active }: { active: boolean }) {
     const [sub, setSub] = useState<SubTab>('Streams');
     const addRef = useRef<(() => void) | null>(null);
+    const showAdd = sub !== 'Archive';
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
                 <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
-                <AddButton onClick={() => addRef.current?.()} />
+                {showAdd && <AddButton onClick={() => addRef.current?.()} />}
             </TabToolbar>
             {sub === 'Streams' && <StreamsTab addRef={addRef} active={active} />}
             {sub === 'Categories' && <RecurringCategoriesTab addRef={addRef} active={active} />}
+            {sub === 'Archive' && <ArchiveTab active={active} />}
         </div>
     );
 }

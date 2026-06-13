@@ -15,6 +15,8 @@ class RecurringPaymentStreamFactory extends Factory
             'recurring_payment_category_id' => RecurringPaymentCategory::factory(),
             'name'                          => fake()->words(2, true),
             'description'                   => fake()->optional()->sentence(),
+            'active'                        => true,
+            'pending_active'                => null,
         ];
     }
 }
