@@ -7,6 +7,163 @@ import { Head, usePage } from '@inertiajs/react';
 import { RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+const VISIBLE_REGULAR_ENTRIES = 3;
+
+function IncomeBalanceContent({
+    income,
+    signed,
+}: {
+    income: BalanceSheetExpanded['income'];
+    signed: (value: number, sign: '+' | '-') => string;
+}) {
+    const [expandedSchedules, setExpandedSchedules] = useState<Set<string>>(new Set());
+
+    const toggleSchedule = (key: string) => {
+        setExpandedSchedules((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
+    return (
+        <div className="space-y-3">
+            {income.by_type.regular.schedules.map((schedule) => {
+                const key = String(schedule.regular_schedule_id ?? schedule.name);
+                const expanded = expandedSchedules.has(key);
+                const visible = expanded ? schedule.entries : schedule.entries.slice(0, VISIBLE_REGULAR_ENTRIES);
+                const hiddenCount = schedule.entries.length - VISIBLE_REGULAR_ENTRIES;
+
+                return (
+                    <div key={key} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                        <div className="flex items-center justify-between">
+                            <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{schedule.name}</span>
+                            <span className="text-base font-medium text-slate-700 dark:text-neutral-200">
+                                {signed(schedule.total, '+')}
+                            </span>
+                        </div>
+                        {schedule.entries.length > 0 && (
+                            <div className="mt-1.5 space-y-1">
+                                {visible.map((entry) => (
+                                    <div
+                                        key={entry.id}
+                                        className="flex items-center justify-between text-sm text-slate-500 dark:text-neutral-200"
+                                    >
+                                        <span>{entry.received_at}</span>
+                                        <span className="font-medium text-slate-700 dark:text-neutral-200">
+                                            {signed(entry.amount, '+')}
+                                        </span>
+                                    </div>
+                                ))}
+                                {!expanded && hiddenCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSchedule(key)}
+                                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                                    >
+                                        Show {hiddenCount} more
+                                    </button>
+                                )}
+                                {expanded && schedule.entries.length > VISIBLE_REGULAR_ENTRIES && (
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSchedule(key)}
+                                        className="text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-neutral-400"
+                                    >
+                                        Show less
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+            {income.by_type.irregular.total > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 dark:bg-neutral-950/50">
+                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Irregular</span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
+                        {signed(income.by_type.irregular.total, '+')}
+                    </span>
+                </div>
+            )}
+            {income.by_type.refund.total > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 dark:bg-neutral-950/50">
+                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Refunds</span>
+                    <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
+                        {signed(income.by_type.refund.total, '+')}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function fmtRecurringEntryLabel(
+    entry: BalanceSheetExpanded['recurring_payments']['streams'][number]['entries'][number],
+) {
+    if (entry.frequency === 'yearly') {
+        const base = entry.day_of_month ? `Annual · day ${entry.day_of_month}` : 'Annual';
+        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+    }
+    if (entry.frequency === 'weekly' && entry.day_of_week != null) {
+        const base = `Weekly · ${DAY_NAMES[entry.day_of_week]}`;
+        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+    }
+    if (entry.frequency === 'monthly') {
+        const base = entry.day_of_month ? `Monthly · day ${entry.day_of_month}` : 'Monthly';
+        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+    }
+    return entry.occurrence_count > 1 ? `${entry.frequency} × ${entry.occurrence_count}` : entry.frequency;
+}
+
+function RecurringBalanceContent({
+    recurring,
+    signed,
+}: {
+    recurring: BalanceSheetExpanded['recurring_payments'];
+    signed: (value: number, sign: '+' | '-') => string;
+}) {
+    return (
+        <div className="space-y-2">
+            {recurring.streams.map((stream) => (
+                <div key={stream.stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                            <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.stream_name}</span>
+                            {stream.category_name && stream.category_name !== 'Uncategorized' && (
+                                <p className="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">{stream.category_name}</p>
+                            )}
+                        </div>
+                        <span className="shrink-0 text-base font-medium text-slate-700 dark:text-neutral-200">
+                            {signed(stream.total, '-')}
+                        </span>
+                    </div>
+                    <div className="mt-1.5 space-y-1">
+                        {stream.entries.map((entry) => (
+                            <div key={entry.id} className="flex items-center justify-between gap-3 text-sm text-slate-500 dark:text-neutral-200">
+                                <span>{fmtRecurringEntryLabel(entry)}</span>
+                                <div className="shrink-0 text-right">
+                                    {entry.occurrence_count > 1 && (
+                                        <span className="mr-2 text-xs text-slate-400 dark:text-neutral-500">
+                                            {signed(entry.amount, '-')} each
+                                        </span>
+                                    )}
+                                    <span className="font-medium text-slate-700 dark:text-neutral-200">
+                                        {signed(entry.period_total, '-')}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 // ─── Shared card shell ────────────────────────────────────────────────────────
 function ModuleCard({
     title,
@@ -47,12 +204,25 @@ type BalanceSheetExpanded = {
     month: string;
     income: {
         total: number;
-        income_entries: Array<{
-            income_stream_id: number;
-            name: string;
-            total: number;
-            entries: Array<{ id: number; amount: number; month: string }>;
-        }>;
+        by_type: {
+            regular: {
+                total: number;
+                schedules: Array<{
+                    regular_schedule_id: number | null;
+                    name: string;
+                    total: number;
+                    entries: Array<{
+                        id: number;
+                        name: string;
+                        description: string | null;
+                        amount: number;
+                        received_at: string;
+                    }>;
+                }>;
+            };
+            irregular: { total: number };
+            refund: { total: number };
+        };
     };
     debt: {
         total: number;
@@ -77,8 +247,19 @@ type BalanceSheetExpanded = {
     recurring_payments: {
         total: number;
         streams: Array<{
+            stream_id: number;
             stream_name: string;
-            entries: Array<{ id: number; amount: number; frequency: string }>;
+            category_name: string;
+            total: number;
+            entries: Array<{
+                id: number;
+                amount: number;
+                frequency: string;
+                day_of_month: number | null;
+                day_of_week: number | null;
+                occurrence_count: number;
+                period_total: number;
+            }>;
         }>;
     };
     savings: {
@@ -174,6 +355,14 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         ? data.spending.categories.reduce((n, c) => n + c.items.length, 0)
         : 0;
 
+    const regularScheduleCount = data ? data.income.by_type.regular.schedules.length : 0;
+    const hasIncome =
+        data &&
+        (data.income.total > 0 ||
+            regularScheduleCount > 0 ||
+            data.income.by_type.irregular.total > 0 ||
+            data.income.by_type.refund.total > 0);
+
     const sections = data
         ? [
               {
@@ -182,29 +371,12 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   pillClass: tintSectionPill.emerald,
                   amountNode: sectionAmount(
                       signed(data.income.total, '+'),
-                      data.income.income_entries.length
-                          ? `${data.income.income_entries.length} stream${data.income.income_entries.length === 1 ? '' : 's'}`
+                      hasIncome
+                          ? `${regularScheduleCount} schedule${regularScheduleCount === 1 ? '' : 's'}`
                           : 'No entries',
                   ),
-                  content: data.income.income_entries.length ? (
-                      <div className="space-y-2">
-                          {data.income.income_entries.map((stream) => (
-                              <div key={stream.income_stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
-                                  <div className="flex items-center justify-between">
-                                      <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(stream.total, '+')}</span>
-                                  </div>
-                                  <div className="mt-1.5 space-y-1">
-                                      {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-neutral-200">
-                                              <span>{entry.month}</span>
-                                              <span className="font-medium text-slate-700 dark:text-neutral-200">{signed(entry.amount, '+')}</span>
-                                          </div>
-                                      ))}
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
+                  content: hasIncome ? (
+                      <IncomeBalanceContent income={data.income} signed={signed} />
                   ) : (
                       <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
                   ),
@@ -277,28 +449,9 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           : 'No entries',
                   ),
                   content: data.recurring_payments.streams.length ? (
-                      <div className="space-y-2">
-                          {data.recurring_payments.streams.map((stream) => (
-                              <div key={stream.stream_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
-                                  <div className="flex items-center justify-between">
-                                      <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.stream_name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">
-                                          {signed(stream.entries.reduce((sum, e) => sum + e.amount, 0), '-')}
-                                      </span>
-                                  </div>
-                                  <div className="mt-1.5 space-y-1">
-                                      {stream.entries.map((entry) => (
-                                          <div key={entry.id} className="flex items-center justify-between text-sm text-slate-500 dark:text-neutral-200">
-                                              <span className="capitalize">{entry.frequency}</span>
-                                              <span className="font-medium text-slate-700 dark:text-neutral-200">{signed(entry.amount, '-')}</span>
-                                          </div>
-                                      ))}
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
+                      <RecurringBalanceContent recurring={data.recurring_payments} signed={signed} />
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">No charges this month</p>
                   ),
               },
               {

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IncomeEntryType;
 use App\Http\Requests\Api\RefundPurchaseRequest;
 use App\Http\Requests\Api\StorePurchaseRequest;
 use App\Http\Requests\Api\UpdatePurchaseRequest;
 use App\Http\Resources\PurchaseResource;
 use App\Models\IncomeEntry;
-use App\Models\IncomeStream;
 use App\Models\Purchase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -65,11 +65,6 @@ class PurchaseController extends Controller
 
     /**
      * Record a refund against a purchase and create the corresponding income entry.
-     *
-     * - Spending is never reduced; the purchase amount stays in spending totals.
-     * - Each refund creates a new income entry linked via purchase_id.
-     * - Omit amount (or send amount >= remaining) to pay off the remaining balance.
-     * - is_refunded is set only when cumulative refunds reach the purchase amount.
      */
     public function refund(RefundPurchaseRequest $request, Purchase $purchase): JsonResponse
     {
@@ -99,22 +94,14 @@ class PurchaseController extends Controller
             return response()->json(['error' => 'invalid_amount', 'message' => 'Refund amount must be greater than zero.'], 422);
         }
 
-        $refundStream = IncomeStream::where('user_id', $userId)
-            ->where('is_system', true)
-            ->where('name', 'Refunds')
-            ->first();
-
-        if (! $refundStream) {
-            return response()->json(['error' => 'no_refund_stream', 'message' => 'System Refunds income stream not found. Please run seeders.'], 500);
-        }
-
-        \Illuminate\Support\Facades\DB::transaction(function () use ($purchase, $refundStream, $refundDate, $refundAmount, $userId) {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($purchase, $refundDate, $refundAmount, $userId) {
             IncomeEntry::create([
-                'user_id'          => $userId,
-                'income_stream_id' => $refundStream->id,
-                'amount'           => $refundAmount,
-                'month'            => $refundDate->copy()->startOfMonth()->toDateString(),
-                'purchase_id'      => $purchase->id,
+                'user_id'     => $userId,
+                'type'        => IncomeEntryType::Refund,
+                'name'        => 'Refund: ' . $purchase->description,
+                'amount'      => $refundAmount,
+                'received_at' => $refundDate->toDateString(),
+                'purchase_id' => $purchase->id,
             ]);
 
             $purchase->load('refundIncomeEntries');

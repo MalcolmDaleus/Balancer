@@ -1,9 +1,8 @@
 <?php
 
 use App\Models\BalanceSheetTotal;
-use App\Models\IncomeCategory;
+use App\Enums\IncomeEntryType;
 use App\Models\IncomeEntry;
-use App\Models\IncomeStream;
 use App\Models\Purchase;
 use App\Models\PurchaseCategory;
 use App\Models\User;
@@ -167,15 +166,7 @@ test('user cannot delete another user\'s purchase', function () {
 
 test('user can refund a purchase and an income entry is created', function () {
     $user = User::factory()->create();
-    $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 49.99]);
-
-    // Create the system Refunds stream that the refund flow requires
-    $refundCat = IncomeCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Refund']);
-    IncomeStream::factory()->system()->create([
-        'user_id' => $user->id,
-        'category_id' => $refundCat->id,
-        'name' => 'Refunds',
-    ]);
+    $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 49.99, 'description' => 'Faulty headphones']);
 
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund")
         ->assertOk()
@@ -184,9 +175,11 @@ test('user can refund a purchase and an income entry is created', function () {
         ->assertJsonPath('purchase.refunded_total', 49.99);
 
     $this->assertDatabaseHas('income_entries', [
-        'user_id' => $user->id,
+        'user_id'     => $user->id,
         'purchase_id' => $purchase->id,
-        'amount' => 49.99,
+        'type'        => IncomeEntryType::Refund->value,
+        'name'        => 'Refund: Faulty headphones',
+        'amount'      => 49.99,
     ]);
     $this->assertDatabaseHas('purchases', ['id' => $purchase->id, 'is_refunded' => true]);
 });
@@ -194,13 +187,6 @@ test('user can refund a purchase and an income entry is created', function () {
 test('user can partially refund a purchase and refund again until fully refunded', function () {
     $user = User::factory()->create();
     $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 60.00]);
-
-    $refundCat = IncomeCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Refund']);
-    IncomeStream::factory()->system()->create([
-        'user_id' => $user->id,
-        'category_id' => $refundCat->id,
-        'name' => 'Refunds',
-    ]);
 
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 20])
         ->assertOk()
@@ -227,13 +213,6 @@ test('partial refund amount over remaining is capped to remaining balance', func
     $user = User::factory()->create();
     $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 60.00]);
 
-    $refundCat = IncomeCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Refund']);
-    IncomeStream::factory()->system()->create([
-        'user_id' => $user->id,
-        'category_id' => $refundCat->id,
-        'name' => 'Refunds',
-    ]);
-
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 20])
         ->assertOk();
 
@@ -248,13 +227,6 @@ test('partial refund amount over remaining is capped to remaining balance', func
 test('refunding a purchase that is already fully refunded returns 422', function () {
     $user = User::factory()->create();
     $purchase = Purchase::factory()->create(['user_id' => $user->id, 'is_refunded' => true]);
-
-    $refundCat = IncomeCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Refund']);
-    IncomeStream::factory()->system()->create([
-        'user_id' => $user->id,
-        'category_id' => $refundCat->id,
-        'name' => 'Refunds',
-    ]);
 
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund")
         ->assertStatus(422)
@@ -318,16 +290,13 @@ test('full refund succeeds on a purchase in a locked month', function () {
         'roll_over' => 0,
     ]);
 
-    $refundCat = IncomeCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Refund']);
-    IncomeStream::factory()->system()->create([
-        'user_id' => $user->id,
-        'category_id' => $refundCat->id,
-        'name' => 'Refunds',
-    ]);
-
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund")
         ->assertOk()
         ->assertJsonPath('purchase.is_refunded', true);
 
     expect($purchase->fresh()->is_refunded)->toBeTrue();
+    $this->assertDatabaseHas('income_entries', [
+        'purchase_id' => $purchase->id,
+        'type'        => IncomeEntryType::Refund->value,
+    ]);
 });

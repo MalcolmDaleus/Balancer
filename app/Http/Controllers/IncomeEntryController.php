@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IncomeEntryType;
 use App\Http\Requests\Api\StoreIncomeEntryRequest;
 use App\Http\Requests\Api\UpdateIncomeEntryRequest;
 use App\Http\Resources\IncomeEntryResource;
@@ -16,8 +17,8 @@ class IncomeEntryController extends Controller
         $this->authorize('viewAny', IncomeEntry::class);
 
         $entries = IncomeEntry::where('user_id', auth()->id())
-            ->with(['stream', 'sourcePurchase'])
-            ->latest('month')
+            ->with(['regularSchedule', 'sourcePurchase'])
+            ->latest('received_at')
             ->get();
 
         return IncomeEntryResource::collection($entries);
@@ -32,28 +33,36 @@ class IncomeEntryController extends Controller
             ['user_id' => auth()->id()]
         ));
 
-        return new IncomeEntryResource($entry->load(['stream', 'sourcePurchase']));
+        return new IncomeEntryResource($entry->load(['regularSchedule', 'sourcePurchase']));
     }
 
     public function show(IncomeEntry $incomeEntry): IncomeEntryResource
     {
         $this->authorize('view', $incomeEntry);
 
-        return new IncomeEntryResource($incomeEntry->load(['stream', 'sourcePurchase']));
+        return new IncomeEntryResource($incomeEntry->load(['regularSchedule', 'sourcePurchase']));
     }
 
     public function update(UpdateIncomeEntryRequest $request, IncomeEntry $incomeEntry): IncomeEntryResource
     {
         $this->authorize('update', $incomeEntry);
 
+        if ($incomeEntry->type === IncomeEntryType::Refund) {
+            abort(422, 'Refund entries cannot be edited.');
+        }
+
         $incomeEntry->update($request->validated());
 
-        return new IncomeEntryResource($incomeEntry->fresh()->load(['stream', 'sourcePurchase']));
+        return new IncomeEntryResource($incomeEntry->fresh()->load(['regularSchedule', 'sourcePurchase']));
     }
 
     public function destroy(IncomeEntry $incomeEntry): JsonResponse
     {
         $this->authorize('delete', $incomeEntry);
+
+        if ($incomeEntry->type === IncomeEntryType::Refund) {
+            abort(422, 'Refund entries cannot be deleted directly.');
+        }
 
         $incomeEntry->delete();
 

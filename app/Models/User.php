@@ -10,6 +10,8 @@ use Laravel\Sanctum\HasApiTokens;
 use App\Models\RecurringPaymentCategory;
 use App\Models\RecurringPaymentStream;
 use App\Models\RecurringPaymentEntry;
+use App\Models\RegularIncomeSchedule;
+use App\Models\RegularIncomeScheduleVersion;
 
 class User extends Authenticatable
 {
@@ -64,12 +66,16 @@ class User extends Authenticatable
         return $this->hasMany(Saving::class); 
     }
 
-    public function incomeStreams() {
-         return $this->hasMany(IncomeStream::class); 
-    }
-
     public function incomeEntries() {
          return $this->hasMany(IncomeEntry::class); 
+    }
+
+    public function regularIncomeSchedules() {
+        return $this->hasMany(RegularIncomeSchedule::class);
+    }
+
+    public function regularIncomeScheduleVersions() {
+        return $this->hasMany(RegularIncomeScheduleVersion::class);
     }
     
     public function balanceSheets() {

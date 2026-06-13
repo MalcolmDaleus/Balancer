@@ -9,27 +9,41 @@ import { ReactNode, useEffect, useState } from 'react';
 // Types — matching Laravel API resource output shapes
 // ---------------------------------------------------------------------------
 
-export interface IncomeCategory {
+export interface RegularIncomeScheduleVersion {
     id: number;
-    category_name: string;
+    regular_schedule_id: number;
+    amount: number;
+    frequency: string;
+    day_of_month: number | null;
+    day_of_week: number | null;
+    anchor_date: string | null;
+    start_date: string;
+    end_date: string | null;
+    active: boolean;
 }
-export interface IncomeStream {
+export interface RegularIncomeSchedule {
     id: number;
-    category_id: number | null;
     name: string;
     description: string | null;
-    is_system: boolean;
-    deleted_at?: string | null;
-    category?: IncomeCategory;
+    /** Live balance-sheet state. Generation service may write this after pending flush. */
+    active: boolean;
+    /** Queued change for the next cycle occurrence. null = no change pending. */
+    pending_active: boolean | null;
+    deleted_at: string | null;
+    versions?: RegularIncomeScheduleVersion[];
 }
 export interface IncomeEntry {
     id: number;
-    income_stream_id: number;
+    type: 'regular' | 'irregular' | 'refund';
+    name: string;
+    description: string | null;
     amount: number;
-    month: string;
+    received_at: string;
     purchase_id: number | null;
     purchase_description?: string | null;
-    stream?: IncomeStream;
+    regular_schedule_id: number | null;
+    regular_schedule_version_id: number | null;
+    regular_schedule?: RegularIncomeSchedule;
 }
 
 export interface PurchaseCategory {

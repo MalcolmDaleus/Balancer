@@ -1,9 +1,10 @@
 <?php
 
 use App\Models\BalanceSheetTotal;
+use App\Enums\IncomeEntryType;
 use App\Models\IncomeEntry;
-use App\Models\IncomeStream;
 use App\Models\Purchase;
+use App\Models\RecurringPaymentEntry;
 use App\Models\RecurringPaymentStream;
 use App\Models\User;
 use App\Services\AutoMonthCloseService;
@@ -53,13 +54,11 @@ test('auto close locks full backlog when user returns after several months', fun
     Carbon::setTestNow('2026-06-05 12:00:00');
 
     $user = User::factory()->create(['created_at' => '2026-03-01']);
-    $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
-
     IncomeEntry::factory()->create([
         'user_id' => $user->id,
-        'income_stream_id' => $stream->id,
+        'type' => IncomeEntryType::Irregular,
         'amount' => 1000,
-        'month' => '2026-03-01',
+        'received_at' => '2026-03-15',
     ]);
 
     // March already closed manually
@@ -181,13 +180,11 @@ test('dashboard passes closed months to inertia when backlog is closed', functio
     Carbon::setTestNow('2026-06-05 12:00:00');
 
     $user = User::factory()->create(['created_at' => '2026-03-01']);
-    $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
-
     IncomeEntry::factory()->create([
         'user_id' => $user->id,
-        'income_stream_id' => $stream->id,
+        'type' => IncomeEntryType::Irregular,
         'amount' => 500,
-        'month' => '2026-03-01',
+        'received_at' => '2026-03-15',
     ]);
 
     $this->actingAs($user)
@@ -201,35 +198,13 @@ test('dashboard passes closed months to inertia when backlog is closed', functio
 });
 
 // ---------------------------------------------------------------------------
-// Pending toggle flush
+// Pending toggle flush (occurrence-based, not month close)
 // ---------------------------------------------------------------------------
 
-test('closing months commits pending_active to active', function () {
+test('month close does not flush recurring pending_active', function () {
     Carbon::setTestNow('2026-06-05 12:00:00');
 
     $user = User::factory()->create(['created_at' => '2026-05-01']);
-
-    // Stream with a pending pause queued
-    $stream = RecurringPaymentStream::factory()->create([
-        'user_id'        => $user->id,
-        'active'         => true,
-        'pending_active' => false,
-    ]);
-
-    (new AutoMonthCloseService)->closePendingMonths($user->id);
-
-    $stream->refresh();
-    expect($stream->active)->toBeFalse();
-    expect($stream->pending_active)->toBeNull();
-});
-
-test('pending_active is not flushed when no months are closed', function () {
-    Carbon::setTestNow('2026-06-05 12:00:00');
-
-    $user = User::factory()->create(['created_at' => '2026-06-01']);
-
-    // Already locked — nothing to close
-    BalanceSheetTotal::factory()->create(['user_id' => $user->id, 'month' => '2026-05-01']);
 
     $stream = RecurringPaymentStream::factory()->create([
         'user_id'        => $user->id,
@@ -237,28 +212,17 @@ test('pending_active is not flushed when no months are closed', function () {
         'pending_active' => false,
     ]);
 
-    (new AutoMonthCloseService)->closePendingMonths($user->id);
-
-    $stream->refresh();
-    // No months were closed, so pending change stays
-    expect($stream->active)->toBeTrue();
-    expect($stream->pending_active)->toBeFalse();
-});
-
-test('pending resume is committed after closing months', function () {
-    Carbon::setTestNow('2026-06-05 12:00:00');
-
-    $user = User::factory()->create(['created_at' => '2026-05-01']);
-
-    $stream = RecurringPaymentStream::factory()->create([
-        'user_id'        => $user->id,
-        'active'         => false,
-        'pending_active' => true,
+    RecurringPaymentEntry::factory()->create([
+        'user_id'                     => $user->id,
+        'recurring_payment_stream_id' => $stream->id,
+        'frequency'                   => 'monthly',
+        'day_of_month'                => 15,
+        'start_date'                  => '2026-01-15',
     ]);
 
     (new AutoMonthCloseService)->closePendingMonths($user->id);
 
     $stream->refresh();
     expect($stream->active)->toBeTrue();
-    expect($stream->pending_active)->toBeNull();
+    expect($stream->pending_active)->toBeFalse();
 });

@@ -5,8 +5,8 @@ use App\Models\BalanceSheetTotal;
 use App\Models\Debt;
 use App\Models\DebtCategory;
 use App\Models\DebtPayment;
+use App\Enums\IncomeEntryType;
 use App\Models\IncomeEntry;
-use App\Models\IncomeStream;
 use App\Models\Purchase;
 use App\Models\PurchaseCategory;
 use App\Models\Saving;
@@ -144,25 +144,25 @@ test('deleting a purchase in a locked month throws MonthLockedException', functi
 
 test('creating an income entry in a locked month throws MonthLockedException', function () {
     [$user, $month] = userWithLockedMonth();
-    $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     expect(fn () => IncomeEntry::create([
-        'user_id' => $user->id,
-        'income_stream_id' => $stream->id,
-        'amount' => 1000.00,
-        'month' => $month,
+        'user_id'     => $user->id,
+        'type'        => IncomeEntryType::Irregular,
+        'name'        => 'Locked income',
+        'amount'      => 1000.00,
+        'received_at' => $month,
     ]))->toThrow(MonthLockedException::class);
 });
 
 test('deleting an income entry in a locked month throws MonthLockedException', function () {
     $user = User::factory()->create();
-    $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     $entry = IncomeEntry::create([
-        'user_id' => $user->id,
-        'income_stream_id' => $stream->id,
-        'amount' => 500.00,
-        'month' => '2025-06-01',
+        'user_id'     => $user->id,
+        'type'        => IncomeEntryType::Irregular,
+        'name'        => 'Test income',
+        'amount'      => 500.00,
+        'received_at' => '2025-06-15',
     ]);
 
     BalanceSheetTotal::create([

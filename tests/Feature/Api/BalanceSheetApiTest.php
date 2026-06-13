@@ -1,8 +1,8 @@
 <?php
 
+use App\Enums\IncomeEntryType;
 use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
-use App\Models\IncomeStream;
 use App\Models\Purchase;
 use App\Models\User;
 
@@ -22,13 +22,12 @@ test('unauthenticated user cannot access balance sheet', function () {
 
 test('user can get simplified balance sheet for a month', function () {
     $user = User::factory()->create();
-    $stream = IncomeStream::factory()->create(['user_id' => $user->id]);
 
     IncomeEntry::factory()->create([
         'user_id' => $user->id,
-        'income_stream_id' => $stream->id,
+        'type' => IncomeEntryType::Irregular,
         'amount' => 3000.00,
-        'month' => '2026-04-01',
+        'received_at' => '2026-04-15',
     ]);
 
     Purchase::factory()->create([
@@ -51,7 +50,8 @@ test('user can get expanded balance sheet', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet?month=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'recurring_payments', 'savings', 'roll_over']);
+        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'recurring_payments', 'savings', 'roll_over'])
+        ->assertJsonStructure(['income' => ['total', 'by_type' => ['regular', 'irregular', 'refund']]]);
 });
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\IncomeEntryType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Traits\DateScopeable;
@@ -12,17 +13,24 @@ class IncomeEntry extends Model
 {
     use HasFactory, UserScopable, DateScopeable, MonthLockable;
 
+    protected string $monthLockColumn = 'received_at';
+
     protected $fillable = [
         'user_id',
-        'income_stream_id',
+        'type',
+        'name',
+        'description',
+        'received_at',
         'amount',
-        'month',
         'purchase_id',
+        'regular_schedule_id',
+        'regular_schedule_version_id',
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'month' => 'date',
+        'type'        => IncomeEntryType::class,
+        'amount'      => 'decimal:2',
+        'received_at' => 'date',
     ];
 
     public function user()
@@ -30,9 +38,14 @@ class IncomeEntry extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function stream()
+    public function regularSchedule()
     {
-        return $this->belongsTo(IncomeStream::class, 'income_stream_id')->withTrashed();
+        return $this->belongsTo(RegularIncomeSchedule::class, 'regular_schedule_id')->withTrashed();
+    }
+
+    public function regularScheduleVersion()
+    {
+        return $this->belongsTo(RegularIncomeScheduleVersion::class, 'regular_schedule_version_id');
     }
 
     public function sourcePurchase()

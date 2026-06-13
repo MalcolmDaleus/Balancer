@@ -4,11 +4,10 @@ use App\Http\Controllers\BalanceSheetTotalController;
 use App\Http\Controllers\DebtCategoryController;
 use App\Http\Controllers\DebtController;
 use App\Http\Controllers\DebtPaymentController;
-use App\Http\Controllers\IncomeCategoryController;
 use App\Http\Controllers\IncomeEntryController;
-use App\Http\Controllers\IncomeStreamController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\RegularIncomeScheduleController;
 use App\Http\Controllers\RecurringPaymentCategoryController;
 use App\Http\Controllers\RecurringPaymentEntryController;
 use App\Http\Controllers\RecurringPaymentStreamController;
@@ -45,10 +44,18 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
         ->name('debt-payments.destroy');
 
     // ---------------------------------------------------------------
-    // Income streams + entries
+    // Income schedules + entries
     // ---------------------------------------------------------------
-    Route::apiResource('income/streams', IncomeStreamController::class)
-        ->parameters(['streams' => 'incomeStream']);
+    Route::apiResource('income/schedules', RegularIncomeScheduleController::class)
+        ->parameters(['schedules' => 'regularIncomeSchedule']);
+    Route::post('income/schedules/{regularIncomeSchedule}/update-amount', [RegularIncomeScheduleController::class, 'updateAmount'])
+        ->name('income.schedules.update-amount');
+    Route::patch('income/schedules/{regularIncomeSchedule}/toggle', [RegularIncomeScheduleController::class, 'toggle'])
+        ->name('income.schedules.toggle');
+    Route::patch('income/schedules/{id}/restore', [RegularIncomeScheduleController::class, 'restore'])
+        ->name('income.schedules.restore');
+    Route::delete('income/schedules/{id}/force', [RegularIncomeScheduleController::class, 'hardDestroy'])
+        ->name('income.schedules.force-delete');
     Route::apiResource('income/entries', IncomeEntryController::class)
         ->parameters(['entries' => 'incomeEntry']);
 
@@ -62,8 +69,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
     // ---------------------------------------------------------------
     Route::apiResource('categories/purchases', PurchaseCategoryController::class)
         ->parameters(['purchases' => 'purchaseCategory']);
-    Route::apiResource('categories/income', IncomeCategoryController::class)
-        ->parameters(['income' => 'incomeCategory']);
     Route::apiResource('categories/debts', DebtCategoryController::class)
         ->parameters(['debts' => 'debtCategory']);
 

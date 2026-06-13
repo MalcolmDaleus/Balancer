@@ -4,7 +4,7 @@ namespace App\Http\Requests\Api;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateIncomeCategoryRequest extends FormRequest
+class UpdateRegularIncomeScheduleRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,7 +14,8 @@ class UpdateIncomeCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_name' => ['required', 'string', 'max:255'],
+            'name'        => ['sometimes', 'string', 'max:64'],
+            'description' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

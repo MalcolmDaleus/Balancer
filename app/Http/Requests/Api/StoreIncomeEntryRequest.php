@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Enums\IncomeEntryType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreIncomeEntryRequest extends FormRequest
 {
@@ -12,19 +14,33 @@ class StoreIncomeEntryRequest extends FormRequest
         return true;
     }
 
-    protected function prepareForValidation(): void
-    {
-        if ($this->has('month') && preg_match('/^\d{4}-\d{2}$/', (string) $this->month)) {
-            $this->merge(['month' => $this->month . '-01']);
-        }
-    }
-
     public function rules(): array
     {
-        return [
-            'income_stream_id' => ['required', 'integer', Rule::exists('income_streams', 'id')->where('user_id', $this->user()->id)],
-            'amount'           => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'month'            => ['required', 'date'],
+        $types = [
+            IncomeEntryType::Regular->value,
+            IncomeEntryType::Irregular->value,
         ];
+
+        return [
+            'type'        => ['required', 'string', Rule::in($types)],
+            'name'        => ['required', 'string', 'max:64'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'amount'      => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'received_at' => ['required', 'date'],
+            'regular_schedule_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('regular_income_schedules', 'id')->where('user_id', $this->user()->id),
+            ],
+        ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->input('type') === IncomeEntryType::Irregular->value && $this->filled('regular_schedule_id')) {
+                $validator->errors()->add('regular_schedule_id', 'Irregular entries cannot be linked to a schedule.');
+            }
+        });
     }
 }

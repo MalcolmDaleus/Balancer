@@ -7,7 +7,6 @@ use App\Models\DebtPayment;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
 use App\Models\RecurringPaymentEntry;
-use App\Models\RecurringPaymentStream;
 use App\Models\Saving;
 use Carbon\Carbon;
 
@@ -22,9 +21,6 @@ class AutoMonthCloseService
     /**
      * Close every unlocked month from the backlog start through the last
      * complete month (current month minus one).
-     *
-     * After closing, any queued pause/resume changes (pending_active) are
-     * committed to the live active column so they take effect in the new month.
      *
      * @return list<string> Closed months as YYYY-MM, oldest first.
      */
@@ -53,34 +49,7 @@ class AutoMonthCloseService
 
         $result = array_reverse($closed);
 
-        // Commit pending toggle changes now that the month boundary has been crossed.
-        // This runs even when closing a backlog — the pending state should always
-        // reflect the user's intent for the current (open) month.
-        if (! empty($result)) {
-            $this->flushPendingToggles($userId);
-        }
-
         return $result;
-    }
-
-    /**
-     * Commit all queued pause/resume changes for the user's recurring streams.
-     *
-     * Copies pending_active → active and resets pending_active to null.
-     * Called automatically after closing months; can also be called directly
-     * in tests or future scheduled commands.
-     */
-    public function flushPendingToggles(int $userId): void
-    {
-        RecurringPaymentStream::where('user_id', $userId)
-            ->whereNotNull('pending_active')
-            ->get()
-            ->each(function (RecurringPaymentStream $stream): void {
-                $stream->update([
-                    'active'         => $stream->pending_active,
-                    'pending_active' => null,
-                ]);
-            });
     }
 
     /**
@@ -93,7 +62,7 @@ class AutoMonthCloseService
     {
         $earliestDates = [
             Purchase::where('user_id', $userId)->min('date'),
-            IncomeEntry::where('user_id', $userId)->min('month'),
+            IncomeEntry::where('user_id', $userId)->min('received_at'),
             Saving::where('user_id', $userId)->min('month'),
             Debt::where('user_id', $userId)->min('issue_date'),
             DebtPayment::where('user_id', $userId)->min('paid_at'),

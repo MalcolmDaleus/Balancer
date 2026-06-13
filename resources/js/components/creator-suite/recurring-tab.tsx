@@ -438,9 +438,14 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                                         / {fmtFreq(entry.frequency)}
                                     </span>
                                 </p>
-                                {entry.day_of_month && (
+                                {entry.day_of_month != null && entry.frequency !== 'weekly' && (
                                     <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
                                         Day {entry.day_of_month} of each {entry.frequency === 'yearly' ? 'year' : 'month'}
+                                    </p>
+                                )}
+                                {entry.day_of_week != null && entry.frequency === 'weekly' && (
+                                    <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
+                                        Every {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][entry.day_of_week]}
                                     </p>
                                 )}
                             </div>
@@ -455,7 +460,9 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                                               : 'Paused'}
                                     </p>
                                     <p className="text-xs text-slate-400 dark:text-neutral-500">
-                                        {meta!.pendingCancel ? 'Click to cancel' : 'Click to change'}
+                                        {meta!.pendingCancel
+                                            ? 'Click to cancel queued change'
+                                            : 'Takes effect after next charge date'}
                                     </p>
                                 </div>
                                 <ToggleSwitch
@@ -570,10 +577,10 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                 <ConfirmModal
                     message={
                         toggleAction.stream.active
-                            ? `Pause "${toggleAction.stream.name}"? It will be excluded from the balance sheet starting next month.`
-                            : `Resume "${toggleAction.stream.name}"? It will be included in the balance sheet starting next month.`
+                            ? `Pause "${toggleAction.stream.name}" after its next charge? It stays on the balance sheet until then.`
+                            : `Resume "${toggleAction.stream.name}" after its next charge?`
                     }
-                    confirmLabel={toggleAction.stream.active ? 'Pause next month' : 'Resume next month'}
+                    confirmLabel={toggleAction.stream.active ? 'Pause after next charge' : 'Resume after next charge'}
                     confirmVariant={toggleAction.stream.active ? 'warning' : 'primary'}
                     onConfirm={() => execToggle(toggleAction.stream)}
                     onCancel={() => setToggleAction(null)}
