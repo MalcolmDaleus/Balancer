@@ -62,11 +62,34 @@ trait MonthLockable
         });
 
         static::deleting(function ($model) {
+            // Soft-archive of instruments may be allowed even when the
+            // instrument's own date sits in a locked month (Facts stay).
+            if (static::allowsSoftDeleteWhenLocked($model)) {
+                return;
+            }
+
             MonthLockService::assertUnlocked(
                 $model->user_id,
                 $model->{$model->getMonthLockColumn()}
             );
         });
+    }
+
+    /**
+     * SoftDeletes models may opt in via: protected bool $monthLockAllowsSoftDelete = true;
+     * Force-deletes always remain month-locked.
+     */
+    protected static function allowsSoftDeleteWhenLocked(Model $model): bool
+    {
+        if (! property_exists($model, 'monthLockAllowsSoftDelete') || ! $model->monthLockAllowsSoftDelete) {
+            return false;
+        }
+
+        if (! method_exists($model, 'isForceDeleting')) {
+            return false;
+        }
+
+        return ! $model->isForceDeleting();
     }
 
     /**

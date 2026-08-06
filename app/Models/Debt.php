@@ -7,15 +7,19 @@ use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Debt extends Model
 {
-    use DateScopeable, HasFactory, MonthLockable, UserScopable;
+    use DateScopeable, HasFactory, MonthLockable, SoftDeletes, UserScopable;
 
     protected string $monthLockColumn = 'issue_date';
 
-    /** Forgiveness updates are allowed on locked months — payments are month-scoped separately. */
+    /** Forgiveness / settlement updates are allowed on locked months. */
     protected array $monthLockExemptAttributes = ['is_forgiven', 'settle_date', 'notes'];
+
+    /** Soft-archive hides the instrument; payment Facts remain for locked history. */
+    protected bool $monthLockAllowsSoftDelete = true;
 
     protected $attributes = [
         'is_forgiven' => false,
@@ -74,6 +78,11 @@ class Debt extends Model
     public function getIsClosedAttribute(): bool
     {
         return $this->is_settled || $this->is_forgiven;
+    }
+
+    public function hasPaymentFacts(): bool
+    {
+        return $this->payments()->exists();
     }
 
     // ----------------------------------------------------------

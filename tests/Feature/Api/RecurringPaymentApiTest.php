@@ -95,13 +95,15 @@ test('user can list their recurring payment streams', function () {
 
 test('user can create a recurring payment stream with initial price entry', function () {
     $user = User::factory()->create();
+    $cat  = RecurringPaymentCategory::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->postJson('/api/v1/recurring-payments/streams', [
-        'name'         => 'Netflix',
-        'amount'       => 15.99,
-        'frequency'    => 'monthly',
-        'day_of_month' => 1,
-        'start_date'   => '2026-01-01',
+        'name'                          => 'Netflix',
+        'recurring_payment_category_id' => $cat->id,
+        'amount'                        => 15.99,
+        'frequency'                     => 'monthly',
+        'day_of_month'                  => 1,
+        'start_date'                    => '2026-01-01',
     ])
         ->assertCreated()
         ->assertJsonPath('data.name', 'Netflix')
@@ -114,6 +116,18 @@ test('user can create a recurring payment stream with initial price entry', func
         'user_id' => $user->id,
         'amount'  => 15.99,
     ]);
+});
+
+test('creating a stream without a category fails validation', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->postJson('/api/v1/recurring-payments/streams', [
+        'name'         => 'Netflix',
+        'amount'       => 15.99,
+        'frequency'    => 'monthly',
+        'day_of_month' => 1,
+        'start_date'   => '2026-01-01',
+    ])->assertStatus(422)->assertJsonPath('error', 'validation_failed');
 });
 
 test('creating a stream without price fields fails validation', function () {
@@ -144,13 +158,15 @@ test('stream delete (archive) is always a soft delete', function () {
 
 test('new streams default to active=true', function () {
     $user = User::factory()->create();
+    $cat  = RecurringPaymentCategory::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->postJson('/api/v1/recurring-payments/streams', [
-        'name'         => 'Spotify',
-        'amount'       => 9.99,
-        'frequency'    => 'monthly',
-        'day_of_month' => 15,
-        'start_date'   => '2026-01-01',
+        'name'                          => 'Spotify',
+        'recurring_payment_category_id' => $cat->id,
+        'amount'                        => 9.99,
+        'frequency'                     => 'monthly',
+        'day_of_month'                  => 15,
+        'start_date'                    => '2026-01-01',
     ])
         ->assertCreated()
         ->assertJsonPath('data.active', true);
@@ -188,6 +204,82 @@ test('toggle again cancels the pending change', function () {
     $stream->refresh();
     expect($stream->active)->toBeTrue();
     expect($stream->pending_active)->toBeNull();
+});
+
+test('update-price does not mutate another user\'s recurring entries', function () {
+    $userA = User::factory()->create();
+    $userB = User::factory()->create();
+
+    $streamA = RecurringPaymentStream::factory()->create(['user_id' => $userA->id]);
+    $streamB = RecurringPaymentStream::factory()->create(['user_id' => $userB->id]);
+
+    $entryA = RecurringPaymentEntry::factory()->create([
+        'user_id'                     => $userA->id,
+        'recurring_payment_stream_id' => $streamA->id,
+        'amount'                      => 10.00,
+        'frequency'                   => 'monthly',
+        'day_of_month'                => 1,
+        'start_date'                  => '2026-01-01',
+        'end_date'                    => null,
+        'active'                      => true,
+    ]);
+
+    // Open-ended active entry for another tenant — must remain untouched.
+    $entryB = RecurringPaymentEntry::factory()->create([
+        'user_id'                     => $userB->id,
+        'recurring_payment_stream_id' => $streamB->id,
+        'amount'                      => 50.00,
+        'frequency'                   => 'monthly',
+        'day_of_month'                => 15,
+        'start_date'                  => '2026-01-01',
+        'end_date'                    => null,
+        'active'                      => true,
+    ]);
+
+    // Entry with end_date still in range — exercises the OR branch that used to
+    // escape the stream_id constraint before the query was grouped.
+    $entryBOpenEnded = RecurringPaymentEntry::factory()->create([
+        'user_id'                     => $userB->id,
+        'recurring_payment_stream_id' => $streamB->id,
+        'amount'                      => 25.00,
+        'frequency'                   => 'monthly',
+        'day_of_month'                => 20,
+        'start_date'                  => '2025-06-01',
+        'end_date'                    => '2026-12-31',
+        'active'                      => true,
+    ]);
+
+    $this->actingAs($userA)->postJson(
+        "/api/v1/recurring-payments/streams/{$streamA->id}/update-price",
+        [
+            'amount'       => 12.00,
+            'start_date'   => '2026-07-01',
+            'frequency'    => 'monthly',
+            'day_of_month' => 1,
+        ]
+    )->assertOk();
+
+    $entryA->refresh();
+    expect($entryA->active)->toBeFalse();
+    expect($entryA->end_date?->toDateString())->toBe('2026-06-30');
+
+    $entryB->refresh();
+    expect($entryB->active)->toBeTrue();
+    expect($entryB->end_date)->toBeNull();
+    expect((float) $entryB->amount)->toBe(50.00);
+
+    $entryBOpenEnded->refresh();
+    expect($entryBOpenEnded->active)->toBeTrue();
+    expect($entryBOpenEnded->end_date?->toDateString())->toBe('2026-12-31');
+    expect((float) $entryBOpenEnded->amount)->toBe(25.00);
+
+    expect(
+        RecurringPaymentEntry::where('recurring_payment_stream_id', $streamA->id)
+            ->where('active', true)
+            ->whereNull('end_date')
+            ->where('amount', 12.00)
+            ->exists()
+    )->toBeTrue();
 });
 
 test('user cannot toggle another user\'s stream', function () {
@@ -300,7 +392,7 @@ test('user can create a yearly recurring payment entry', function () {
         ->assertJsonPath('data.day_of_month', 1);
 });
 
-test('weekly frequency is rejected', function () {
+test('user can create a weekly recurring payment entry', function () {
     $user   = User::factory()->create();
     $stream = RecurringPaymentStream::factory()->create(['user_id' => $user->id]);
 
@@ -310,7 +402,21 @@ test('weekly frequency is rejected', function () {
         'frequency'                   => 'weekly',
         'day_of_week'                 => 1,
         'start_date'                  => '2026-01-01',
-    ])->assertStatus(422);
+    ])->assertCreated()
+      ->assertJsonPath('data.frequency', 'weekly')
+      ->assertJsonPath('data.day_of_week', 1);
+});
+
+test('weekly entry requires day_of_week', function () {
+    $user   = User::factory()->create();
+    $stream = RecurringPaymentStream::factory()->create(['user_id' => $user->id]);
+
+    $this->actingAs($user)->postJson('/api/v1/recurring-payments/entries', [
+        'recurring_payment_stream_id' => $stream->id,
+        'amount'                      => 5.00,
+        'frequency'                   => 'weekly',
+        'start_date'                  => '2026-01-01',
+    ])->assertStatus(422)->assertJsonPath('error', 'validation_failed');
 });
 
 test('monthly entry requires day_of_month', function () {

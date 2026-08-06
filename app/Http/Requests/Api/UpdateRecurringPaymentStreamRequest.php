@@ -17,7 +17,7 @@ class UpdateRecurringPaymentStreamRequest extends FormRequest
         return [
             'recurring_payment_category_id' => [
                 'sometimes',
-                'nullable',
+                'required',
                 'integer',
                 Rule::exists('recurring_payment_categories', 'id')->where('user_id', $this->user()->id),
             ],

@@ -87,6 +87,23 @@ test('user can delete their saving', function () {
         ->assertNoContent();
 });
 
+test('withdrawal exceeding savings balance is rejected', function () {
+    $user = User::factory()->create();
+    Saving::factory()->create([
+        'user_id' => $user->id,
+        'type'    => 'deposit',
+        'amount'  => 50.00,
+        'month'   => '2026-04-01',
+    ]);
+
+    $this->actingAs($user)->postJson('/api/v1/savings', [
+        'amount' => 75.00,
+        'type'   => 'withdrawal',
+        'month'  => '2026-04',
+    ])->assertStatus(422)
+      ->assertJsonPath('error', 'validation_failed');
+});
+
 test('saving on locked month returns 423', function () {
     $user = User::factory()->create();
 

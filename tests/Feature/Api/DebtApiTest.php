@@ -98,12 +98,31 @@ test('user can update their debt', function () {
     ])->assertOk()->assertJsonPath('data.description', 'Updated');
 });
 
-test('user can delete their debt', function () {
+test('user can hard-delete a debt with no payments', function () {
     $user = User::factory()->create();
     $debt = Debt::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
         ->assertNoContent();
+
+    expect(Debt::withTrashed()->find($debt->id))->toBeNull();
+});
+
+test('deleting a debt with payments soft-archives and keeps payment Facts', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
+    $payment = DebtPayment::factory()->create([
+        'user_id' => $user->id,
+        'debt_id' => $debt->id,
+        'amount'  => 100,
+    ]);
+
+    $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
+        ->assertNoContent();
+
+    expect(Debt::find($debt->id))->toBeNull();
+    expect(Debt::withTrashed()->find($debt->id)->trashed())->toBeTrue();
+    expect(DebtPayment::find($payment->id))->not->toBeNull();
 });
 
 // ---------------------------------------------------------------------------
@@ -268,6 +287,26 @@ test('debt is auto-settled when payments reach the full amount', function () {
 
     $this->assertNotNull($debt->fresh()->settle_date);
     $this->assertEquals(0.0, $debt->fresh()->load('payments')->remaining_balance);
+});
+
+test('deleting a settling payment clears settle_date', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 200]);
+
+    $payment = DebtPayment::factory()->create([
+        'user_id' => $user->id,
+        'debt_id' => $debt->id,
+        'amount'  => 200,
+        'paid_at' => '2026-04-15',
+    ]);
+
+    app(\App\Services\DebtSettlementService::class)->sync($debt);
+    expect($debt->fresh()->settle_date)->not->toBeNull();
+
+    $this->actingAs($user)->deleteJson("/api/v1/debt-payments/{$payment->id}")
+        ->assertNoContent();
+
+    expect($debt->fresh()->settle_date)->toBeNull();
 });
 
 // ---------------------------------------------------------------------------

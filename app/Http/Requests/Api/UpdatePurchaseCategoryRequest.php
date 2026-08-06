@@ -11,10 +11,17 @@ class UpdatePurchaseCategoryRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('name') && $this->filled('category_name')) {
+            $this->merge(['name' => $this->input('category_name')]);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'category_name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:64'],
         ];
     }
 }

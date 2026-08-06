@@ -28,26 +28,6 @@ class DebtPayment extends Model
     ];
 
     // ----------------------------------------------------------
-    // Model Events
-    // ----------------------------------------------------------
-
-    /**
-     * After a payment is saved, check whether the parent debt is now fully
-     * paid off. If so, and if no settle_date has been set yet, stamp it now.
-     */
-    protected static function booted(): void
-    {
-        static::saved(function (DebtPayment $payment) {
-            $debt = $payment->debt()->first();
-
-            if ($debt && $debt->settle_date === null && $debt->remaining_balance <= 0) {
-                $debt->settle_date = $payment->paid_at;
-                $debt->saveQuietly();
-            }
-        });
-    }
-
-    // ----------------------------------------------------------
     // Relationships
     // ----------------------------------------------------------
 
@@ -58,6 +38,6 @@ class DebtPayment extends Model
 
     public function debt()
     {
-        return $this->belongsTo(Debt::class);
+        return $this->belongsTo(Debt::class)->withTrashed();
     }
 }

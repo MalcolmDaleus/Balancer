@@ -7,6 +7,10 @@ use App\Services\BalanceSheetService;
 use App\Services\OccurrenceCalculatorService;
 use Carbon\Carbon;
 
+afterEach(function () {
+    Carbon::setTestNow();
+});
+
 test('monthly recurring entry counts once in its charge month', function () {
     $calculator = app(OccurrenceCalculatorService::class);
 
@@ -52,8 +56,8 @@ test('weekly recurring entry counts each occurrence in the month', function () {
     expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(40.00);
 });
 
-test('balance sheet recurring total uses occurrence counts not flat entry amounts', function () {
-    Carbon::setTestNow('2026-06-15 12:00:00');
+test('balance sheet charged recurring uses materialized purchases not live projections', function () {
+    Carbon::setTestNow('2026-01-15 12:00:00');
 
     $user = User::factory()->create();
 
@@ -71,16 +75,20 @@ test('balance sheet recurring total uses occurrence counts not flat entry amount
         'start_date'                  => '2026-01-15',
     ]);
 
-    // June — yearly charge is not due
-    $june = (new BalanceSheetService($user->id, '2026-06'))->getSimplified();
-    expect($june['total_recurring'])->toBe(0.0);
+    // Before materialization — charged total is 0
+    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring'])->toBe(0.0);
 
-    // January — yearly charge is due
-    $january = (new BalanceSheetService($user->id, '2026-01'))->getSimplified();
-    expect($january['total_recurring'])->toBe(999.0);
+    app(\App\Services\FinanceProcessingService::class)->processDueForUser($user->id);
+
+    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring'])->toBe(999.0);
+
+    Carbon::setTestNow('2026-06-15 12:00:00');
+    expect((new BalanceSheetService($user->id, '2026-06'))->getSimplified()['total_recurring'])->toBe(0.0);
 });
 
-test('paused recurring streams are excluded from balance sheet totals', function () {
+test('paused recurring streams are excluded from projected balance sheet totals', function () {
+    Carbon::setTestNow('2026-04-01 12:00:00');
+
     $user = User::factory()->create();
 
     $stream = RecurringPaymentStream::factory()->create([
@@ -97,8 +105,9 @@ test('paused recurring streams are excluded from balance sheet totals', function
         'start_date'                  => '2026-04-01',
     ]);
 
-    $april = (new BalanceSheetService($user->id, '2026-04'))->getSimplified();
-    expect($april['total_recurring'])->toBe(0.0);
+    $april = (new BalanceSheetService($user->id, '2026-04'))->getExpanded();
+    expect($april['recurring_payments']['charged_total'])->toBe(0.0);
+    expect($april['recurring_payments']['projected_total'])->toBe(0.0);
 });
 
 test('pending_active flushes on a recurring occurrence day', function () {

@@ -5,8 +5,11 @@ use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
 use App\Models\User;
+use Carbon\Carbon;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -145,14 +148,16 @@ test('user can get locked months list', function () {
 // ---------------------------------------------------------------------------
 
 test('user can get balance sheet history', function () {
+    Carbon::setTestNow('2026-07-15 12:00:00');
+
     $user = User::factory()->create();
     $other = User::factory()->create();
 
-    // Create 5 known snapshots within the last 12 months for the user
-    foreach (range(1, 5) as $i) {
+    // Explicit months avoid Carbon subMonths edge cases colliding under test now().
+    foreach (['2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01'] as $month) {
         BalanceSheetTotal::create([
             'user_id' => $user->id,
-            'month' => now()->subMonths($i)->startOfMonth()->toDateString(),
+            'month' => $month,
             'total_income' => 0,
             'total_debt_paid' => 0,
             'total_spending' => 0,
@@ -165,7 +170,7 @@ test('user can get balance sheet history', function () {
     // Other user's snapshots should not appear
     BalanceSheetTotal::create([
         'user_id' => $other->id,
-        'month' => now()->subMonths(1)->startOfMonth()->toDateString(),
+        'month' => '2026-06-01',
         'total_income' => 0,
         'total_debt_paid' => 0,
         'total_spending' => 0,

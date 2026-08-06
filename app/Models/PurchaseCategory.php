@@ -2,21 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Traits\UserScopable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Traits\UserScopable;
 
 class PurchaseCategory extends Model
 {
-    use HasFactory, UserScopable, SoftDeletes;
+    use HasFactory, SoftDeletes, UserScopable;
 
     protected $fillable = [
         'user_id',
-        'category_name',
+        'name',
     ];
-
-    public $timestamps = false; 
 
     public function user()
     {

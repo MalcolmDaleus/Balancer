@@ -30,7 +30,6 @@ class Purchase extends Model
         'attachment_path',
         'url',
         'is_refunded',
-        'recurring_payment_entry_id',
     ];
 
     protected $casts = [
@@ -89,11 +88,6 @@ class Purchase extends Model
     public function category()
     {
         return $this->belongsTo(PurchaseCategory::class, 'category_id')->withTrashed();
-    }
-
-    public function recurringPaymentEntry()
-    {
-        return $this->belongsTo(RecurringPaymentEntry::class, 'recurring_payment_entry_id');
     }
 
     /** Refund income entries linked to this purchase (may be multiple for partial refunds). */

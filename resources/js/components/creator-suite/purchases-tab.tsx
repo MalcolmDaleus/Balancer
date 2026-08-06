@@ -326,7 +326,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
         }
     };
 
-    const catName = (id: number) => cats.find((c) => c.id === id)?.category_name ?? '—';
+    const catName = (id: number) => cats.find((c) => c.id === id)?.name ?? '—';
 
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -351,7 +351,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                     <option value="">— select —</option>
                     {cats.map((c) => (
                         <option key={c.id} value={c.id}>
-                            {c.category_name}
+                            {c.name}
                         </option>
                     ))}
                 </select>
@@ -482,7 +482,7 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
-    const [form, setForm] = useState({ category_name: '' });
+    const [form, setForm] = useState({ name: '' });
 
     const load = async () => {
         setLoading(true);
@@ -502,13 +502,13 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
 
     const selectRow = (c: PurchaseCategory) => {
         setSelected(c);
-        setForm({ category_name: c.category_name });
+        setForm({ name: c.name });
         setError(null);
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => {
         setSelected(null);
-        setForm({ category_name: '' });
+        setForm({ name: '' });
         setError(null);
         setSheetOpen(false);
     };
@@ -517,7 +517,7 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
         if (addRef) {
             addRef.current = () => {
                 setSelected(null);
-                setForm({ category_name: '' });
+                setForm({ name: '' });
                 setError(null);
                 setSheetOpen(true);
             };
@@ -566,8 +566,8 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
                     required
                     maxLength={255}
                     className={inputCls}
-                    value={form.category_name}
-                    onChange={(e) => setForm({ category_name: e.target.value })}
+                    value={form.name}
+                    onChange={(e) => setForm({ name: e.target.value })}
                 />
             </Field>
             <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
@@ -578,7 +578,7 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Remove category "${confirm.category_name}"? It will be unlisted if purchases reference it.`}
+                    message={`Remove category "${confirm.name}"? It will be unlisted if purchases reference it.`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -594,7 +594,7 @@ function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRe
                         {cats.map((c) => (
                             <ListRow key={c.id} selected={selected?.id === c.id} disabled={!!c.deleted_at}>
                                 <div className="flex items-center justify-between gap-3">
-                                    <span className={rowTitleCls}>{c.category_name}</span>
+                                    <span className={rowTitleCls}>{c.name}</span>
                                     <div className="flex items-center gap-2">
                                         {c.deleted_at && <StatusChip label="Unlisted" color="amber" />}
                                         {!c.deleted_at && <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />}

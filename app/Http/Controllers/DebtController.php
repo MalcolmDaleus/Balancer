@@ -56,7 +56,13 @@ class DebtController extends Controller
     {
         $this->authorize('delete', $debt);
 
-        $debt->delete();
+        // Soft-archive when payment Facts exist (preserves locked-month history).
+        // Hard-delete only when the instrument has never produced Facts.
+        if ($debt->hasPaymentFacts()) {
+            $debt->delete();
+        } else {
+            $debt->forceDelete();
+        }
 
         return response()->json(null, 204);
     }

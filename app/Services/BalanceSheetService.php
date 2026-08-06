@@ -7,6 +7,7 @@ use App\Models\BalanceSheetTotal;
 use App\Models\Debt;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Models\RecurringCharge;
 use App\Models\RecurringPaymentEntry;
 use App\Models\Saving;
 use Carbon\Carbon;
@@ -31,6 +32,7 @@ class BalanceSheetService
 
     /** Cached collections */
     protected ?Collection $purchases = null;
+    protected ?Collection $recurringCharges = null;
     protected ?Collection $incomeEntries = null;
     protected ?Collection $debts = null;
     protected ?Collection $savings = null;
@@ -147,7 +149,7 @@ class BalanceSheetService
 
                 return [
                     'category_id' => $categoryId ?: null,
-                    'category_name' => $cat?->category_name ?? 'Uncategorized',
+                    'category_name' => $cat?->name ?? 'Uncategorized',
                     'amount' => $amount,
                     'items' => $items,
                 ];
@@ -188,63 +190,30 @@ class BalanceSheetService
 
         $savingsDeposits     = $savingsRows->where('type', 'deposit')->sum('amount');
         $savingsWithdrawals  = $savingsRows->where('type', 'withdrawal')->sum('amount');
-        $savingsMonthlyTotal = max(0.0, (float) $savingsDeposits - (float) $savingsWithdrawals);
+        $savingsMonthlyTotal = (float) $savingsDeposits - (float) $savingsWithdrawals;
 
         $savingsGrandTotal = (float) Saving::where('user_id', $this->userId)
             ->whereDate('month', '<=', $this->month->toDateString())
             ->selectRaw("SUM(CASE WHEN type = 'deposit' THEN amount ELSE -amount END) as net")
             ->value('net') ?? 0.0;
 
-        // Recurring payment entries with occurrence-weighted totals for this month
-        $recurringEntries = $this->getRecurringEntries();
-        $calculator       = $this->occurrenceCalculator();
+        // Recurring: charged Facts + projected remaining (display only).
+        // Closed months: no projections — rebuild from Facts / stamped names only.
+        $monthLocked = MonthLockService::isLocked($this->userId, $this->month);
+        $recurringCharged = $this->buildChargedRecurringGrouped();
+        $recurringProjected = $monthLocked ? collect() : $this->buildProjectedRecurringGrouped();
+        $recurringChargedTotal = MoneyService::sum($recurringCharged->pluck('total')->toArray());
+        $recurringProjectedTotal = MoneyService::sum($recurringProjected->pluck('total')->toArray());
 
-        $recurringGrouped = $recurringEntries
-            ->groupBy(fn ($e) => $e->recurring_payment_stream_id)
-            ->map(function ($group, $streamId) use ($calculator) {
-                $stream   = $group->first()->stream ?? null;
-                $category = $stream?->category ?? null;
-                $items    = $group->map(function ($e) use ($calculator) {
-                    $dates = $calculator->recurringEntryDatesInPeriod($e, $this->periodStart, $this->periodEnd);
-                    $periodTotal = MoneyService::sum(array_fill(0, count($dates), (float) $e->amount));
-
-                    return [
-                        'id'                => $e->id,
-                        'amount'            => (float) $e->amount,
-                        'frequency'         => $e->frequency,
-                        'day_of_month'      => $e->day_of_month,
-                        'day_of_week'       => $e->day_of_week,
-                        'start_date'        => $e->start_date?->toDateString(),
-                        'end_date'          => $e->end_date?->toDateString(),
-                        'occurrence_count'  => count($dates),
-                        'period_total'      => round($periodTotal, 2),
-                    ];
-                })
-                    ->filter(fn ($item) => $item['occurrence_count'] > 0)
-                    ->values();
-
-                return [
-                    'stream_id'     => $streamId,
-                    'stream_name'   => $stream?->name ?? 'Unknown',
-                    'category_id'   => $category?->id,
-                    'category_name' => $category?->name ?? 'Uncategorized',
-                    'total'         => MoneyService::sum($items->pluck('period_total')->toArray()),
-                    'entries'       => $items,
-                ];
-            })
-            ->filter(fn ($stream) => $stream['entries']->isNotEmpty())
-            ->values();
-
-        $recurringTotal = MoneyService::sum($recurringGrouped->pluck('total')->toArray());
-
-        // Rollover: income - spending - debt_paid - recurring - savings
-        $outgoings = MoneyService::sum([$debtTotalPaid, $spendingTotal, $recurringTotal, $savingsMonthlyTotal]);
+        // Rollover uses charged recurring only — projected never enters locked totals.
+        $outgoings = MoneyService::sum([$debtTotalPaid, $spendingTotal, $recurringChargedTotal, $savingsMonthlyTotal]);
         $rollover  = MoneyService::subtract($incomeTotal, $outgoings);
 
         // Final structure
         return [
             'user_id' => $this->userId,
             'month' => DateTimeService::formatForUI($this->month, 'monthYear'),
+            'is_locked' => $monthLocked,
             'income' => [
                 'total'    => round($incomeTotal, 2),
                 'by_type'  => [
@@ -270,8 +239,11 @@ class BalanceSheetService
                 'categories' => $spendingByCategory,
             ],
             'recurring_payments' => [
-                'total'   => round($recurringTotal, 2),
-                'streams' => $recurringGrouped,
+                'total'           => round($recurringChargedTotal, 2),
+                'charged_total'   => round($recurringChargedTotal, 2),
+                'projected_total' => round($recurringProjectedTotal, 2),
+                'streams'         => $recurringCharged,
+                'projected'       => $recurringProjected,
             ],
             'savings' => [
                 'monthly_total'    => round($savingsMonthlyTotal, 2),
@@ -330,9 +302,7 @@ class BalanceSheetService
     // ----------------------------------------------------------
 
     /**
-     * Load purchases for the period (cached).
-     *
-     * @return Collection
+     * One-off purchases for the period.
      */
     protected function getPurchases(): Collection
     {
@@ -346,6 +316,23 @@ class BalanceSheetService
             ->get();
 
         return $this->purchases;
+    }
+
+    /**
+     * Materialized recurring charge Facts for the period.
+     */
+    protected function getRecurringCharges(): Collection
+    {
+        if ($this->recurringCharges !== null) {
+            return $this->recurringCharges;
+        }
+
+        $this->recurringCharges = RecurringCharge::where('user_id', $this->userId)
+            ->forPeriod($this->month, 'occurred_on', 'month')
+            ->with(['entry', 'stream', 'category'])
+            ->get();
+
+        return $this->recurringCharges;
     }
 
     /**
@@ -382,13 +369,18 @@ class BalanceSheetService
 
         // Include debts issued on/before period end.
         // Exclude debts already closed (settled OR forgiven) before this period starts.
-        $this->debts = Debt::where('user_id', $this->userId)
+        // Closed months: include soft-archived instruments so history stays rebuildable from Facts.
+        $query = MonthLockService::isLocked($this->userId, $this->month)
+            ? Debt::withTrashed()
+            : Debt::query();
+
+        $this->debts = $query
+            ->where('user_id', $this->userId)
             ->whereDate('issue_date', '<=', $this->periodEnd->toDateString())
             ->where(function ($q) {
                 $q->whereNull('settle_date')
                   ->orWhereDate('settle_date', '>=', $this->periodStart->toDateString());
             })
-            // Eager-load payments so getRemainingBalanceAttribute() avoids N+1 queries.
             ->with('payments')
             ->get();
 
@@ -446,9 +438,7 @@ class BalanceSheetService
     }
 
     /**
-     * Sum spending (purchases) for the period.
-     *
-     * @return float
+     * Sum one-off spending for the period.
      */
     protected function getSpendingTotal(): float
     {
@@ -468,24 +458,119 @@ class BalanceSheetService
         $deposits    = $rows->where('type', 'deposit')->sum('amount');
         $withdrawals = $rows->where('type', 'withdrawal')->sum('amount');
 
-        return max(0.0, (float) $deposits - (float) $withdrawals);
+        return (float) $deposits - (float) $withdrawals;
     }
 
     /**
-     * Sum recurring payment amounts for the period using occurrence counts.
-     * Reuses the cached collection from getRecurringEntries().
+     * Charged recurring total for the period (materialized Facts only).
+     * Used by simplified sheet + snapshots — never includes projections.
      */
     protected function getRecurringTotal(): float
     {
+        return (float) $this->getRecurringCharges()->sum('amount');
+    }
+
+    /**
+     * Group materialized recurring charge Facts by stream for the expanded sheet.
+     * Uses stamped names on Facts so closed months stay stable after instrument rename.
+     */
+    protected function buildChargedRecurringGrouped(): Collection
+    {
+        return $this->getRecurringCharges()
+            ->groupBy(fn (RecurringCharge $c) => $c->recurring_payment_stream_id)
+            ->map(function (Collection $group, $streamId) {
+                $first = $group->first();
+                $entry = $first->entry;
+
+                $items = $group->map(fn (RecurringCharge $c) => [
+                    'id'               => $c->recurring_payment_entry_id,
+                    'charge_id'        => $c->id,
+                    'amount'           => (float) $c->amount,
+                    'frequency'        => $entry?->frequency,
+                    'day_of_month'     => $entry?->day_of_month,
+                    'day_of_week'      => $entry?->day_of_week,
+                    'occurrence_count' => 1,
+                    'period_total'     => round((float) $c->amount, 2),
+                    'charged_date'     => DateTimeService::formatForUI($c->occurred_on, 'short'),
+                ])->values();
+
+                return [
+                    'stream_id'     => $streamId ?: null,
+                    'stream_name'   => $first->stream_name,
+                    'category_id'   => $first->recurring_payment_category_id,
+                    'category_name' => $first->category_name ?? 'Uncategorized',
+                    'total'         => MoneyService::sum($items->pluck('period_total')->toArray()),
+                    'entries'       => $items,
+                ];
+            })
+            ->filter(fn ($stream) => $stream['entries']->isNotEmpty())
+            ->values();
+    }
+
+    /**
+     * Remaining scheduled occurrences not yet materialized through period end (display only).
+     */
+    protected function buildProjectedRecurringGrouped(): Collection
+    {
+        $today = DateTimeService::today();
+        $projectionStart = $today->copy()->addDay()->startOfDay();
+
+        if ($projectionStart->gt($this->periodEnd)) {
+            return collect();
+        }
+
+        if ($this->periodEnd->lt($today)) {
+            return collect();
+        }
+
+        $from = $projectionStart->gt($this->periodStart) ? $projectionStart : $this->periodStart->copy();
         $calculator = $this->occurrenceCalculator();
 
-        return (float) $this->getRecurringEntries()->sum(
-            fn (RecurringPaymentEntry $entry) => $calculator->recurringEntryAmountInPeriod(
-                $entry,
-                $this->periodStart,
-                $this->periodEnd,
-            )
-        );
+        $chargedDatesByEntry = $this->getRecurringCharges()
+            ->groupBy('recurring_payment_entry_id')
+            ->map(fn (Collection $group) => $group
+                ->map(fn (RecurringCharge $c) => $c->occurred_on->toDateString())
+                ->all());
+
+        return $this->getRecurringEntries()
+            ->groupBy(fn ($e) => $e->recurring_payment_stream_id)
+            ->map(function ($group, $streamId) use ($calculator, $from, $chargedDatesByEntry) {
+                $stream = $group->first()->stream ?? null;
+                $category = $stream?->category ?? null;
+
+                $items = $group->map(function ($e) use ($calculator, $from, $chargedDatesByEntry) {
+                    $dates = $calculator->recurringEntryDatesInPeriod($e, $from, $this->periodEnd);
+                    $existing = $chargedDatesByEntry->get($e->id, []);
+                    $dates = array_values(array_filter(
+                        $dates,
+                        fn (Carbon $d) => ! in_array($d->toDateString(), $existing, true)
+                    ));
+                    $periodTotal = MoneyService::sum(array_fill(0, count($dates), (float) $e->amount));
+
+                    return [
+                        'id'               => $e->id,
+                        'amount'           => (float) $e->amount,
+                        'frequency'        => $e->frequency,
+                        'day_of_month'     => $e->day_of_month,
+                        'day_of_week'      => $e->day_of_week,
+                        'occurrence_count' => count($dates),
+                        'period_total'     => round($periodTotal, 2),
+                    ];
+                })
+                    ->filter(fn ($item) => $item['occurrence_count'] > 0)
+                    ->values();
+
+                return [
+                    'stream_id'     => $streamId,
+                    'stream_name'   => $stream?->name ?? 'Unknown',
+                    'category_id'   => $category?->id,
+                    'category_name' => $category?->name ?? 'Uncategorized',
+                    'total'         => MoneyService::sum($items->pluck('period_total')->toArray()),
+                    'entries'       => $items,
+                ];
+            })
+            ->filter(fn ($stream) => $stream['entries']->isNotEmpty())
+            ->values();
     }
 
     protected function occurrenceCalculator(): OccurrenceCalculatorService

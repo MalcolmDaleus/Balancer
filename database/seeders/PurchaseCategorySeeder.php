@@ -21,7 +21,7 @@ class PurchaseCategorySeeder extends Seeder
 
         foreach ($categories as $name) {
             PurchaseCategory::firstOrCreate(
-                ['user_id' => $user->id, 'category_name' => $name]
+                ['user_id' => $user->id, 'name' => $name]
             );
         }
     }

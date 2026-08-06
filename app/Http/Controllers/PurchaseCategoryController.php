@@ -5,47 +5,40 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Api\StorePurchaseCategoryRequest;
 use App\Http\Requests\Api\UpdatePurchaseCategoryRequest;
 use App\Http\Resources\PurchaseCategoryResource;
+use App\Models\BalanceSheetTotal;
+use App\Models\Purchase;
 use App\Models\PurchaseCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PurchaseCategoryController extends Controller
 {
-    /**
-     * List only non-soft-deleted categories for this user.
-     */
     public function index(): AnonymousResourceCollection
     {
         $this->authorize('viewAny', PurchaseCategory::class);
 
         $categories = PurchaseCategory::where('user_id', auth()->id())
-            ->orderBy('category_name')
+            ->orderBy('name')
             ->get();
 
         return PurchaseCategoryResource::collection($categories);
     }
 
-    /**
-     * Create a category.
-     *
-     * If a soft-deleted category with the same (case-insensitive) name already exists
-     * for this user it is restored instead of creating a duplicate.
-     */
     public function store(StorePurchaseCategoryRequest $request): PurchaseCategoryResource
     {
         $this->authorize('create', PurchaseCategory::class);
 
         $userId = auth()->id();
-        $name   = $request->input('category_name');
+        $name = $request->input('name');
 
-        // Reactivation: restore soft-deleted category if same name exists
         $existing = PurchaseCategory::withTrashed()
             ->where('user_id', $userId)
-            ->whereRaw('LOWER(category_name) = LOWER(?)', [$name])
+            ->whereRaw('LOWER(name) = LOWER(?)', [$name])
             ->first();
 
         if ($existing && $existing->trashed()) {
             $existing->restore();
+
             return new PurchaseCategoryResource($existing->fresh());
         }
 
@@ -64,32 +57,49 @@ class PurchaseCategoryController extends Controller
         return new PurchaseCategoryResource($purchaseCategory);
     }
 
-    public function update(UpdatePurchaseCategoryRequest $request, PurchaseCategory $purchaseCategory): PurchaseCategoryResource
+    public function update(UpdatePurchaseCategoryRequest $request, PurchaseCategory $purchaseCategory): PurchaseCategoryResource|JsonResponse
     {
         $this->authorize('update', $purchaseCategory);
+
+        $newName = $request->input('name');
+        if ($newName !== $purchaseCategory->name && $this->usedInLockedMonth($purchaseCategory)) {
+            return response()->json([
+                'error'   => 'classifier_locked',
+                'message' => 'This category is used in a closed month and cannot be renamed.',
+            ], 423);
+        }
 
         $purchaseCategory->update($request->validated());
 
         return new PurchaseCategoryResource($purchaseCategory->fresh());
     }
 
-    /**
-     * Delete a category.
-     *
-     * Hard delete if no purchases reference it (safe — no orphans).
-     * Soft delete if purchases exist — the category stays for historical accuracy
-     * but is hidden from pickers.
-     */
     public function destroy(PurchaseCategory $purchaseCategory): JsonResponse
     {
         $this->authorize('delete', $purchaseCategory);
 
         if ($purchaseCategory->purchases()->exists()) {
-            $purchaseCategory->delete(); // soft delete
+            $purchaseCategory->delete();
         } else {
             $purchaseCategory->forceDelete();
         }
 
         return response()->json(null, 204);
+    }
+
+    private function usedInLockedMonth(PurchaseCategory $category): bool
+    {
+        $lockedMonths = BalanceSheetTotal::where('user_id', $category->user_id)
+            ->pluck('month')
+            ->map(fn ($m) => \Carbon\Carbon::parse($m)->format('Y-m'));
+
+        if ($lockedMonths->isEmpty()) {
+            return false;
+        }
+
+        return Purchase::where('category_id', $category->id)
+            ->where('user_id', $category->user_id)
+            ->get()
+            ->contains(fn (Purchase $p) => $lockedMonths->contains($p->date?->format('Y-m')));
     }
 }

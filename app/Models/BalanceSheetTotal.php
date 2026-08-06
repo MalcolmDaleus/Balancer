@@ -36,10 +36,4 @@ class BalanceSheetTotal extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-    // Derived attribute: net change
-    public function getNetChangeAttribute()
-    {
-        return $this->total_income - ($this->total_spending + $this->total_debt_paid);
-    }
 }

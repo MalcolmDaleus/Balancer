@@ -119,16 +119,22 @@ function fmtRecurringEntryLabel(
     return entry.occurrence_count > 1 ? `${entry.frequency} × ${entry.occurrence_count}` : entry.frequency;
 }
 
-function RecurringBalanceContent({
-    recurring,
+function RecurringStreamList({
+    streams,
     signed,
+    emptyLabel,
 }: {
-    recurring: BalanceSheetExpanded['recurring_payments'];
+    streams: BalanceSheetExpanded['recurring_payments']['streams'];
     signed: (value: number, sign: '+' | '-') => string;
+    emptyLabel: string;
 }) {
+    if (!streams.length) {
+        return <p className="text-sm text-slate-500 dark:text-neutral-200">{emptyLabel}</p>;
+    }
+
     return (
         <div className="space-y-2">
-            {recurring.streams.map((stream) => (
+            {streams.map((stream) => (
                 <div key={stream.stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -142,9 +148,16 @@ function RecurringBalanceContent({
                         </span>
                     </div>
                     <div className="mt-1.5 space-y-1">
-                        {stream.entries.map((entry) => (
-                            <div key={entry.id} className="flex items-center justify-between gap-3 text-sm text-slate-500 dark:text-neutral-200">
-                                <span>{fmtRecurringEntryLabel(entry)}</span>
+                        {stream.entries.map((entry, idx) => (
+                            <div
+                                key={`${entry.id}-${entry.charged_date ?? idx}`}
+                                className="flex items-center justify-between gap-3 text-sm text-slate-500 dark:text-neutral-200"
+                            >
+                                <span>
+                                    {entry.charged_date
+                                        ? entry.charged_date
+                                        : fmtRecurringEntryLabel(entry)}
+                                </span>
                                 <div className="shrink-0 text-right">
                                     {entry.occurrence_count > 1 && (
                                         <span className="mr-2 text-xs text-slate-400 dark:text-neutral-500">
@@ -160,6 +173,47 @@ function RecurringBalanceContent({
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+function RecurringBalanceContent({
+    recurring,
+    signed,
+}: {
+    recurring: BalanceSheetExpanded['recurring_payments'];
+    signed: (value: number, sign: '+' | '-') => string;
+}) {
+    const chargedTotal = recurring.charged_total ?? recurring.total;
+    const projectedTotal = recurring.projected_total ?? 0;
+    const projected = recurring.projected ?? [];
+
+    return (
+        <div className="space-y-4">
+            <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">
+                    <span>Charged</span>
+                    <span>{signed(chargedTotal, '-')}</span>
+                </div>
+                <RecurringStreamList
+                    streams={recurring.streams}
+                    signed={signed}
+                    emptyLabel="No charges yet this month"
+                />
+            </div>
+            {(projectedTotal > 0 || projected.length > 0) && (
+                <div>
+                    <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">
+                        <span>Projected remaining</span>
+                        <span>{signed(projectedTotal, '-')}</span>
+                    </div>
+                    <RecurringStreamList
+                        streams={projected}
+                        signed={signed}
+                        emptyLabel="No remaining scheduled charges"
+                    />
+                </div>
+            )}
         </div>
     );
 }
@@ -246,7 +300,26 @@ type BalanceSheetExpanded = {
     };
     recurring_payments: {
         total: number;
+        charged_total?: number;
+        projected_total?: number;
         streams: Array<{
+            stream_id: number;
+            stream_name: string;
+            category_name: string;
+            total: number;
+            entries: Array<{
+                id: number;
+                purchase_id?: number;
+                amount: number;
+                frequency: string;
+                day_of_month: number | null;
+                day_of_week: number | null;
+                occurrence_count: number;
+                period_total: number;
+                charged_date?: string;
+            }>;
+        }>;
+        projected?: Array<{
             stream_id: number;
             stream_name: string;
             category_name: string;
@@ -259,6 +332,7 @@ type BalanceSheetExpanded = {
                 day_of_week: number | null;
                 occurrence_count: number;
                 period_total: number;
+                charged_date?: string;
             }>;
         }>;
     };
@@ -444,11 +518,17 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   pillClass: tintSectionPill.orange,
                   amountNode: sectionAmount(
                       signed(data.recurring_payments.total, '-'),
-                      data.recurring_payments.streams.length
-                          ? `${data.recurring_payments.streams.length} stream${data.recurring_payments.streams.length === 1 ? '' : 's'}`
+                      (data.recurring_payments.streams.length || (data.recurring_payments.projected?.length ?? 0))
+                          ? `${data.recurring_payments.streams.length} charged` +
+                            ((data.recurring_payments.projected_total ?? 0) > 0
+                                ? ` · ${signed(data.recurring_payments.projected_total ?? 0, '-')} projected`
+                                : '')
                           : 'No entries',
                   ),
-                  content: data.recurring_payments.streams.length ? (
+                  content: (
+                      data.recurring_payments.streams.length ||
+                      (data.recurring_payments.projected?.length ?? 0) > 0
+                  ) ? (
                       <RecurringBalanceContent recurring={data.recurring_payments} signed={signed} />
                   ) : (
                       <p className="text-sm text-slate-500 dark:text-neutral-200">No charges this month</p>

@@ -174,7 +174,7 @@ function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObj
                     <option value="">— none —</option>
                     {cats.map((c) => (
                         <option key={c.id} value={c.id}>
-                            {c.category_name}
+                            {c.name}
                         </option>
                     ))}
                 </select>
@@ -527,7 +527,7 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
-    const [form, setForm] = useState({ category_name: '' });
+    const [form, setForm] = useState({ name: '' });
 
     const load = async () => {
         setLoading(true);
@@ -547,13 +547,13 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
 
     const selectRow = (c: DebtCategory) => {
         setSelected(c);
-        setForm({ category_name: c.category_name });
+        setForm({ name: c.name });
         setError(null);
         if (isMobile) setSheetOpen(true);
     };
     const reset = () => {
         setSelected(null);
-        setForm({ category_name: '' });
+        setForm({ name: '' });
         setError(null);
         setSheetOpen(false);
     };
@@ -562,7 +562,7 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
         if (addRef) {
             addRef.current = () => {
                 setSelected(null);
-                setForm({ category_name: '' });
+                setForm({ name: '' });
                 setError(null);
                 setSheetOpen(true);
             };
@@ -611,8 +611,8 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
                     required
                     maxLength={255}
                     className={inputCls}
-                    value={form.category_name}
-                    onChange={(e) => setForm({ category_name: e.target.value })}
+                    value={form.name}
+                    onChange={(e) => setForm({ name: e.target.value })}
                 />
             </Field>
             <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
@@ -623,7 +623,7 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete debt category "${confirm.category_name}"?`}
+                    message={`Delete debt category "${confirm.name}"?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -639,7 +639,7 @@ function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: Mutab
                         {cats.map((c) => (
                             <ListRow key={c.id} selected={selected?.id === c.id}>
                                 <div className="flex items-center justify-between gap-3">
-                                    <span className={rowTitleCls}>{c.category_name}</span>
+                                    <span className={rowTitleCls}>{c.name}</span>
                                     <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />
                                 </div>
                             </ListRow>

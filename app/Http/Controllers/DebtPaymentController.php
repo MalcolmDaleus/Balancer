@@ -7,11 +7,16 @@ use App\Http\Requests\Api\UpdateDebtPaymentRequest;
 use App\Http\Resources\DebtPaymentResource;
 use App\Models\Debt;
 use App\Models\DebtPayment;
+use App\Services\DebtSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DebtPaymentController extends Controller
 {
+    public function __construct(
+        private readonly DebtSettlementService $settlement,
+    ) {}
+
     public function index(Debt $debt): AnonymousResourceCollection
     {
         $this->authorize('viewAny', [DebtPayment::class, $debt]);
@@ -30,11 +35,7 @@ class DebtPaymentController extends Controller
             ['user_id' => auth()->id(), 'debt_id' => $debt->id]
         ));
 
-        // Auto-settle: if all payments now cover the original amount, set settle_date.
-        $debt->refresh()->load('payments');
-        if ($debt->remaining_balance <= 0 && is_null($debt->settle_date) && ! $debt->is_forgiven) {
-            $debt->update(['settle_date' => $payment->paid_at->toDateString()]);
-        }
+        $this->settlement->sync($debt);
 
         return new DebtPaymentResource($payment);
     }
@@ -52,6 +53,8 @@ class DebtPaymentController extends Controller
 
         $debtPayment->update($request->validated());
 
+        $this->settlement->sync($debtPayment->debt);
+
         return new DebtPaymentResource($debtPayment->fresh());
     }
 
@@ -59,7 +62,12 @@ class DebtPaymentController extends Controller
     {
         $this->authorize('delete', $debtPayment);
 
+        $debt = $debtPayment->debt;
         $debtPayment->delete();
+
+        if ($debt) {
+            $this->settlement->sync($debt);
+        }
 
         return response()->json(null, 204);
     }

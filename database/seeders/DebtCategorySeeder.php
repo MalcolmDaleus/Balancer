@@ -21,7 +21,7 @@ class DebtCategorySeeder extends Seeder
 
         foreach ($categories as $name) {
             DebtCategory::firstOrCreate(
-                ['user_id' => $user->id, 'category_name' => $name]
+                ['user_id' => $user->id, 'name' => $name]
             );
         }
     }

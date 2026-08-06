@@ -6,18 +6,10 @@ use App\Models\User;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
-
 test('unauthenticated user cannot access categories', function () {
     $this->getJson('/api/v1/categories/purchases')->assertStatus(401);
     $this->getJson('/api/v1/categories/debts')->assertStatus(401);
 });
-
-// ---------------------------------------------------------------------------
-// Purchase Categories
-// ---------------------------------------------------------------------------
 
 test('user can list their purchase categories', function () {
     $user = User::factory()->create();
@@ -33,32 +25,32 @@ test('user can create a purchase category', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->postJson('/api/v1/categories/purchases', [
-        'category_name' => 'Food',
+        'name' => 'Food',
     ])->assertCreated()
-      ->assertJsonPath('data.category_name', 'Food');
+      ->assertJsonPath('data.name', 'Food');
 });
 
 test('user can update a purchase category', function () {
-    $user     = User::factory()->create();
-    $category = PurchaseCategory::factory()->create(['user_id' => $user->id, 'category_name' => 'Old']);
+    $user = User::factory()->create();
+    $category = PurchaseCategory::factory()->create(['user_id' => $user->id, 'name' => 'Old']);
 
     $this->actingAs($user)->putJson("/api/v1/categories/purchases/{$category->id}", [
-        'category_name' => 'New',
-    ])->assertOk()->assertJsonPath('data.category_name', 'New');
+        'name' => 'New',
+    ])->assertOk()->assertJsonPath('data.name', 'New');
 });
 
 test('user cannot update another user\'s purchase category', function () {
-    $user     = User::factory()->create();
-    $other    = User::factory()->create();
+    $user = User::factory()->create();
+    $other = User::factory()->create();
     $category = PurchaseCategory::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->putJson("/api/v1/categories/purchases/{$category->id}", [
-        'category_name' => 'Hacked',
+        'name' => 'Hacked',
     ])->assertStatus(403);
 });
 
 test('purchase category is hard deleted when unused', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $category = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/categories/purchases/{$category->id}")
@@ -68,7 +60,7 @@ test('purchase category is hard deleted when unused', function () {
 });
 
 test('purchase category is soft deleted when purchases exist', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $category = PurchaseCategory::factory()->create(['user_id' => $user->id]);
     \App\Models\Purchase::factory()->create(['user_id' => $user->id, 'category_id' => $category->id]);
 
@@ -77,10 +69,6 @@ test('purchase category is soft deleted when purchases exist', function () {
 
     $this->assertSoftDeleted('purchase_categories', ['id' => $category->id]);
 });
-
-// ---------------------------------------------------------------------------
-// Debt Categories
-// ---------------------------------------------------------------------------
 
 test('user can list their debt categories', function () {
     $user = User::factory()->create();
@@ -96,9 +84,9 @@ test('user can create a debt category', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->postJson('/api/v1/categories/debts', [
-        'category_name' => 'Mortgage',
+        'name' => 'Mortgage',
     ])->assertCreated()
-      ->assertJsonPath('data.category_name', 'Mortgage');
+      ->assertJsonPath('data.name', 'Mortgage');
 });
 
 test('category create fails without name', function () {

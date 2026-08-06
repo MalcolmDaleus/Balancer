@@ -9,17 +9,21 @@ use Illuminate\Support\Facades\DB;
 /**
  * Recurring payment cycle hooks (pending toggle flush on occurrence days).
  *
- * Unlike income, recurring payments do not materialize ledger rows — the balance
- * sheet sums occurrences per month via OccurrenceCalculatorService.
+ * Materialization runs in RecurringPaymentMaterializationService before this
+ * flush so occurrence-day pause is charge-then-pause. After pause, future
+ * open-month Facts (dates after as-of) are removed.
+ *
+ * Primary trigger: FinanceProcessingService / finance:process-due.
  */
 class RecurringPaymentCycleService
 {
     public function __construct(
         private readonly OccurrenceCalculatorService $calculator,
+        private readonly RecurringPaymentMaterializationService $materializer,
     ) {}
 
     /**
-     * Run cycle processing for a user. Intended on every dashboard visit (idempotent).
+     * Run cycle processing for a user. Idempotent.
      */
     public function processForUser(int $userId, Carbon|string|null $asOf = null): void
     {
@@ -50,11 +54,17 @@ class RecurringPaymentCycleService
                     return;
                 }
 
-                DB::transaction(function () use ($stream): void {
+                DB::transaction(function () use ($stream, $today): void {
+                    $becomingInactive = $stream->pending_active === false;
+
                     $stream->update([
                         'active'         => $stream->pending_active,
                         'pending_active' => null,
                     ]);
+
+                    if ($becomingInactive) {
+                        $this->materializer->removeFutureChargesForStream($stream, $today);
+                    }
                 });
             });
     }

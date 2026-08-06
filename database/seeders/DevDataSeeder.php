@@ -137,7 +137,7 @@ class DevDataSeeder extends Seeder
 
         $cats = PurchaseCategory::where('user_id', $user->id)
             ->get()
-            ->keyBy('category_name');
+            ->keyBy('name');
 
         $groceriesCat = $cats->get('Groceries');
         $diningCat = $cats->get('Dining');
@@ -222,8 +222,8 @@ class DevDataSeeder extends Seeder
         // ------------------------------------------------------------------
         $this->command->line('  → Debts');
 
-        $loanCat = DebtCategory::where('user_id', $user->id)->where('category_name', 'Loan')->first();
-        $personalCat = DebtCategory::where('user_id', $user->id)->where('category_name', 'Personal')->first();
+        $loanCat = DebtCategory::where('user_id', $user->id)->where('name', 'Loan')->first();
+        $personalCat = DebtCategory::where('user_id', $user->id)->where('name', 'Personal')->first();
 
         $laptopDebt = Debt::firstOrCreate(
             ['user_id' => $user->id, 'description' => 'Laptop loan from friend'],

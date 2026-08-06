@@ -45,14 +45,24 @@ class RecurringPaymentStream extends Model
         return $this->hasMany(RecurringPaymentEntry::class, 'recurring_payment_stream_id');
     }
 
+    public function charges()
+    {
+        return $this->hasMany(RecurringCharge::class, 'recurring_payment_stream_id');
+    }
+
     /**
      * The currently active entry — there should be at most one at any given time.
+     *
+     * OR must be grouped; otherwise SQL precedence can drop the stream_id
+     * foreign-key constraint from the second branch.
      */
     public function activeEntry()
     {
         return $this->hasOne(RecurringPaymentEntry::class, 'recurring_payment_stream_id')
             ->where('active', true)
-            ->whereNull('end_date')
-            ->orWhere('end_date', '>=', now()->toDateString());
+            ->where(function ($q) {
+                $q->whereNull('end_date')
+                  ->orWhere('end_date', '>=', now()->toDateString());
+            });
     }
 }

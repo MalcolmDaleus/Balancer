@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Models\Saving;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreSavingRequest extends FormRequest
 {
@@ -26,5 +28,28 @@ class StoreSavingRequest extends FormRequest
             'notes'  => ['nullable', 'string', 'max:500'],
             'month'  => ['required', 'date'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $type = $this->input('type', 'deposit');
+            if ($type !== 'withdrawal') {
+                return;
+            }
+
+            $amount = (float) $this->input('amount', 0);
+            $available = Saving::runningBalance(
+                $this->user()->id,
+                $this->input('month'),
+            );
+
+            if ($amount > round($available, 2)) {
+                $validator->errors()->add(
+                    'amount',
+                    'This is more than you have in savings.'
+                );
+            }
+        });
     }
 }

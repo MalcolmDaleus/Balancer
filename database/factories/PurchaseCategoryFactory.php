@@ -10,8 +10,8 @@ class PurchaseCategoryFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id'       => User::factory(),
-            'category_name' => fake()->unique()->word(),
+            'user_id' => User::factory(),
+            'name'    => fake()->unique()->word(),
         ];
     }
 }

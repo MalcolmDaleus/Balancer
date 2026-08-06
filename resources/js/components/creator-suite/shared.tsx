@@ -48,7 +48,7 @@ export interface IncomeEntry {
 
 export interface PurchaseCategory {
     id: number;
-    category_name: string;
+    name: string;
     deleted_at: string | null;
 }
 export interface Purchase {
@@ -68,7 +68,7 @@ export interface Purchase {
 
 export interface DebtCategory {
     id: number;
-    category_name: string;
+    name: string;
 }
 export interface Debt {
     id: number;
@@ -113,9 +113,9 @@ export interface RecurringStream {
     recurring_payment_category_id: number | null;
     name: string;
     description: string | null;
-    /** Live balance-sheet state. Only AutoMonthCloseService may write this. */
+    /** Live balance-sheet state. Flushed from pending_active on next charge date. */
     active: boolean;
-    /** Queued change for the next month boundary. null = no change pending. */
+    /** Queued pause/resume for the next charge occurrence. null = no change pending. */
     pending_active: boolean | null;
     deleted_at: string | null;
     category?: RecurringCategory;

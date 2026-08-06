@@ -19,9 +19,8 @@ class StorePurchaseRequest extends FormRequest
             'amount'                     => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
             'description'                => ['required', 'string', 'max:255'],
             'date'                       => ['required', 'date'],
-            'attachment_path'            => ['nullable', 'string', 'max:500'],
-            'url'                        => ['nullable', 'url', 'max:500'],
-            'recurring_payment_entry_id' => ['nullable', 'integer', Rule::exists('recurring_payment_entries', 'id')->where('user_id', $this->user()->id)],
+            'attachment_path' => ['nullable', 'string', 'max:500'],
+            'url'             => ['nullable', 'url', 'max:500'],
         ];
     }
 }

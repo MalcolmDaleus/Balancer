@@ -21,9 +21,8 @@ class PurchaseResource extends JsonResource
             'is_refunded'                 => $this->is_refunded,
             'refunded_total'              => $this->refunded_total,
             'remaining_refundable'        => $this->remaining_refundable,
-            'refund_status'               => $this->refund_status,
-            'recurring_payment_entry_id'  => $this->recurring_payment_entry_id,
-            'category'                    => new PurchaseCategoryResource($this->whenLoaded('category')),
+            'refund_status'        => $this->refund_status,
+            'category'             => new PurchaseCategoryResource($this->whenLoaded('category')),
             'created_at'                  => $this->created_at,
             'updated_at'                  => $this->updated_at,
         ];

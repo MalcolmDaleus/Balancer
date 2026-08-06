@@ -273,7 +273,7 @@ test('creating a debt in a locked month throws MonthLockedException', function (
     ]))->toThrow(MonthLockedException::class);
 });
 
-test('deleting a debt whose issue_date is in a locked month throws MonthLockedException', function () {
+test('soft-archiving a debt in a locked issue month is allowed', function () {
     $user = User::factory()->create();
     $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
 
@@ -291,7 +291,30 @@ test('deleting a debt whose issue_date is in a locked month throws MonthLockedEx
         'total_spending' => 0, 'savings_snapshot' => 0, 'roll_over' => 0,
     ]);
 
-    expect(fn () => $debt->delete())->toThrow(MonthLockedException::class);
+    $debt->delete();
+    expect(Debt::find($debt->id))->toBeNull();
+    expect(Debt::withTrashed()->find($debt->id)->trashed())->toBeTrue();
+});
+
+test('force-deleting a debt in a locked issue month throws MonthLockedException', function () {
+    $user = User::factory()->create();
+    $cat = DebtCategory::factory()->create(['user_id' => $user->id]);
+
+    $debt = Debt::create([
+        'user_id' => $user->id,
+        'category_id' => $cat->id,
+        'amount' => 100.00,
+        'description' => 'Will lock',
+        'issue_date' => '2025-08-01',
+    ]);
+
+    BalanceSheetTotal::create([
+        'user_id' => $user->id, 'month' => '2025-08-01',
+        'total_income' => 0, 'total_debt_paid' => 0,
+        'total_spending' => 0, 'savings_snapshot' => 0, 'roll_over' => 0,
+    ]);
+
+    expect(fn () => $debt->forceDelete())->toThrow(MonthLockedException::class);
 });
 
 test('forgiving a debt whose issue_date is in a locked month is allowed', function () {

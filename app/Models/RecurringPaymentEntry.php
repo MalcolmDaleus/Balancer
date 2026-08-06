@@ -48,9 +48,9 @@ class RecurringPaymentEntry extends Model
             ->withTrashed();
     }
 
-    public function purchases()
+    public function charges()
     {
-        return $this->hasMany(Purchase::class, 'recurring_payment_entry_id');
+        return $this->hasMany(RecurringCharge::class, 'recurring_payment_entry_id');
     }
 
     // ----------------------------------------------------------

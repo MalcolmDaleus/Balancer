@@ -32,4 +32,24 @@ class Saving extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Signed running savings balance (deposits − withdrawals) through as-of month.
+     */
+    public static function runningBalance(int $userId, ?string $asOfMonth = null, ?int $excludeId = null): float
+    {
+        $query = static::query()
+            ->where('user_id', $userId)
+            ->selectRaw("COALESCE(SUM(CASE WHEN type = 'deposit' THEN amount ELSE -amount END), 0) as net");
+
+        if ($asOfMonth !== null) {
+            $query->whereDate('month', '<=', $asOfMonth);
+        }
+
+        if ($excludeId !== null) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        return (float) $query->value('net');
+    }
 }

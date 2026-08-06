@@ -40,8 +40,11 @@ function fmtAmount(n: number) {
 
 function fmtFreq(freq: string) {
     if (freq === 'yearly') return 'Yearly';
+    if (freq === 'weekly') return 'Weekly';
     return 'Monthly';
 }
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function fmtDate(d: string) {
     return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -59,11 +62,13 @@ function PriceScheduleFields({
     amountLabel = 'Amount',
     startDateLabel = 'Starts on',
 }: {
-    priceForm: { amount: string; start_date: string; frequency: string; day_of_month: string };
+    priceForm: { amount: string; start_date: string; frequency: string; day_of_month: string; day_of_week: string };
     setPriceForm: React.Dispatch<React.SetStateAction<typeof priceForm>>;
     amountLabel?: string;
     startDateLabel?: string;
 }) {
+    const isWeekly = priceForm.frequency === 'weekly';
+
     return (
         <>
             <Field label={amountLabel}>
@@ -82,23 +87,48 @@ function PriceScheduleFields({
                     <select
                         className={selectCls}
                         value={priceForm.frequency}
-                        onChange={(e) => setPriceForm((f) => ({ ...f, frequency: e.target.value }))}
+                        onChange={(e) =>
+                            setPriceForm((f) => ({
+                                ...f,
+                                frequency: e.target.value,
+                                day_of_week: e.target.value === 'weekly' ? (f.day_of_week || String(new Date().getDay())) : '',
+                                day_of_month: e.target.value === 'weekly' ? '' : (f.day_of_month || defaultDayOfMonth()),
+                            }))
+                        }
                     >
+                        <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
                     </select>
                 </Field>
-                <Field label="Day of month">
-                    <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        required
-                        className={inputCls}
-                        value={priceForm.day_of_month}
-                        onChange={(e) => setPriceForm((f) => ({ ...f, day_of_month: e.target.value }))}
-                    />
-                </Field>
+                {isWeekly ? (
+                    <Field label="Day of week">
+                        <select
+                            className={selectCls}
+                            required
+                            value={priceForm.day_of_week}
+                            onChange={(e) => setPriceForm((f) => ({ ...f, day_of_week: e.target.value }))}
+                        >
+                            {WEEKDAYS.map((label, value) => (
+                                <option key={value} value={String(value)}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                ) : (
+                    <Field label="Day of month">
+                        <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            required
+                            className={inputCls}
+                            value={priceForm.day_of_month}
+                            onChange={(e) => setPriceForm((f) => ({ ...f, day_of_month: e.target.value }))}
+                        />
+                    </Field>
+                )}
             </div>
             <Field label={startDateLabel}>
                 <input
@@ -264,6 +294,7 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
         start_date: todayStr(),
         frequency: 'monthly',
         day_of_month: defaultDayOfMonth(),
+        day_of_week: String(new Date().getDay()),
     });
     const [priceForm, setPriceForm] = useState(blankPrice());
     const [showPriceUpdate, setShowPriceUpdate] = useState(false);
@@ -336,15 +367,19 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                 };
                 await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
             } else {
-                const body = {
+                const body: Record<string, unknown> = {
                     name: form.name,
                     recurring_payment_category_id: form.recurring_payment_category_id ? Number(form.recurring_payment_category_id) : null,
                     description: form.description || null,
                     amount: Number(priceForm.amount),
                     frequency: priceForm.frequency,
-                    day_of_month: Number(priceForm.day_of_month),
                     start_date: priceForm.start_date,
                 };
+                if (priceForm.frequency === 'weekly') {
+                    body.day_of_week = Number(priceForm.day_of_week);
+                } else {
+                    body.day_of_month = Number(priceForm.day_of_month);
+                }
                 await apiFetch('/api/v1/recurring-payments/streams', { method: 'POST', body: JSON.stringify(body) });
             }
             reset();
@@ -366,8 +401,12 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                 amount: Number(priceForm.amount),
                 start_date: priceForm.start_date,
                 frequency: priceForm.frequency,
-                day_of_month: Number(priceForm.day_of_month),
             };
+            if (priceForm.frequency === 'weekly') {
+                body.day_of_week = Number(priceForm.day_of_week);
+            } else {
+                body.day_of_month = Number(priceForm.day_of_month);
+            }
             await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}/update-price`, { method: 'POST', body: JSON.stringify(body) });
             setShowPriceUpdate(false);
             setPriceForm(blankPrice());
@@ -490,13 +529,14 @@ function StreamsTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
                         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     />
                 </Field>
-                <Field label="Category (optional)">
+                <Field label="Category">
                     <select
+                        required
                         className={selectCls}
                         value={form.recurring_payment_category_id}
                         onChange={(e) => setForm((f) => ({ ...f, recurring_payment_category_id: e.target.value }))}
                     >
-                        <option value="">— none —</option>
+                        <option value="">— select category —</option>
                         {cats
                             .filter((c) => !c.deleted_at)
                             .map((c) => (

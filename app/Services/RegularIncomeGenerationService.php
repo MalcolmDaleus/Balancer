@@ -7,6 +7,7 @@ use App\Models\IncomeEntry;
 use App\Models\RegularIncomeSchedule;
 use App\Models\RegularIncomeScheduleVersion;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 class RegularIncomeGenerationService
@@ -16,8 +17,11 @@ class RegularIncomeGenerationService
     ) {}
 
     /**
-     * Generate future regular income entries and flush pending toggles for a user.
-     * Intended to run on every dashboard visit (idempotent).
+     * Generate regular income entries through the end of the as-of month and
+     * flush pending schedule toggles. Idempotent; safe under concurrent runs.
+     *
+     * Primary trigger: FinanceProcessingService / finance:process-due.
+     * Horizon: from as-of date through end of that calendar month.
      */
     public function generateForUser(int $userId, Carbon|string|null $asOf = null): void
     {
@@ -75,20 +79,32 @@ class RegularIncomeGenerationService
                 continue;
             }
 
-            IncomeEntry::firstOrCreate(
-                [
-                    'regular_schedule_version_id' => $version->id,
-                    'received_at'                 => $date->toDateString(),
-                ],
-                [
-                    'user_id'             => $schedule->user_id,
-                    'type'                => IncomeEntryType::Regular,
-                    'name'                => $schedule->name,
-                    'description'         => $schedule->description,
-                    'amount'              => $version->amount,
-                    'regular_schedule_id' => $schedule->id,
-                ]
-            );
+            $this->createOccurrenceIfMissing($schedule, $version, $date);
+        }
+    }
+
+    /**
+     * Insert an occurrence row; ignore unique races from concurrent generators.
+     * Unique key: (regular_schedule_version_id, received_at).
+     */
+    private function createOccurrenceIfMissing(
+        RegularIncomeSchedule $schedule,
+        RegularIncomeScheduleVersion $version,
+        Carbon $date,
+    ): void {
+        try {
+            IncomeEntry::create([
+                'regular_schedule_version_id' => $version->id,
+                'received_at'                 => $date->toDateString(),
+                'user_id'                     => $schedule->user_id,
+                'type'                        => IncomeEntryType::Regular,
+                'name'                        => $schedule->name,
+                'description'                 => $schedule->description,
+                'amount'                      => $version->amount,
+                'regular_schedule_id'         => $schedule->id,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Concurrent process already created this occurrence.
         }
     }
 

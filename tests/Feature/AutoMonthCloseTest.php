@@ -154,7 +154,7 @@ test('dashboard visit auto closes pending months', function () {
     ]);
 });
 
-test('dashboard throttles auto close to once per session per calendar month', function () {
+test('dashboard throttles finance catch-up to once per session per day', function () {
     Carbon::setTestNow('2026-06-05 12:00:00');
 
     $user = User::factory()->create(['created_at' => '2026-04-01']);
@@ -162,7 +162,7 @@ test('dashboard throttles auto close to once per session per calendar month', fu
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
     $this->assertDatabaseCount('balance_sheet_totals', 1);
 
-    // Delete snapshot to simulate unclosed month — throttle should prevent re-close
+    // Delete snapshot to simulate unclosed month — same-day throttle should prevent re-sync
     BalanceSheetTotal::where('user_id', $user->id)->delete();
 
     $this->actingAs($user)

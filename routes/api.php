@@ -4,10 +4,12 @@ use App\Http\Controllers\BalanceSheetTotalController;
 use App\Http\Controllers\DebtCategoryController;
 use App\Http\Controllers\DebtController;
 use App\Http\Controllers\DebtPaymentController;
+use App\Http\Controllers\FinanceSyncController;
 use App\Http\Controllers\IncomeEntryController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RegularIncomeScheduleController;
+use App\Http\Controllers\RecurringChargeController;
 use App\Http\Controllers\RecurringPaymentCategoryController;
 use App\Http\Controllers\RecurringPaymentEntryController;
 use App\Http\Controllers\RecurringPaymentStreamController;
@@ -89,6 +91,14 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
         ->name('recurring-payments.streams.force-delete');
     Route::apiResource('recurring-payments/entries', RecurringPaymentEntryController::class)
         ->parameters(['entries' => 'recurringPaymentEntry']);
+    Route::apiResource('recurring-payments/charges', RecurringChargeController::class)
+        ->only(['index', 'show', 'destroy'])
+        ->parameters(['charges' => 'recurringCharge']);
+
+    // ---------------------------------------------------------------
+    // Finance catch-up (cron is primary; this is explicit / pre-host safety)
+    // ---------------------------------------------------------------
+    Route::post('finance/sync', FinanceSyncController::class)->name('finance.sync');
 
     // ---------------------------------------------------------------
     // Balance sheet

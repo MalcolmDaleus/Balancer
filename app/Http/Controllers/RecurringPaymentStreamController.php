@@ -55,13 +55,14 @@ class RecurringPaymentStreamController extends Controller
 
             RecurringPaymentEntry::create([
                 'user_id'                     => $stream->user_id,
-                'recurring_payment_stream_id'  => $stream->id,
-                'amount'                       => $data['amount'],
-                'frequency'                    => $data['frequency'],
-                'day_of_month'                 => $data['day_of_month'],
-                'start_date'                   => $data['start_date'],
-                'end_date'                     => null,
-                'active'                       => true,
+                'recurring_payment_stream_id' => $stream->id,
+                'amount'                      => $data['amount'],
+                'frequency'                   => $data['frequency'],
+                'day_of_month'                => $data['day_of_month'] ?? null,
+                'day_of_week'                 => $data['day_of_week'] ?? null,
+                'start_date'                  => $data['start_date'],
+                'end_date'                    => null,
+                'active'                      => true,
             ]);
 
             return $stream;
@@ -108,10 +109,14 @@ class RecurringPaymentStreamController extends Controller
 
         DB::transaction(function () use ($recurringPaymentStream, $data, $startDate) {
             // End any currently active entries the day before the new one starts.
+            // OR must be grouped or SQL precedence drops the stream_id constraint
+            // from the second branch (cross-tenant write risk).
             $recurringPaymentStream->entries()
                 ->where('active', true)
-                ->whereNull('end_date')
-                ->orWhere('end_date', '>=', $startDate->toDateString())
+                ->where(function ($q) use ($startDate) {
+                    $q->whereNull('end_date')
+                      ->orWhere('end_date', '>=', $startDate->toDateString());
+                })
                 ->update([
                     'active'   => false,
                     'end_date' => $startDate->copy()->subDay()->toDateString(),
@@ -145,9 +150,9 @@ class RecurringPaymentStreamController extends Controller
      * - No pending change → queues the opposite of the current `active` state.
      * - Pending change already queued → cancels it (sets pending_active back to null).
      *
-     * The queued change is committed by AutoMonthCloseService when the current
-     * month closes, keeping each balance sheet snapshot internally consistent.
-     * The live `active` column (used by balance sheet queries) is not touched here.
+     * The queued change is committed by RecurringPaymentCycleService on the next
+     * charge occurrence date (dashboard/cron process path). The live `active`
+     * column used by balance sheet queries is not touched here.
      */
     public function toggle(RecurringPaymentStream $recurringPaymentStream): RecurringPaymentStreamResource
     {
@@ -221,6 +226,13 @@ class RecurringPaymentStreamController extends Controller
                     'message' => 'This stream has appeared in a closed balance sheet and cannot be permanently deleted.',
                 ], 423);
             }
+        }
+
+        if ($stream->charges()->exists()) {
+            return response()->json([
+                'error'   => 'has_facts',
+                'message' => 'This stream has charged Facts and cannot be permanently deleted. Soft-archive it instead.',
+            ], 422);
         }
 
         $stream->forceDelete();
