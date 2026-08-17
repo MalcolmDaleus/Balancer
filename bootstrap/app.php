@@ -11,6 +11,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -54,12 +55,17 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        // Unauthorized — 403
-        $exceptions->render(function (AuthorizationException $e, $request) {
+        // Unauthorized — 403 (includes unverified email via EnsureEmailIsVerified)
+        $exceptions->render(function (AuthorizationException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
+                $message = $e->getMessage();
+                $error = str_contains(strtolower($message), 'verified')
+                    ? 'email_unverified'
+                    : 'forbidden';
+
                 return new JsonResponse([
-                    'error'   => 'forbidden',
-                    'message' => 'This action is unauthorized.',
+                    'error'   => $error,
+                    'message' => $message !== '' ? $message : 'This action is unauthorized.',
                 ], 403);
             }
         });

@@ -16,7 +16,7 @@ use App\Http\Controllers\RecurringPaymentStreamController;
 use App\Http\Controllers\SavingController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(function () {
+Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
 
     // ---------------------------------------------------------------
     // Purchases + Refund action
@@ -98,7 +98,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
     // ---------------------------------------------------------------
     // Finance catch-up (cron is primary; this is explicit / pre-host safety)
     // ---------------------------------------------------------------
-    Route::post('finance/sync', FinanceSyncController::class)->name('finance.sync');
+    Route::post('finance/sync', FinanceSyncController::class)
+        ->middleware('throttle:finance-sync')
+        ->name('finance.sync');
 
     // ---------------------------------------------------------------
     // Balance sheet
@@ -107,7 +109,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->name('api.v1.')->group(functi
         Route::get('/', [BalanceSheetTotalController::class, 'expanded'])->name('expanded');
         Route::get('/locked-months', [BalanceSheetTotalController::class, 'lockedMonths'])->name('locked-months');
         Route::get('/summary', [BalanceSheetTotalController::class, 'summary'])->name('summary');
-        Route::post('/close', [BalanceSheetTotalController::class, 'close'])->name('close');
+        Route::post('/close', [BalanceSheetTotalController::class, 'close'])
+            ->middleware('throttle:10,1')
+            ->name('close');
         Route::get('/history', [BalanceSheetTotalController::class, 'history'])->name('history');
         Route::get('/compare', [BalanceSheetTotalController::class, 'compare'])->name('compare');
         Route::delete('/{balanceSheetTotal}', [BalanceSheetTotalController::class, 'destroy'])->name('destroy');

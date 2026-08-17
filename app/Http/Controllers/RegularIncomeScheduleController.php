@@ -168,7 +168,9 @@ class RegularIncomeScheduleController extends Controller
 
     public function restore(int $regularIncomeSchedule): RegularIncomeScheduleResource
     {
-        $schedule = RegularIncomeSchedule::withTrashed()->findOrFail($regularIncomeSchedule);
+        $schedule = RegularIncomeSchedule::withTrashed()
+            ->where('user_id', auth()->id())
+            ->findOrFail($regularIncomeSchedule);
 
         $this->authorize('restore', $schedule);
 
@@ -181,7 +183,9 @@ class RegularIncomeScheduleController extends Controller
 
     public function hardDestroy(int $regularIncomeSchedule): JsonResponse
     {
-        $schedule = RegularIncomeSchedule::withTrashed()->findOrFail($regularIncomeSchedule);
+        $schedule = RegularIncomeSchedule::withTrashed()
+            ->where('user_id', auth()->id())
+            ->findOrFail($regularIncomeSchedule);
 
         $this->authorize('delete', $schedule);
 

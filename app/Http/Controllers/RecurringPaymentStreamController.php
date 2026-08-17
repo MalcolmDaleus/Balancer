@@ -189,7 +189,9 @@ class RecurringPaymentStreamController extends Controller
      */
     public function restore(int $recurringPaymentStream): RecurringPaymentStreamResource
     {
-        $stream = RecurringPaymentStream::withTrashed()->findOrFail($recurringPaymentStream);
+        $stream = RecurringPaymentStream::withTrashed()
+            ->where('user_id', auth()->id())
+            ->findOrFail($recurringPaymentStream);
 
         $this->authorize('restore', $stream);
 
@@ -207,7 +209,9 @@ class RecurringPaymentStreamController extends Controller
      */
     public function hardDestroy(int $recurringPaymentStream): JsonResponse
     {
-        $stream = RecurringPaymentStream::withTrashed()->findOrFail($recurringPaymentStream);
+        $stream = RecurringPaymentStream::withTrashed()
+            ->where('user_id', auth()->id())
+            ->findOrFail($recurringPaymentStream);
 
         $this->authorize('delete', $stream);
 

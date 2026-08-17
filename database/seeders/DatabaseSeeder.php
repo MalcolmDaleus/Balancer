@@ -13,7 +13,12 @@ class DatabaseSeeder extends Seeder
             PurchaseCategorySeeder::class,
             DebtCategorySeeder::class,
             RecurringPaymentCategorySeeder::class,
-            DevDataSeeder::class,
         ]);
+
+        if (app()->environment('local')) {
+            $this->call(DevDataSeeder::class);
+        } else {
+            $this->command?->warn('DevDataSeeder skipped outside local. Run --class=DevDataSeeder only if intentional.');
+        }
     }
 }

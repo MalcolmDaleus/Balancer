@@ -157,9 +157,10 @@ class BalanceSheetService
 
         $spendingTotal = MoneyService::sum($spendingByCategory->pluck('amount')->toArray());
 
-        // Debt details (per-debt paid this month computed from debt_payments)
-        $debtDetails = $debts->map(function ($d) {
-            $paidThisMonth = $this->getDebtPaidForDebtInPeriod($d, $this->periodStart, $this->periodEnd);
+        // Debt details — one grouped payment sum for the period (no per-debt query).
+        $paidByDebtId = $this->getDebtPaidByDebtForPeriod();
+        $debtDetails = $debts->map(function ($d) use ($paidByDebtId) {
+            $paidThisMonth = (float) ($paidByDebtId[$d->id] ?? 0.0);
 
             return [
                 'id'                   => $d->id,
@@ -597,20 +598,20 @@ class BalanceSheetService
     }
 
     /**
-     * Compute amount paid for a single debt during the given period.
-     * Queries debt_payments directly for accurate per-debt, per-period figures.
+     * Per-debt paid totals for the current period (single grouped query).
      *
-     * @param Debt   $debt
-     * @param Carbon $periodStart
-     * @param Carbon $periodEnd
-     * @return float
+     * @return array<int, float> debt_id => amount
      */
-    protected function getDebtPaidForDebtInPeriod(Debt $debt, Carbon $periodStart, Carbon $periodEnd): float
+    protected function getDebtPaidByDebtForPeriod(): array
     {
-        return (float) DB::table('debt_payments')
-            ->where('debt_id', $debt->id)
-            ->whereBetween('paid_at', [$periodStart->toDateTimeString(), $periodEnd->toDateTimeString()])
-            ->sum('amount');
+        return DB::table('debt_payments')
+            ->selectRaw('debt_id, SUM(amount) as total')
+            ->where('user_id', $this->userId)
+            ->whereBetween('paid_at', [$this->periodStart->toDateTimeString(), $this->periodEnd->toDateTimeString()])
+            ->groupBy('debt_id')
+            ->pluck('total', 'debt_id')
+            ->map(fn ($total) => (float) $total)
+            ->all();
     }
 
     // ----------------------------------------------------------

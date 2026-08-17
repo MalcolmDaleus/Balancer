@@ -109,8 +109,8 @@ class BalanceSheetTotalController extends Controller
         $this->authorize('viewAny', BalanceSheetTotal::class);
 
         $request->validate([
-            'month_a' => ['required', 'string'],
-            'month_b' => ['required', 'string'],
+            'month_a' => ['required', 'date_format:Y-m'],
+            'month_b' => ['required', 'date_format:Y-m'],
         ]);
 
         $svc = new BalanceSheetService(auth()->id());

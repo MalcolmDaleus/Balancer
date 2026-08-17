@@ -26,10 +26,11 @@ class SavingController extends Controller
     {
         $this->authorize('create', Saving::class);
 
+        // Defaults first, then validated input (client type wins), then tenant.
         $saving = Saving::create(array_merge(
             ['type' => 'deposit'],
             $request->validated(),
-            ['user_id' => auth()->id()]
+            ['user_id' => auth()->id()],
         ));
 
         return new SavingResource($saving);

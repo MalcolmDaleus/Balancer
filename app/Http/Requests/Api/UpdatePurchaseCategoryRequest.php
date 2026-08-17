@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdatePurchaseCategoryRequest extends FormRequest
 {
@@ -20,8 +21,17 @@ class UpdatePurchaseCategoryRequest extends FormRequest
 
     public function rules(): array
     {
+        $categoryId = $this->route('purchaseCategory')?->id;
+
         return [
-            'name' => ['required', 'string', 'max:64'],
+            'name' => [
+                'required',
+                'string',
+                'max:64',
+                Rule::unique('purchase_categories', 'name')
+                    ->where(fn ($q) => $q->where('user_id', $this->user()->id)->whereNull('deleted_at'))
+                    ->ignore($categoryId),
+            ],
         ];
     }
 }

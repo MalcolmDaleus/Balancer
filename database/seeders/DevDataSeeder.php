@@ -24,6 +24,12 @@ class DevDataSeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment('local')) {
+            $this->command?->error('DevDataSeeder refused: only runs in the local environment.');
+
+            return;
+        }
+
         $user = User::first();
 
         if (! $user) {
