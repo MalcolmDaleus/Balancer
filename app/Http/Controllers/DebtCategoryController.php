@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreDebtCategoryRequest;
 use App\Http\Requests\Api\UpdateDebtCategoryRequest;
 use App\Http\Resources\DebtCategoryResource;
@@ -57,16 +58,17 @@ class DebtCategoryController extends Controller
         return new DebtCategoryResource($debtCategory);
     }
 
-    public function update(UpdateDebtCategoryRequest $request, DebtCategory $debtCategory): DebtCategoryResource|JsonResponse
+    public function update(UpdateDebtCategoryRequest $request, DebtCategory $debtCategory): DebtCategoryResource
     {
         $this->authorize('update', $debtCategory);
 
         $newName = $request->input('name');
         if ($newName !== $debtCategory->name && $this->usedInLockedMonth($debtCategory)) {
-            return response()->json([
-                'error'   => 'classifier_locked',
-                'message' => 'This category is used in a closed month and cannot be renamed.',
-            ], 423);
+            throw new DomainException(
+                'classifier_locked',
+                'This category is used in a closed month and cannot be renamed.',
+                423,
+            );
         }
 
         $debtCategory->update($request->validated());

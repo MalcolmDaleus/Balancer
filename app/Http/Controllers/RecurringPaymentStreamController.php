@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentPriceRequest;
@@ -225,18 +226,19 @@ class RecurringPaymentStreamController extends Controller
                 ->exists();
 
             if ($hasLockedEntries) {
-                return response()->json([
-                    'error'   => 'locked_month',
-                    'message' => 'This stream has appeared in a closed balance sheet and cannot be permanently deleted.',
-                ], 423);
+                throw new DomainException(
+                    'locked_month',
+                    'This stream has appeared in a closed balance sheet and cannot be permanently deleted.',
+                    423,
+                );
             }
         }
 
         if ($stream->charges()->exists()) {
-            return response()->json([
-                'error'   => 'has_facts',
-                'message' => 'This stream has charged Facts and cannot be permanently deleted. Soft-archive it instead.',
-            ], 422);
+            throw new DomainException(
+                'has_facts',
+                'This stream has charged Facts and cannot be permanently deleted. Soft-archive it instead.',
+            );
         }
 
         $stream->forceDelete();

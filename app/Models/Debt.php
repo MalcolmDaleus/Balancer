@@ -103,18 +103,4 @@ class Debt extends Model
     {
         return $this->hasMany(DebtPayment::class);
     }
-
-    // ----------------------------------------------------------
-    // Helper
-    // ----------------------------------------------------------
-
-    /**
-     * Total amount paid across all recorded payments.
-     */
-    public function totalPaid(): float
-    {
-        return $this->relationLoaded('payments')
-            ? (float) $this->payments->sum('amount')
-            : (float) $this->payments()->sum('amount');
-    }
 }

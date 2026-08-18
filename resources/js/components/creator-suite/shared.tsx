@@ -3,7 +3,8 @@
  */
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { ReactNode, useEffect, useState } from 'react';
+import { formatMoney } from '@/lib/money';
+import { ReactNode } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types — matching Laravel API resource output shapes
@@ -48,6 +49,7 @@ export interface IncomeEntry {
 
 export interface PurchaseCategory {
     id: number;
+    user_id?: number;
     name: string;
     deleted_at: string | null;
 }
@@ -68,7 +70,9 @@ export interface Purchase {
 
 export interface DebtCategory {
     id: number;
+    user_id?: number;
     name: string;
+    deleted_at: string | null;
 }
 export interface Debt {
     id: number;
@@ -166,11 +170,12 @@ export async function apiFetchList<T>(url: string): Promise<T[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Currency formatter (no user context needed here — just bare numbers)
+// Currency formatter — thin wrapper around shared money helpers
 // ---------------------------------------------------------------------------
 
-export function fmt(amount: number, currency = 'USD') {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+/** @deprecated Prefer useFormatMoney() in components for user currency/locale. */
+export function fmt(amount: number, currency = 'USD', locale?: string | null) {
+    return formatMoney(amount, currency, locale);
 }
 
 // ---------------------------------------------------------------------------
@@ -294,19 +299,6 @@ export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: 
             ))}
         </div>
     );
-}
-
-/** Returns true when the viewport is narrower than the md breakpoint (768 px). */
-export function useIsMobile(): boolean {
-    const [mobile, setMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
-    useEffect(() => {
-        const mq = window.matchMedia('(max-width: 767px)');
-        const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
-        setMobile(mq.matches);
-        mq.addEventListener('change', handler);
-        return () => mq.removeEventListener('change', handler);
-    }, []);
-    return mobile;
 }
 
 export interface SplitPaneProps {

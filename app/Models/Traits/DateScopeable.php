@@ -85,7 +85,9 @@ trait DateScopeable
     }
 
     // ----------------------------------------------------------
-    // 🔹 COMMON PREDEFINED SCOPES
+    // COMMON PREDEFINED SCOPES
+    // Kept for Statistics / long-range history queries (Wave product work).
+    // Prefer these over ad-hoc date math when filtering Facts by lookback window.
     // ----------------------------------------------------------
 
     public function scopeForLast3Months(Builder $query, string $column = 'created_at'): Builder

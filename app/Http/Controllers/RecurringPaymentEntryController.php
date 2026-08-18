@@ -66,8 +66,8 @@ class RecurringPaymentEntryController extends Controller
      * Deactivate an entry (soft delete).
      *
      * The entry's end_date is set to today and active is set to false so it stops
-     * appearing in current-month projections. A soft delete is then applied so the
-     * entry is hidden from normal queries but preserved for historical purchase links.
+     * generating new Facts. A soft delete is then applied so the entry is hidden
+     * from normal queries but preserved for historical RecurringCharge links.
      */
     public function destroy(RecurringPaymentEntry $recurringPaymentEntry): JsonResponse
     {

@@ -28,8 +28,9 @@ import {
     secondaryBtnCls,
     selectCls,
     todayStr,
-    useIsMobile,
 } from './shared';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useLockedMonths } from './locked-months';
 
 // ---------------------------------------------------------------------------
@@ -48,10 +49,6 @@ const FREQ_LABELS: Record<string, string> = {
 };
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-function fmtAmount(n: number) {
-    return `$${n.toFixed(2)}`;
-}
 
 function fmtFreq(freq: string) {
     return FREQ_LABELS[freq] ?? freq;
@@ -194,6 +191,7 @@ function VersionScheduleFields({
 }
 
 function VersionHistory({ versions }: { versions: RegularIncomeScheduleVersion[] }) {
+    const fmtAmount = useFormatMoney();
     const [open, setOpen] = useState(false);
     if (!versions.length) return null;
 
@@ -304,6 +302,7 @@ function entryTypeChip(type: IncomeEntry['type']) {
 type ToggleAction = { schedule: RegularIncomeSchedule; isCancel: boolean };
 
 function SchedulesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+    const fmtAmount = useFormatMoney();
     const isMobile = useIsMobile();
     const [schedules, setSchedules] = useState<RegularIncomeSchedule[]>([]);
     const [loading, setLoading] = useState(false);
@@ -667,6 +666,7 @@ function SchedulesTab({ active, addRef }: { active: boolean; addRef?: MutableRef
 // ---------------------------------------------------------------------------
 
 function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+    const fmtAmount = useFormatMoney();
     const isMobile = useIsMobile();
     const { isLocked } = useLockedMonths();
     const [entries, setEntries] = useState<IncomeEntry[]>([]);
@@ -889,6 +889,7 @@ function EntriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefOb
 // ---------------------------------------------------------------------------
 
 function ArchiveTab({ active }: { active: boolean }) {
+    const fmtAmount = useFormatMoney();
     const [schedules, setSchedules] = useState<RegularIncomeSchedule[]>([]);
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);

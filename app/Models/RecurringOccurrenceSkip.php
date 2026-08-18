@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Marks a due recurring occurrence that must not be re-materialized
- * (e.g. user deleted the generated purchase in an open month).
+ * (e.g. user deleted the generated RecurringCharge Fact in an open month).
  */
 class RecurringOccurrenceSkip extends Model
 {

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\BalanceSheetMonthQueryRequest;
 use App\Http\Requests\Api\CloseMonthRequest;
+use App\Http\Requests\Api\CompareBalanceSheetRequest;
 use App\Http\Resources\BalanceSheetTotalResource;
 use App\Models\BalanceSheetTotal;
 use App\Services\BalanceSheetService;
@@ -20,11 +22,11 @@ class BalanceSheetTotalController extends Controller
      * Returns the full expanded balance sheet for the authenticated user.
      * Accepts optional ?month=YYYY-MM query parameter (defaults to current month).
      */
-    public function expanded(Request $request): JsonResponse
+    public function expanded(BalanceSheetMonthQueryRequest $request): JsonResponse
     {
         $this->authorize('viewAny', BalanceSheetTotal::class);
 
-        $month = $request->query('month');
+        $month = $request->validated('month');
         $svc = new BalanceSheetService(auth()->id(), $month);
 
         return response()->json($svc->getExpanded());
@@ -50,11 +52,11 @@ class BalanceSheetTotalController extends Controller
      * Returns the simplified (totals-only) balance sheet snapshot.
      * Accepts optional ?month=YYYY-MM query parameter (defaults to current month).
      */
-    public function summary(Request $request): JsonResponse
+    public function summary(BalanceSheetMonthQueryRequest $request): JsonResponse
     {
         $this->authorize('viewAny', BalanceSheetTotal::class);
 
-        $month = $request->query('month');
+        $month = $request->validated('month');
         $svc = new BalanceSheetService(auth()->id(), $month);
 
         return response()->json($svc->getSimplified());
@@ -104,19 +106,15 @@ class BalanceSheetTotalController extends Controller
      * Compares two months side by side.
      * Query params: ?month_a=YYYY-MM&month_b=YYYY-MM
      */
-    public function compare(Request $request): JsonResponse
+    public function compare(CompareBalanceSheetRequest $request): JsonResponse
     {
         $this->authorize('viewAny', BalanceSheetTotal::class);
 
-        $request->validate([
-            'month_a' => ['required', 'date_format:Y-m'],
-            'month_b' => ['required', 'date_format:Y-m'],
-        ]);
-
+        $validated = $request->validated();
         $svc = new BalanceSheetService(auth()->id());
         $result = $svc->compareMonths(
-            $request->query('month_a'),
-            $request->query('month_b')
+            $validated['month_a'],
+            $validated['month_b']
         );
 
         return response()->json($result);

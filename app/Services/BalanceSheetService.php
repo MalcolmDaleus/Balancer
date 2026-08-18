@@ -26,9 +26,6 @@ class BalanceSheetService
     public readonly Carbon $month;            // normalized to first day of month UTC
     public readonly Carbon $periodStart;      // month start UTC
     public readonly Carbon $periodEnd;        // month end UTC
-    public readonly Carbon $previousMonth;
-    public readonly Carbon $previousPeriodStart;
-    public readonly Carbon $previousPeriodEnd;
 
     /** Cached collections */
     protected ?Collection $purchases = null;
@@ -51,10 +48,6 @@ class BalanceSheetService
         $this->month = DateTimeService::normalizeMonth($month);
         $this->periodStart = DateTimeService::monthStart($this->month);
         $this->periodEnd = DateTimeService::monthEnd($this->month);
-
-        $this->previousMonth = $this->month->copy()->subMonth();
-        $this->previousPeriodStart = DateTimeService::monthStart($this->previousMonth);
-        $this->previousPeriodEnd = DateTimeService::monthEnd($this->previousMonth);
     }
 
     // ----------------------------------------------------------
@@ -193,7 +186,7 @@ class BalanceSheetService
         $savingsWithdrawals  = $savingsRows->where('type', 'withdrawal')->sum('amount');
         $savingsMonthlyTotal = (float) $savingsDeposits - (float) $savingsWithdrawals;
 
-        $savingsGrandTotal = (float) Saving::where('user_id', $this->userId)
+        $savingsGrandTotal = (float) Saving::forUser($this->userId)
             ->whereDate('month', '<=', $this->month->toDateString())
             ->selectRaw("SUM(CASE WHEN type = 'deposit' THEN amount ELSE -amount END) as net")
             ->value('net') ?? 0.0;
@@ -311,7 +304,7 @@ class BalanceSheetService
             return $this->purchases;
         }
 
-        $this->purchases = Purchase::where('user_id', $this->userId)
+        $this->purchases = Purchase::forUser($this->userId)
             ->forPeriod($this->month, 'date', 'month')
             ->with('category')
             ->get();
@@ -328,7 +321,7 @@ class BalanceSheetService
             return $this->recurringCharges;
         }
 
-        $this->recurringCharges = RecurringCharge::where('user_id', $this->userId)
+        $this->recurringCharges = RecurringCharge::forUser($this->userId)
             ->forPeriod($this->month, 'occurred_on', 'month')
             ->with(['entry', 'stream', 'category'])
             ->get();
@@ -347,7 +340,7 @@ class BalanceSheetService
             return $this->incomeEntries;
         }
 
-        $this->incomeEntries = IncomeEntry::where('user_id', $this->userId)
+        $this->incomeEntries = IncomeEntry::forUser($this->userId)
             ->forPeriod($this->month, 'received_at', 'month')
             ->with('regularSchedule')
             ->get();
@@ -376,7 +369,7 @@ class BalanceSheetService
             : Debt::query();
 
         $this->debts = $query
-            ->where('user_id', $this->userId)
+            ->forUser($this->userId)
             ->whereDate('issue_date', '<=', $this->periodEnd->toDateString())
             ->where(function ($q) {
                 $q->whereNull('settle_date')
@@ -399,7 +392,7 @@ class BalanceSheetService
             return $this->savings;
         }
 
-        $this->savings = Saving::where('user_id', $this->userId)
+        $this->savings = Saving::forUser($this->userId)
             ->forPeriod($this->month, 'month', 'month')
             ->get();
 
@@ -417,7 +410,7 @@ class BalanceSheetService
             return $this->recurringEntries;
         }
 
-        $this->recurringEntries = RecurringPaymentEntry::where('user_id', $this->userId)
+        $this->recurringEntries = RecurringPaymentEntry::forUser($this->userId)
             ->activeForMonth($this->periodStart, $this->periodEnd)
             ->whereHas('stream', fn ($q) => $q->where('active', true))
             ->with(['stream', 'stream.category'])
@@ -433,7 +426,7 @@ class BalanceSheetService
      */
     protected function getIncomeTotal(): float
     {
-        return (float) IncomeEntry::where('user_id', $this->userId)
+        return (float) IncomeEntry::forUser($this->userId)
             ->forPeriod($this->month, 'received_at', 'month')
             ->sum('amount');
     }
@@ -443,7 +436,7 @@ class BalanceSheetService
      */
     protected function getSpendingTotal(): float
     {
-        return (float) Purchase::where('user_id', $this->userId)
+        return (float) Purchase::forUser($this->userId)
             ->forPeriod($this->month, 'date', 'month')
             ->sum('amount');
     }
@@ -663,7 +656,7 @@ class BalanceSheetService
      */
     public function getHistory(int $months = 12): Collection
     {
-        return BalanceSheetTotal::where('user_id', $this->userId)
+        return BalanceSheetTotal::forUser($this->userId)
             ->forLastPeriods($months, 'month', 'month')
             ->orderBy('month', 'asc')
             ->get();

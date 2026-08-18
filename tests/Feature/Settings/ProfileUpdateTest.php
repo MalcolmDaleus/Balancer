@@ -21,6 +21,8 @@ test('profile information can be updated', function () {
             'first_name' => 'Test',
             'last_name' => 'User',
             'email' => 'test@example.com',
+            'currency' => 'EUR',
+            'locale' => 'de-DE',
         ]);
 
     $response
@@ -32,6 +34,8 @@ test('profile information can be updated', function () {
     expect($user->first_name)->toBe('Test');
     expect($user->last_name)->toBe('User');
     expect($user->email)->toBe('test@example.com');
+    expect($user->currency)->toBe('EUR');
+    expect($user->locale)->toBe('de-DE');
     expect($user->email_verified_at)->toBeNull();
 });
 
@@ -44,6 +48,8 @@ test('email verification status is unchanged when the email address is unchanged
             'first_name' => 'Test',
             'last_name' => 'User',
             'email' => $user->email,
+            'currency' => $user->currency,
+            'locale' => $user->locale,
         ]);
 
     $response

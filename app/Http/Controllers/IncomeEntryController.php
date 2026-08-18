@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\IncomeEntryType;
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreIncomeEntryRequest;
 use App\Http\Requests\Api\UpdateIncomeEntryRequest;
 use App\Http\Resources\IncomeEntryResource;
@@ -16,7 +17,7 @@ class IncomeEntryController extends Controller
     {
         $this->authorize('viewAny', IncomeEntry::class);
 
-        $entries = IncomeEntry::where('user_id', auth()->id())
+        $entries = IncomeEntry::forUser(auth()->id())
             ->with(['regularSchedule', 'sourcePurchase'])
             ->latest('received_at')
             ->get();
@@ -47,10 +48,7 @@ class IncomeEntryController extends Controller
     {
         $this->authorize('update', $incomeEntry);
 
-        if ($incomeEntry->type === IncomeEntryType::Refund) {
-            abort(422, 'Refund entries cannot be edited.');
-        }
-
+        // Refund immutability enforced in UpdateIncomeEntryRequest.
         $incomeEntry->update($request->validated());
 
         return new IncomeEntryResource($incomeEntry->fresh()->load(['regularSchedule', 'sourcePurchase']));
@@ -61,7 +59,10 @@ class IncomeEntryController extends Controller
         $this->authorize('delete', $incomeEntry);
 
         if ($incomeEntry->type === IncomeEntryType::Refund) {
-            abort(422, 'Refund entries cannot be deleted directly.');
+            throw new DomainException(
+                'refund_immutable',
+                'Refund entries cannot be deleted directly.',
+            );
         }
 
         $incomeEntry->delete();

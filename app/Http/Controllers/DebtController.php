@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\ForgiveDebtRequest;
 use App\Http\Requests\Api\StoreDebtRequest;
 use App\Http\Requests\Api\UpdateDebtRequest;
@@ -74,16 +75,16 @@ class DebtController extends Controller
      * A fully paid debt is already "settled" and cannot be retroactively forgiven.
      * Sets is_forgiven = true and settle_date to the given date (default: today).
      */
-    public function forgive(ForgiveDebtRequest $request, Debt $debt): DebtResource|JsonResponse
+    public function forgive(ForgiveDebtRequest $request, Debt $debt): DebtResource
     {
         $this->authorize('update', $debt);
 
         if ($debt->is_forgiven) {
-            return response()->json(['error' => 'already_forgiven', 'message' => 'This debt has already been forgiven.'], 422);
+            throw new DomainException('already_forgiven', 'This debt has already been forgiven.');
         }
 
         if ($debt->remaining_balance <= 0) {
-            return response()->json(['error' => 'already_settled', 'message' => 'A fully paid debt cannot be marked as forgiven.'], 422);
+            throw new DomainException('already_settled', 'A fully paid debt cannot be marked as forgiven.');
         }
 
         $forgiveDate = $request->input('forgive_date') ?? now()->toDateString();

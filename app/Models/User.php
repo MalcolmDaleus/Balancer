@@ -7,11 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Models\RecurringPaymentCategory;
-use App\Models\RecurringPaymentStream;
-use App\Models\RecurringPaymentEntry;
-use App\Models\RegularIncomeSchedule;
-use App\Models\RegularIncomeScheduleVersion;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -29,6 +24,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'currency',
+        'locale',
     ];
 
     /**
@@ -100,5 +96,15 @@ class User extends Authenticatable implements MustVerifyEmail
     public function recurringPaymentEntries()
     {
         return $this->hasMany(RecurringPaymentEntry::class);
+    }
+
+    public function recurringCharges()
+    {
+        return $this->hasMany(RecurringCharge::class);
+    }
+
+    public function recurringOccurrenceSkips()
+    {
+        return $this->hasMany(RecurringOccurrenceSkip::class);
     }
 }

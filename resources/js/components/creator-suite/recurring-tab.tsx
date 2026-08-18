@@ -27,8 +27,8 @@ import {
     secondaryBtnCls,
     selectCls,
     todayStr,
-    useIsMobile,
 } from './shared';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // ---------------------------------------------------------------------------
 // Helpers

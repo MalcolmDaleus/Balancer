@@ -28,8 +28,8 @@ import {
     secondaryBtnCls,
     secondaryBtnFullCls,
     todayStr,
-    useIsMobile,
 } from './shared';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useLockedMonths } from './locked-months';
 
 type RefundStep = 'choose' | 'partial' | 'confirm-full' | 'confirm-payoff';

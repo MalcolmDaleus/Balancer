@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\IncomeEntryType;
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreRegularIncomeScheduleRequest;
 use App\Http\Requests\Api\UpdateRegularIncomeScheduleAmountRequest;
 use App\Http\Requests\Api\UpdateRegularIncomeScheduleRequest;
@@ -198,10 +200,11 @@ class RegularIncomeScheduleController extends Controller
                 ->exists();
 
             if ($hasLockedEntries) {
-                return response()->json([
-                    'error'   => 'locked_month',
-                    'message' => 'This schedule has appeared in a closed balance sheet and cannot be permanently deleted.',
-                ], 423);
+                throw new DomainException(
+                    'locked_month',
+                    'This schedule has appeared in a closed balance sheet and cannot be permanently deleted.',
+                    423,
+                );
             }
         }
 
@@ -217,7 +220,7 @@ class RegularIncomeScheduleController extends Controller
     {
         $entries = IncomeEntry::where('user_id', $schedule->user_id)
             ->where('regular_schedule_id', $schedule->id)
-            ->where('type', 'regular')
+            ->where('type', IncomeEntryType::Regular)
             ->get();
 
         foreach ($entries as $entry) {

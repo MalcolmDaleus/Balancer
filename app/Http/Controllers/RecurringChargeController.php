@@ -16,7 +16,6 @@ class RecurringChargeController extends Controller
         $this->authorize('viewAny', RecurringCharge::class);
 
         $charges = RecurringCharge::where('user_id', auth()->id())
-            ->with(['entry', 'stream', 'category'])
             ->latest('occurred_on')
             ->get();
 
@@ -27,9 +26,7 @@ class RecurringChargeController extends Controller
     {
         $this->authorize('view', $recurringCharge);
 
-        return new RecurringChargeResource(
-            $recurringCharge->load(['entry', 'stream', 'category'])
-        );
+        return new RecurringChargeResource($recurringCharge);
     }
 
     public function destroy(RecurringCharge $recurringCharge): JsonResponse

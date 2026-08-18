@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Settings;
 
 use App\Models\User;
+use App\Support\SupportedLocales;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -10,8 +11,6 @@ use Illuminate\Validation\Rule;
 class ProfileUpdateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
-     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
@@ -27,6 +26,15 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
+            'currency' => ['required', 'string', Rule::in(['USD', 'EUR'])],
+            'locale' => ['nullable', 'string', Rule::in(SupportedLocales::keys())],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('locale') === '') {
+            $this->merge(['locale' => null]);
+        }
     }
 }

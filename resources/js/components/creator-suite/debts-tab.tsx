@@ -27,15 +27,15 @@ import {
     selectCls,
     secondaryBtnFullCls,
     todayStr,
-    useIsMobile,
 } from './shared';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useLockedMonths } from './locked-months';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Debts
 // ---------------------------------------------------------------------------
 
-function DebtsTab_({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
     const { isLocked } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
@@ -668,7 +668,7 @@ export function DebtsTab({ active }: { active: boolean }) {
                 <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
-            {sub === 'Debts' && <DebtsTab_ addRef={addRef} active={active} />}
+            {sub === 'Debts' && <DebtsListTab addRef={addRef} active={active} />}
             {sub === 'Payments' && <PaymentsTab addRef={addRef} active={active} />}
             {sub === 'Categories' && <DebtCategoriesTab addRef={addRef} active={active} />}
         </div>

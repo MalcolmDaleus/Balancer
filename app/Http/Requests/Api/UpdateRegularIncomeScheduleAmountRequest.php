@@ -50,6 +50,10 @@ class UpdateRegularIncomeScheduleAmountRequest extends FormRequest
             if ($enum->usesDayOfMonth() && $this->input('day_of_month') === null) {
                 $validator->errors()->add('day_of_month', 'Day of month is required for this frequency.');
             }
+
+            if ($enum->usesAnchorDate() && $this->input('anchor_date') === null) {
+                $validator->errors()->add('anchor_date', 'Anchor date is required for biweekly schedules.');
+            }
         });
     }
 }

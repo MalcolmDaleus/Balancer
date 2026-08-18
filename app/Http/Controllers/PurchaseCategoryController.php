@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StorePurchaseCategoryRequest;
 use App\Http\Requests\Api\UpdatePurchaseCategoryRequest;
 use App\Http\Resources\PurchaseCategoryResource;
@@ -57,16 +58,17 @@ class PurchaseCategoryController extends Controller
         return new PurchaseCategoryResource($purchaseCategory);
     }
 
-    public function update(UpdatePurchaseCategoryRequest $request, PurchaseCategory $purchaseCategory): PurchaseCategoryResource|JsonResponse
+    public function update(UpdatePurchaseCategoryRequest $request, PurchaseCategory $purchaseCategory): PurchaseCategoryResource
     {
         $this->authorize('update', $purchaseCategory);
 
         $newName = $request->input('name');
         if ($newName !== $purchaseCategory->name && $this->usedInLockedMonth($purchaseCategory)) {
-            return response()->json([
-                'error'   => 'classifier_locked',
-                'message' => 'This category is used in a closed month and cannot be renamed.',
-            ], 423);
+            throw new DomainException(
+                'classifier_locked',
+                'This category is used in a closed month and cannot be renamed.',
+                423,
+            );
         }
 
         $purchaseCategory->update($request->validated());

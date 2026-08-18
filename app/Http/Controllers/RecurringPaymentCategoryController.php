@@ -58,6 +58,14 @@ class RecurringPaymentCategoryController extends Controller
         return new RecurringPaymentCategoryResource($recurringPaymentCategory);
     }
 
+    /**
+     * Soft update / rename.
+     *
+     * Recurring Facts stamp `category_name` at materialization time, so renaming
+     * this classifier does not rewrite locked-month history. Unlike purchase/debt
+     * categories (no Fact-level name stamp), rename is allowed even when the
+     * category was used in a closed month. Future charges pick up the new name.
+     */
     public function update(UpdateRecurringPaymentCategoryRequest $request, RecurringPaymentCategory $recurringPaymentCategory): RecurringPaymentCategoryResource
     {
         $this->authorize('update', $recurringPaymentCategory);

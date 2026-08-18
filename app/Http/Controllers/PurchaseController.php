@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\IncomeEntryType;
+use App\Exceptions\DomainException;
 use App\Http\Requests\Api\RefundPurchaseRequest;
 use App\Http\Requests\Api\StorePurchaseRequest;
 use App\Http\Requests\Api\UpdatePurchaseRequest;
@@ -18,7 +19,7 @@ class PurchaseController extends Controller
     {
         $this->authorize('viewAny', Purchase::class);
 
-        $purchases = Purchase::where('user_id', auth()->id())
+        $purchases = Purchase::forUser(auth()->id())
             ->with(['category', 'refundIncomeEntries'])
             ->latest('date')
             ->get();
@@ -73,13 +74,13 @@ class PurchaseController extends Controller
         $purchase->loadMissing('refundIncomeEntries');
 
         if ($purchase->is_refunded) {
-            return response()->json(['error' => 'already_refunded', 'message' => 'This purchase has already been fully refunded.'], 422);
+            throw new DomainException('already_refunded', 'This purchase has already been fully refunded.');
         }
 
         $remaining = $purchase->remaining_refundable;
 
         if ($remaining <= 0) {
-            return response()->json(['error' => 'nothing_to_refund', 'message' => 'There is no remaining balance to refund.'], 422);
+            throw new DomainException('nothing_to_refund', 'There is no remaining balance to refund.');
         }
 
         $userId = auth()->id();
@@ -91,7 +92,7 @@ class PurchaseController extends Controller
             : min((float) $requested, $remaining);
 
         if ($refundAmount <= 0) {
-            return response()->json(['error' => 'invalid_amount', 'message' => 'Refund amount must be greater than zero.'], 422);
+            throw new DomainException('invalid_amount', 'Refund amount must be greater than zero.');
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($purchase, $refundDate, $refundAmount, $userId) {

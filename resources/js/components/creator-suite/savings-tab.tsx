@@ -22,8 +22,8 @@ import {
     rowTitleCls,
     selectCls,
     thisMonthStr,
-    useIsMobile,
 } from './shared';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useLockedMonths } from './locked-months';
 
 export function SavingsTab({ active }: { active: boolean }) {

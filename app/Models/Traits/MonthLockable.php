@@ -27,7 +27,8 @@ use Illuminate\Database\Eloquent\Model;
  * 1. Add `use MonthLockable;` to the model.
  * 2. Optionally declare `protected string $monthLockColumn = 'date';`
  *    to specify which column holds the date/datetime to derive the month
- *    from. Defaults to 'month' if not declared.
+ *    from. Defaults to `'month'` if not declared (Saving uses that; most
+ *    Facts override — Purchase `date`, IncomeEntry `received_at`, etc.).
  */
 trait MonthLockable
 {

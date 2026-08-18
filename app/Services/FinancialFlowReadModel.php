@@ -14,6 +14,8 @@ use Illuminate\Support\Collection;
  * Canonical union of Fact rows for Statistics / unified feeds.
  *
  * Maps each domain table onto the shared Fact taxonomy (not a physical mega-table).
+ *
+ * @internal Wave 3 foundation for Statistics (after Settings). Do not wire HTTP API yet.
  */
 class FinancialFlowReadModel
 {

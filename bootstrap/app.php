@@ -1,8 +1,10 @@
 <?php
 
+use App\Exceptions\DomainException;
 use App\Exceptions\MonthLockedException;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -36,6 +38,26 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Domain / business-rule failures — { error, message, ... }
+        $exceptions->render(function (DomainException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse(array_merge([
+                    'error'   => $e->error,
+                    'message' => $e->getMessage(),
+                ], $e->extra), $e->status);
+            }
+        });
+
+        // Invalid date/month parse — 422 (API safety net when FormRequest missed a path)
+        $exceptions->render(function (InvalidFormatException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return new JsonResponse([
+                    'error'   => 'invalid_date',
+                    'message' => 'The given date or month could not be parsed.',
+                ], 422);
+            }
+        });
+
         // Month locked — 423 (applies everywhere, but most relevant on API)
         $exceptions->render(function (MonthLockedException $e) {
             return new JsonResponse([
