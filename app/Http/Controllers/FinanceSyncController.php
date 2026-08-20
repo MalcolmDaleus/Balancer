@@ -7,9 +7,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Explicit catch-up endpoint. Prefer cron (`finance:process-due` /
- * `finance:close-months`) in production; this exists for manual sync and
- * pre-host dashboard safety nets.
+ * Optional explicit catch-up. Prefer cron (`finance:process-due` /
+ * `finance:close-months`) in production; this is for manual/API sync.
  */
 class FinanceSyncController extends Controller
 {

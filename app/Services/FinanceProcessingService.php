@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 /**
  * Orchestrates due-date financial processing and month close.
  *
- * Cron is the primary trigger; dashboard/API catch-up is a temporary safety net.
+ * Cron is the primary trigger; optional API/CLI sync (`finance:sync`) for explicit catch-up.
  * All entry points share the same idempotent per-user pipeline and lock.
  */
 class FinanceProcessingService

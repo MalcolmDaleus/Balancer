@@ -6,9 +6,8 @@ use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StorePurchaseCategoryRequest;
 use App\Http\Requests\Api\UpdatePurchaseCategoryRequest;
 use App\Http\Resources\PurchaseCategoryResource;
-use App\Models\BalanceSheetTotal;
-use App\Models\Purchase;
 use App\Models\PurchaseCategory;
+use App\Services\MonthLockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -91,17 +90,12 @@ class PurchaseCategoryController extends Controller
 
     private function usedInLockedMonth(PurchaseCategory $category): bool
     {
-        $lockedMonths = BalanceSheetTotal::where('user_id', $category->user_id)
-            ->pluck('month')
-            ->map(fn ($m) => \Carbon\Carbon::parse($m)->format('Y-m'));
-
-        if ($lockedMonths->isEmpty()) {
-            return false;
-        }
-
-        return Purchase::where('category_id', $category->id)
-            ->where('user_id', $category->user_id)
-            ->get()
-            ->contains(fn (Purchase $p) => $lockedMonths->contains($p->date?->format('Y-m')));
+        return MonthLockService::classifierUsedInLockedMonth(
+            (int) $category->user_id,
+            'purchases',
+            'category_id',
+            'date',
+            (int) $category->id,
+        );
     }
 }

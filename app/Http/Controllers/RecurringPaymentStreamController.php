@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentStreamRequest;
 use App\Http\Requests\Api\UpdateRecurringPaymentPriceRequest;
 use App\Http\Resources\RecurringPaymentStreamResource;
-use App\Models\BalanceSheetTotal;
 use App\Models\RecurringPaymentEntry;
 use App\Models\RecurringPaymentStream;
+use App\Services\InstrumentHardDeleteService;
+use App\Services\InstrumentVersionRolloverService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -101,48 +101,21 @@ class RecurringPaymentStreamController extends Controller
      *
      * Body: { amount, start_date, frequency?, day_of_month?, day_of_week? }
      */
-    public function updatePrice(UpdateRecurringPaymentPriceRequest $request, RecurringPaymentStream $recurringPaymentStream): RecurringPaymentStreamResource
-    {
+    public function updatePrice(
+        UpdateRecurringPaymentPriceRequest $request,
+        RecurringPaymentStream $recurringPaymentStream,
+        InstrumentVersionRolloverService $rollover,
+    ): RecurringPaymentStreamResource {
         $this->authorize('update', $recurringPaymentStream);
 
-        $data      = $request->validated();
+        $data = $request->validated();
         $startDate = Carbon::parse($data['start_date']);
 
-        DB::transaction(function () use ($recurringPaymentStream, $data, $startDate) {
-            // End any currently active entries the day before the new one starts.
-            // OR must be grouped or SQL precedence drops the stream_id constraint
-            // from the second branch (cross-tenant write risk).
-            $recurringPaymentStream->entries()
-                ->where('active', true)
-                ->where(function ($q) use ($startDate) {
-                    $q->whereNull('end_date')
-                      ->orWhere('end_date', '>=', $startDate->toDateString());
-                })
-                ->update([
-                    'active'   => false,
-                    'end_date' => $startDate->copy()->subDay()->toDateString(),
-                ]);
+        $rollover->rollRecurringStreamPrice($recurringPaymentStream, $data, $startDate);
 
-            // Create the replacement entry inheriting frequency from the last entry
-            // unless the caller explicitly overrides it.
-            $previous = $recurringPaymentStream->entries()
-                ->orderByDesc('start_date')
-                ->first();
-
-            RecurringPaymentEntry::create([
-                'user_id'                     => $recurringPaymentStream->user_id,
-                'recurring_payment_stream_id'  => $recurringPaymentStream->id,
-                'amount'                       => $data['amount'],
-                'frequency'                    => $data['frequency']    ?? $previous?->frequency    ?? 'monthly',
-                'day_of_month'                 => $data['day_of_month'] ?? $previous?->day_of_month ?? null,
-                'day_of_week'                  => $data['day_of_week']  ?? $previous?->day_of_week  ?? null,
-                'start_date'                   => $startDate->toDateString(),
-                'end_date'                     => null,
-                'active'                       => true,
-            ]);
-        });
-
-        return new RecurringPaymentStreamResource($recurringPaymentStream->fresh()->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')]));
+        return new RecurringPaymentStreamResource(
+            $recurringPaymentStream->fresh()->load(['category', 'entries' => fn ($q) => $q->orderByDesc('start_date')])
+        );
     }
 
     /**
@@ -208,39 +181,17 @@ class RecurringPaymentStreamController extends Controller
      * A stream "contributed" if it has entries with a start_date before or during
      * the most recently locked month — meaning it appeared in at least one snapshot.
      */
-    public function hardDestroy(int $recurringPaymentStream): JsonResponse
-    {
+    public function hardDestroy(
+        int $recurringPaymentStream,
+        InstrumentHardDeleteService $hardDelete,
+    ): JsonResponse {
         $stream = RecurringPaymentStream::withTrashed()
             ->where('user_id', auth()->id())
             ->findOrFail($recurringPaymentStream);
 
         $this->authorize('delete', $stream);
 
-        // Determine if any entry was ever active during a locked month.
-        $latestLocked = BalanceSheetTotal::where('user_id', $stream->user_id)->max('month');
-
-        if ($latestLocked) {
-            $latestLockedEnd = Carbon::parse($latestLocked)->endOfMonth()->toDateString();
-            $hasLockedEntries = $stream->entries()->withTrashed()
-                ->where('start_date', '<=', $latestLockedEnd)
-                ->exists();
-
-            if ($hasLockedEntries) {
-                throw new DomainException(
-                    'locked_month',
-                    'This stream has appeared in a closed balance sheet and cannot be permanently deleted.',
-                    423,
-                );
-            }
-        }
-
-        if ($stream->charges()->exists()) {
-            throw new DomainException(
-                'has_facts',
-                'This stream has charged Facts and cannot be permanently deleted. Soft-archive it instead.',
-            );
-        }
-
+        $hardDelete->assertCanHardDeleteStream($stream);
         $stream->forceDelete();
 
         return response()->json(null, 204);

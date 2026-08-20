@@ -1,19 +1,12 @@
+import { apiFetchList, errorMessage } from '@/api/client';
 import { tintSectionPill } from '@/components/creator-suite/shared';
-import { type SharedData } from '@/types';
-import { usePage } from '@inertiajs/react';
+import { useFinanceDataOptional } from '@/contexts/finance-data';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { type BalanceSheetSnapshot } from '@/types/api';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-export type BalanceSheetSnapshot = {
-    id: number;
-    month: string;
-    total_income: number;
-    total_debt_paid: number;
-    total_spending: number;
-    total_recurring: number;
-    savings_snapshot: number;
-    roll_over: number;
-};
+export type { BalanceSheetSnapshot };
 
 const pillBase = 'rounded-full px-2.5 py-0.5 text-sm font-medium';
 
@@ -32,8 +25,8 @@ function DetailRow({ label, value, className = '' }: { label: string; value: str
 }
 
 export default function BalanceSheetHistoryCard({ className = '' }: { className?: string }) {
-    const { auth } = usePage<SharedData>().props;
-    const userCurrency = String((auth?.user as { currency?: string } | undefined)?.currency ?? 'USD');
+    const amount = useFormatMoney();
+    const finance = useFinanceDataOptional();
 
     const [snapshots, setSnapshots] = useState<BalanceSheetSnapshot[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -41,23 +34,6 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
     const [error, setError] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<number | null>(null);
 
-    const formatter = useMemo(() => {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: userCurrency,
-                minimumFractionDigits: 2,
-            });
-        } catch {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-            });
-        }
-    }, [userCurrency]);
-
-    const amount = (value: number) => formatter.format(value);
     const signed = (value: number, sign: '+' | '-') => `${sign}${amount(Math.abs(value))}`;
 
     const loadHistory = useCallback(async (silent = false) => {
@@ -68,21 +44,10 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
         }
         setError(null);
         try {
-            const response = await fetch('/api/v1/balance-sheet/history?months=24', {
-                method: 'GET',
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to load history (${response.status})`);
-            }
-
-            const body = await response.json();
-            const rows: BalanceSheetSnapshot[] = Array.isArray(body) ? body : (body.data ?? []);
+            const rows = await apiFetchList<BalanceSheetSnapshot>('/api/v1/balance-sheet/history?months=24');
             setSnapshots([...rows].sort((a, b) => b.month.localeCompare(a.month)));
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load history');
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -92,6 +57,12 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
     useEffect(() => {
         void loadHistory();
     }, [loadHistory]);
+
+    useEffect(() => {
+        if (finance && finance.financeEpoch > 0) {
+            void loadHistory(true);
+        }
+    }, [finance?.financeEpoch, loadHistory]);
 
     return (
         <div
@@ -138,6 +109,7 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                                 >
                                     <button
                                         type="button"
+                                        aria-expanded={isOpen}
                                         onClick={() => setExpandedId(isOpen ? null : snap.id)}
                                         className="flex w-full flex-col gap-2 px-3 py-2.5 text-left sm:flex-row sm:items-center sm:justify-between"
                                     >

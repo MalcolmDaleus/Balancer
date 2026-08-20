@@ -6,9 +6,8 @@ use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreDebtCategoryRequest;
 use App\Http\Requests\Api\UpdateDebtCategoryRequest;
 use App\Http\Resources\DebtCategoryResource;
-use App\Models\BalanceSheetTotal;
-use App\Models\Debt;
 use App\Models\DebtCategory;
+use App\Services\MonthLockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -91,18 +90,13 @@ class DebtCategoryController extends Controller
 
     private function usedInLockedMonth(DebtCategory $category): bool
     {
-        $lockedMonths = BalanceSheetTotal::where('user_id', $category->user_id)
-            ->pluck('month')
-            ->map(fn ($m) => \Carbon\Carbon::parse($m)->format('Y-m'));
-
-        if ($lockedMonths->isEmpty()) {
-            return false;
-        }
-
-        return Debt::withTrashed()
-            ->where('category_id', $category->id)
-            ->where('user_id', $category->user_id)
-            ->get()
-            ->contains(fn (Debt $d) => $lockedMonths->contains($d->issue_date?->format('Y-m')));
+        return MonthLockService::classifierUsedInLockedMonth(
+            (int) $category->user_id,
+            'debts',
+            'category_id',
+            'issue_date',
+            (int) $category->id,
+            includeSoftDeleted: true,
+        );
     }
 }

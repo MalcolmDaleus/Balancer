@@ -93,14 +93,31 @@ class RecurringPaymentMaterializationService
         $dates = $this->calculator->recurringEntryDatesInPeriod($entry, $monthStart, $horizonEnd);
         $created = 0;
 
+        $rangeStart = $monthStart->toDateString();
+        $rangeEnd = $horizonEnd->toDateString();
+
+        $skipDates = RecurringOccurrenceSkip::where('recurring_payment_entry_id', $entry->id)
+            ->whereBetween('occurrence_date', [$rangeStart, $rangeEnd])
+            ->pluck('occurrence_date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip()
+            ->all();
+
+        $chargeDates = RecurringCharge::where('recurring_payment_entry_id', $entry->id)
+            ->whereBetween('occurred_on', [$rangeStart, $rangeEnd])
+            ->pluck('occurred_on')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip()
+            ->all();
+
         foreach ($dates as $date) {
             $occurrenceDate = $date->toDateString();
 
-            if ($this->isSkipped($entry->id, $occurrenceDate)) {
+            if (isset($skipDates[$occurrenceDate])) {
                 continue;
             }
 
-            if ($this->chargeExists($entry->id, $occurrenceDate)) {
+            if (isset($chargeDates[$occurrenceDate])) {
                 continue;
             }
 
@@ -116,25 +133,12 @@ class RecurringPaymentMaterializationService
                     'occurred_on'                   => $occurrenceDate,
                 ]);
                 $created++;
+                $chargeDates[$occurrenceDate] = true;
             } catch (UniqueConstraintViolationException) {
                 // Concurrent materializer already created this occurrence.
             }
         }
 
         return $created;
-    }
-
-    private function isSkipped(int $entryId, string $occurrenceDate): bool
-    {
-        return RecurringOccurrenceSkip::where('recurring_payment_entry_id', $entryId)
-            ->whereDate('occurrence_date', $occurrenceDate)
-            ->exists();
-    }
-
-    private function chargeExists(int $entryId, string $occurrenceDate): bool
-    {
-        return RecurringCharge::where('recurring_payment_entry_id', $entryId)
-            ->whereDate('occurred_on', $occurrenceDate)
-            ->exists();
     }
 }

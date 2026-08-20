@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -13,11 +14,6 @@ class User extends Authenticatable implements MustVerifyEmail
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'first_name',
         'last_name',
@@ -27,21 +23,11 @@ class User extends Authenticatable implements MustVerifyEmail
         'locale',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -51,59 +37,67 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
-    public function purchases() {
-        return $this->hasMany(Purchase::class); 
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
     }
 
-    public function debts() { 
-        return $this->hasMany(Debt::class); 
-    }
-    
-    public function savings() { 
-        return $this->hasMany(Saving::class); 
+    public function debts(): HasMany
+    {
+        return $this->hasMany(Debt::class);
     }
 
-    public function incomeEntries() {
-         return $this->hasMany(IncomeEntry::class); 
+    public function savings(): HasMany
+    {
+        return $this->hasMany(Saving::class);
     }
 
-    public function regularIncomeSchedules() {
+    public function incomeEntries(): HasMany
+    {
+        return $this->hasMany(IncomeEntry::class);
+    }
+
+    public function regularIncomeSchedules(): HasMany
+    {
         return $this->hasMany(RegularIncomeSchedule::class);
     }
 
-    public function regularIncomeScheduleVersions() {
+    public function regularIncomeScheduleVersions(): HasMany
+    {
         return $this->hasMany(RegularIncomeScheduleVersion::class);
     }
-    
-    public function balanceSheets() {
-         return $this->hasMany(BalanceSheetTotal::class); 
+
+    public function balanceSheets(): HasMany
+    {
+        return $this->hasMany(BalanceSheetTotal::class);
     }
 
-    public function debtPayments() {
+    public function debtPayments(): HasMany
+    {
         return $this->hasMany(DebtPayment::class);
     }
 
-    public function recurringPaymentCategories()
+    public function recurringPaymentCategories(): HasMany
     {
         return $this->hasMany(RecurringPaymentCategory::class);
     }
 
-    public function recurringPaymentStreams()
+    public function recurringPaymentStreams(): HasMany
     {
         return $this->hasMany(RecurringPaymentStream::class);
     }
 
-    public function recurringPaymentEntries()
+    public function recurringPaymentEntries(): HasMany
     {
         return $this->hasMany(RecurringPaymentEntry::class);
     }
 
-    public function recurringCharges()
+    public function recurringCharges(): HasMany
     {
         return $this->hasMany(RecurringCharge::class);
     }
 
-    public function recurringOccurrenceSkips()
+    public function recurringOccurrenceSkips(): HasMany
     {
         return $this->hasMany(RecurringOccurrenceSkip::class);
     }

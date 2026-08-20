@@ -1,11 +1,14 @@
+import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { useIsMobile } from '@/hooks/use-mobile';
+import type { Debt, DebtCategory, DebtPayment } from '@/types/api';
 import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { CategoryTab } from './category-tab';
+import { useLockedMonths } from './locked-months';
 import {
     AddButton,
     ApiError,
     ConfirmModal,
-    Debt,
-    DebtCategory,
-    DebtPayment,
     EmptyRows,
     Field,
     FormActions,
@@ -18,8 +21,6 @@ import {
     StatusChip,
     SubTabBar,
     TabToolbar,
-    apiFetch,
-    apiFetchList,
     dateCls,
     inputCls,
     rowDetailCls,
@@ -28,8 +29,6 @@ import {
     secondaryBtnFullCls,
     todayStr,
 } from './shared';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useLockedMonths } from './locked-months';
 
 // ---------------------------------------------------------------------------
 // Sub-tab: Debts
@@ -37,7 +36,8 @@ import { useLockedMonths } from './locked-months';
 
 function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
-    const { isLocked } = useLockedMonths();
+    const fmtAmount = useFormatMoney();
+    const { canMutateFact, loaded } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
     const [cats, setCats] = useState<DebtCategory[]>([]);
     const [loading, setLoading] = useState(false);
@@ -59,8 +59,8 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             setDebts(d);
             setCats(c);
             setFetched(true);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -71,6 +71,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     }, [active, fetched]);
 
     const selectRow = (d: Debt) => {
+        if (!canMutateFact(d.issue_date)) return;
         setSelected(d);
         setForm({
             description: d.description,
@@ -105,6 +106,10 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canMutateFact(form.issue_date)) {
+            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -122,8 +127,8 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             }
             reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -134,8 +139,8 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             await apiFetch(`/api/v1/debts/${d.id}`, { method: 'DELETE' });
             if (selected?.id === d.id) reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         }
         setConfirm(null);
     };
@@ -144,8 +149,8 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
         try {
             await apiFetch(`/api/v1/debts/${d.id}/forgive`, { method: 'POST' });
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         }
         setForgiving(null);
     };
@@ -208,7 +213,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 />
             </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!canMutateFact(form.issue_date)} />
         </form>
     );
 
@@ -238,7 +243,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                         {!loading && !debts.length && <EmptyRows label="No debts yet." />}
                         {debts.map((d) => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
-                            const monthLocked = isLocked(d.issue_date);
+                            const monthLocked = !canMutateFact(d.issue_date);
                             const canEdit = !closed && !monthLocked;
                             const canForgive = !closed;
                             const forgiveOnly = canForgive && !canEdit;
@@ -248,7 +253,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{d.description}</p>
                                             <p className={`mt-1 ${rowDetailCls}`}>
-                                                Balance: ${d.remaining_balance.toFixed(2)} / ${d.amount.toFixed(2)}
+                                                Balance: {fmtAmount(d.remaining_balance)} / {fmtAmount(d.amount)}
                                             </p>
                                         </div>
                                         {closed ? (
@@ -292,7 +297,8 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
 
 function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
-    const { isLocked } = useLockedMonths();
+    const fmtAmount = useFormatMoney();
+    const { canMutateFact, loaded } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
     const [payments, setPayments] = useState<DebtPayment[]>([]);
     const [debtId, setDebtId] = useState<number | null>(null);
@@ -316,7 +322,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                 setDebts(d);
                 setFetched(true);
             })
-            .catch((e) => setError(e.message))
+            .catch((e: unknown) => setError(errorMessage(e)))
             .finally(() => setLoading(false));
     }, [active, fetched]);
 
@@ -330,7 +336,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
             .then((p) => {
                 setPayments(p);
             })
-            .catch((e) => setError(e.message))
+            .catch((e: unknown) => setError(errorMessage(e)))
             .finally(() => setPayLoading(false));
     }, [debtId]);
 
@@ -339,11 +345,12 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         setPayLoading(true);
         apiFetchList<DebtPayment>(`/api/v1/debts/${debtId}/payments`)
             .then((p) => setPayments(p))
-            .catch((e) => setError(e.message))
+            .catch((e: unknown) => setError(errorMessage(e)))
             .finally(() => setPayLoading(false));
     };
 
     const selectRow = (p: DebtPayment) => {
+        if (!canMutateFact(p.paid_at)) return;
         setSelected(p);
         setForm({ amount: String(p.amount), paid_at: p.paid_at, notes: p.notes ?? '' });
         setError(null);
@@ -373,6 +380,10 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
     const handleSubmit = async (e: React.FormEvent) => {
         if (!debtId) return;
         e.preventDefault();
+        if (!canMutateFact(form.paid_at)) {
+            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -384,8 +395,8 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
             }
             reset();
             reloadPayments();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -396,8 +407,8 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
             await apiFetch(`/api/v1/debt-payments/${p.id}`, { method: 'DELETE' });
             if (selected?.id === p.id) reset();
             reloadPayments();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         }
         setConfirm(null);
     };
@@ -439,7 +450,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 />
             </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!canMutateFact(form.paid_at)} />
         </form>
     );
 
@@ -447,18 +458,19 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete payment of $${confirm.amount}?`}
+                    message={`Delete payment of ${fmtAmount(confirm.amount)}?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
             )}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
                 <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-600 dark:text-neutral-300">Debt</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-600 dark:text-neutral-300" htmlFor="debt-payment-debt-select">Debt</label>
                     {loading ? (
                         <LoadingRows />
                     ) : (
                         <select
+                            id="debt-payment-debt-select"
                             className={selectCls}
                             value={debtId ?? ''}
                             onChange={(e) => {
@@ -469,7 +481,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                             <option value="">— select a debt —</option>
                             {debts.map((d) => (
                                 <option key={d.id} value={d.id}>
-                                    {d.description} (${d.remaining_balance.toFixed(2)} left)
+                                    {d.description} ({fmtAmount(d.remaining_balance)} left)
                                 </option>
                             ))}
                         </select>
@@ -485,11 +497,11 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                                 {payLoading && <LoadingRows />}
                                 {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
                                 {payments.map((p) => {
-                                    const paymentLocked = isLocked(p.paid_at);
+                                    const paymentLocked = !canMutateFact(p.paid_at);
                                     return (
                                     <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed}>
                                         <div className="flex items-start justify-between gap-3">
-                                            <p className={rowTitleCls}>${p.amount.toFixed(2)}</p>
+                                            <p className={rowTitleCls}>{fmtAmount(p.amount)}</p>
                                         </div>
                                         <p className={`mt-2 truncate ${rowDetailCls}`}>
                                             {p.paid_at}
@@ -514,145 +526,6 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
 }
 
 // ---------------------------------------------------------------------------
-// Sub-tab: Categories
-// ---------------------------------------------------------------------------
-
-function DebtCategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
-    const isMobile = useIsMobile();
-    const [cats, setCats] = useState<DebtCategory[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [fetched, setFetched] = useState(false);
-    const [selected, setSelected] = useState<DebtCategory | null>(null);
-    const [confirm, setConfirm] = useState<DebtCategory | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [sheetOpen, setSheetOpen] = useState(false);
-    const [form, setForm] = useState({ name: '' });
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            setCats(await apiFetchList<DebtCategory>('/api/v1/categories/debts'));
-            setFetched(true);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (active && !fetched) load();
-    }, [active, fetched]);
-
-    const selectRow = (c: DebtCategory) => {
-        setSelected(c);
-        setForm({ name: c.name });
-        setError(null);
-        if (isMobile) setSheetOpen(true);
-    };
-    const reset = () => {
-        setSelected(null);
-        setForm({ name: '' });
-        setError(null);
-        setSheetOpen(false);
-    };
-
-    useEffect(() => {
-        if (addRef) {
-            addRef.current = () => {
-                setSelected(null);
-                setForm({ name: '' });
-                setError(null);
-                setSheetOpen(true);
-            };
-        }
-        return () => {
-            if (addRef) addRef.current = null;
-        };
-    }, []);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        setError(null);
-        try {
-            if (selected) {
-                await apiFetch(`/api/v1/categories/debts/${selected.id}`, { method: 'PUT', body: JSON.stringify(form) });
-            } else {
-                await apiFetch('/api/v1/categories/debts', { method: 'POST', body: JSON.stringify(form) });
-            }
-            reset();
-            setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDelete = async (c: DebtCategory) => {
-        try {
-            await apiFetch(`/api/v1/categories/debts/${c.id}`, { method: 'DELETE' });
-            if (selected?.id === c.id) reset();
-            setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
-        }
-        setConfirm(null);
-    };
-
-    const formContent = (
-        <form onSubmit={handleSubmit} className="space-y-3">
-            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Name">
-                <input
-                    type="text"
-                    required
-                    maxLength={255}
-                    className={inputCls}
-                    value={form.name}
-                    onChange={(e) => setForm({ name: e.target.value })}
-                />
-            </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-        </form>
-    );
-
-    return (
-        <>
-            {confirm && (
-                <ConfirmModal
-                    message={`Delete debt category "${confirm.name}"?`}
-                    onConfirm={() => handleDelete(confirm)}
-                    onCancel={() => setConfirm(null)}
-                />
-            )}
-            <SplitPane
-                sheetOpen={sheetOpen}
-                onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Category' : 'New Category'}
-                list={
-                    <ListStack>
-                        {loading && <LoadingRows />}
-                        {!loading && !cats.length && <EmptyRows label="No debt categories." />}
-                        {cats.map((c) => (
-                            <ListRow key={c.id} selected={selected?.id === c.id}>
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className={rowTitleCls}>{c.name}</span>
-                                    <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />
-                                </div>
-                            </ListRow>
-                        ))}
-                    </ListStack>
-                }
-                form={formContent}
-            />
-        </>
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -670,7 +543,18 @@ export function DebtsTab({ active }: { active: boolean }) {
             </TabToolbar>
             {sub === 'Debts' && <DebtsListTab addRef={addRef} active={active} />}
             {sub === 'Payments' && <PaymentsTab addRef={addRef} active={active} />}
-            {sub === 'Categories' && <DebtCategoriesTab addRef={addRef} active={active} />}
+            {sub === 'Categories' && (
+                <CategoryTab
+                    active={active}
+                    addRef={addRef}
+                    listUrl="/api/v1/categories/debts"
+                    storeUrl="/api/v1/categories/debts"
+                    updateUrl={(id) => `/api/v1/categories/debts/${id}`}
+                    deleteUrl={(id) => `/api/v1/categories/debts/${id}`}
+                    emptyLabel="No debt categories."
+                    deleteConfirmMessage={(name) => `Delete debt category "${name}"?`}
+                />
+            )}
         </div>
     );
 }

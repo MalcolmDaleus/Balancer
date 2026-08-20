@@ -3,15 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Enums\IncomeEntryType;
-use App\Exceptions\DomainException;
 use App\Http\Requests\Api\StoreRegularIncomeScheduleRequest;
 use App\Http\Requests\Api\UpdateRegularIncomeScheduleAmountRequest;
 use App\Http\Requests\Api\UpdateRegularIncomeScheduleRequest;
 use App\Http\Resources\RegularIncomeScheduleResource;
-use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
 use App\Models\RegularIncomeSchedule;
 use App\Models\RegularIncomeScheduleVersion;
+use App\Services\InstrumentHardDeleteService;
+use App\Services\InstrumentVersionRolloverService;
 use App\Services\MonthLockService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -103,41 +103,14 @@ class RegularIncomeScheduleController extends Controller
     public function updateAmount(
         UpdateRegularIncomeScheduleAmountRequest $request,
         RegularIncomeSchedule $regularIncomeSchedule,
+        InstrumentVersionRolloverService $rollover,
     ): RegularIncomeScheduleResource {
         $this->authorize('update', $regularIncomeSchedule);
 
         $data = $request->validated();
         $startDate = Carbon::parse($data['start_date']);
 
-        DB::transaction(function () use ($regularIncomeSchedule, $data, $startDate) {
-            $regularIncomeSchedule->versions()
-                ->where('active', true)
-                ->where(function ($q) use ($startDate) {
-                    $q->whereNull('end_date')
-                      ->orWhere('end_date', '>=', $startDate->toDateString());
-                })
-                ->update([
-                    'active'   => false,
-                    'end_date' => $startDate->copy()->subDay()->toDateString(),
-                ]);
-
-            $previous = $regularIncomeSchedule->versions()
-                ->orderByDesc('start_date')
-                ->first();
-
-            RegularIncomeScheduleVersion::create([
-                'user_id'             => $regularIncomeSchedule->user_id,
-                'regular_schedule_id' => $regularIncomeSchedule->id,
-                'amount'              => $data['amount'],
-                'frequency'           => $data['frequency'] ?? $previous?->frequency ?? 'monthly',
-                'day_of_month'        => $data['day_of_month'] ?? $previous?->day_of_month,
-                'day_of_week'         => $data['day_of_week'] ?? $previous?->day_of_week,
-                'anchor_date'         => $data['anchor_date'] ?? $previous?->anchor_date,
-                'start_date'          => $startDate->toDateString(),
-                'end_date'            => null,
-                'active'              => true,
-            ]);
-        });
+        $rollover->rollIncomeScheduleAmount($regularIncomeSchedule, $data, $startDate);
 
         return new RegularIncomeScheduleResource(
             $regularIncomeSchedule->fresh()->load(['versions' => fn ($q) => $q->orderByDesc('start_date')])
@@ -183,31 +156,17 @@ class RegularIncomeScheduleController extends Controller
         );
     }
 
-    public function hardDestroy(int $regularIncomeSchedule): JsonResponse
-    {
+    public function hardDestroy(
+        int $regularIncomeSchedule,
+        InstrumentHardDeleteService $hardDelete,
+    ): JsonResponse {
         $schedule = RegularIncomeSchedule::withTrashed()
             ->where('user_id', auth()->id())
             ->findOrFail($regularIncomeSchedule);
 
         $this->authorize('delete', $schedule);
 
-        $latestLocked = BalanceSheetTotal::where('user_id', $schedule->user_id)->max('month');
-
-        if ($latestLocked) {
-            $latestLockedEnd = Carbon::parse($latestLocked)->endOfMonth()->toDateString();
-            $hasLockedEntries = $schedule->entries()
-                ->whereDate('received_at', '<=', $latestLockedEnd)
-                ->exists();
-
-            if ($hasLockedEntries) {
-                throw new DomainException(
-                    'locked_month',
-                    'This schedule has appeared in a closed balance sheet and cannot be permanently deleted.',
-                    423,
-                );
-            }
-        }
-
+        $hardDelete->assertCanHardDeleteSchedule($schedule);
         $schedule->forceDelete();
 
         return response()->json(null, 204);

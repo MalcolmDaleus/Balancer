@@ -4,7 +4,6 @@ use App\Enums\IncomeEntryType;
 use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
 use App\Models\RegularIncomeSchedule;
-use App\Models\RegularIncomeScheduleVersion;
 use App\Models\User;
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
@@ -94,11 +93,10 @@ test('user can update their income schedule', function () {
 
 test('schedule rename propagates to open-month regular entries', function () {
     $user     = User::factory()->create();
-    $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id, 'name' => 'Old Name']);
-    $version  = RegularIncomeScheduleVersion::factory()->create([
-        'user_id'             => $user->id,
-        'regular_schedule_id' => $schedule->id,
-    ]);
+    $schedule = RegularIncomeSchedule::factory()
+        ->withActiveVersion()
+        ->create(['user_id' => $user->id, 'name' => 'Old Name']);
+    $version  = $schedule->versions()->first();
 
     $openEntry = IncomeEntry::factory()->create([
         'user_id'                     => $user->id,

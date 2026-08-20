@@ -32,11 +32,7 @@ class UpdateRecurringPaymentEntryRequest extends FormRequest
         $validator->after(function (Validator $validator): void {
             $entry = $this->route('recurringPaymentEntry');
 
-            $frequencyValue = $this->input('frequency', $entry?->frequency);
-            $frequency = is_string($frequencyValue)
-                ? RecurringPaymentFrequency::tryFrom($frequencyValue)
-                : null;
-
+            $frequency = $this->input('frequency', $entry?->frequency);
             $dayOfMonth = $this->has('day_of_month')
                 ? $this->input('day_of_month')
                 : $entry?->day_of_month;
@@ -44,15 +40,13 @@ class UpdateRecurringPaymentEntryRequest extends FormRequest
                 ? $this->input('day_of_week')
                 : $entry?->day_of_week;
 
-            if ($frequency === null) {
-                return;
-            }
+            $freq = RecurringPaymentFrequency::tryFrom((string) $frequency);
 
-            if ($frequency->usesDayOfWeek() && $dayOfWeek === null) {
+            if ($freq?->usesDayOfWeek() && $dayOfWeek === null) {
                 $validator->errors()->add('day_of_week', 'Day of week is required for weekly frequency.');
             }
 
-            if ($frequency->usesDayOfMonth() && is_null($dayOfMonth)) {
+            if ($freq?->usesDayOfMonth() && is_null($dayOfMonth)) {
                 $validator->errors()->add(
                     'day_of_month',
                     'The day of month field is required when frequency is monthly or yearly.'

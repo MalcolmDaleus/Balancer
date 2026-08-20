@@ -15,7 +15,7 @@ class RecurringChargeController extends Controller
     {
         $this->authorize('viewAny', RecurringCharge::class);
 
-        $charges = RecurringCharge::where('user_id', auth()->id())
+        $charges = RecurringCharge::forUser(auth()->id())
             ->latest('occurred_on')
             ->get();
 

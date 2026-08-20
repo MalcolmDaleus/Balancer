@@ -1,5 +1,11 @@
+import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { useIsMobile } from '@/hooks/use-mobile';
+import type { Purchase, PurchaseCategory } from '@/types/api';
 import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { CategoryTab } from './category-tab';
+import { useLockedMonths } from './locked-months';
 import {
     AddButton,
     ApiError,
@@ -10,15 +16,11 @@ import {
     ListRow,
     ListStack,
     LoadingRows,
-    Purchase,
-    PurchaseCategory,
     RowActions,
     SplitPane,
     StatusChip,
     SubTabBar,
     TabToolbar,
-    apiFetch,
-    apiFetchList,
     dateCls,
     inputCls,
     rowAmountCls,
@@ -29,8 +31,6 @@ import {
     secondaryBtnFullCls,
     todayStr,
 } from './shared';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useLockedMonths } from './locked-months';
 
 type RefundStep = 'choose' | 'partial' | 'confirm-full' | 'confirm-payoff';
 
@@ -47,6 +47,7 @@ function RefundModal({
     onClose: () => void;
     onConfirm: (amount: number | null) => void;
 }) {
+    const fmt = useFormatMoney();
     const hasPartial = purchase.refund_status === 'partial';
     const remaining = purchase.remaining_refundable;
     const refunded = purchase.refunded_total;
@@ -57,8 +58,6 @@ function RefundModal({
     const close = () => {
         if (!saving) onClose();
     };
-
-    const fmt = (n: number) => `$${n.toFixed(2)}`;
 
     const title = purchase.description;
 
@@ -203,7 +202,8 @@ function RefundModal({
 
 function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
     const isMobile = useIsMobile();
-    const { isLocked } = useLockedMonths();
+    const fmtAmount = useFormatMoney();
+    const { canMutateFact, loaded } = useLockedMonths();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
     const [cats, setCats] = useState<PurchaseCategory[]>([]);
     const [loading, setLoading] = useState(false);
@@ -230,8 +230,8 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             setPurchases(p);
             setCats(c.filter((c) => !c.deleted_at));
             setFetched(true);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -242,6 +242,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
     }, [active, fetched]);
 
     const selectRow = (p: Purchase) => {
+        if (!canMutateFact(p.date)) return;
         setSelected(p);
         setForm({
             category_id: String(p.category_id),
@@ -276,6 +277,10 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canMutateFact(form.date)) {
+            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -293,8 +298,8 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             }
             reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -305,8 +310,8 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             await apiFetch(`/api/v1/purchases/${p.id}`, { method: 'DELETE' });
             if (selected?.id === p.id) reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         }
         setConfirm(null);
     };
@@ -319,8 +324,8 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             await apiFetch(`/api/v1/purchases/${p.id}/refund`, { method: 'POST', body: JSON.stringify(body) });
             setRefundTarget(null);
             setFetched(false);
-        } catch (err: any) {
-            setRefundError(err.message);
+        } catch (err: unknown) {
+            setRefundError(errorMessage(err));
         } finally {
             setRefundSaving(false);
         }
@@ -386,7 +391,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                     onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                 />
             </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!canMutateFact(form.date)} />
         </form>
     );
 
@@ -423,15 +428,15 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                         {purchases.map((p) => {
                             const fullyRefunded = p.refund_status === 'full' || p.is_refunded;
                             const partiallyRefunded = p.refund_status === 'partial';
-                            const monthLocked = isLocked(p.date);
-                            const canEdit = !partiallyRefunded && !monthLocked;
+                            const canWrite = canMutateFact(p.date);
+                            const canEdit = !partiallyRefunded && canWrite;
                             const refundOnly = !canEdit && !partiallyRefunded;
                             return (
                                 <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{p.description}</p>
-                                            <p className={`mt-1 ${rowAmountCls} text-rose-500 dark:text-rose-400`}>${p.amount.toFixed(2)}</p>
+                                            <p className={`mt-1 ${rowAmountCls} text-rose-500 dark:text-rose-400`}>{fmtAmount(p.amount)}</p>
                                             <p className={`mt-0.5 truncate ${rowDetailCls}`}>
                                                 {p.date} · {catName(p.category_id)}
                                             </p>
@@ -469,148 +474,6 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
 }
 
 // ---------------------------------------------------------------------------
-// Sub-tab: Categories
-// ---------------------------------------------------------------------------
-
-function CategoriesTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
-    const isMobile = useIsMobile();
-    const [cats, setCats] = useState<PurchaseCategory[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [fetched, setFetched] = useState(false);
-    const [selected, setSelected] = useState<PurchaseCategory | null>(null);
-    const [confirm, setConfirm] = useState<PurchaseCategory | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [sheetOpen, setSheetOpen] = useState(false);
-    const [form, setForm] = useState({ name: '' });
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            setCats(await apiFetchList<PurchaseCategory>('/api/v1/categories/purchases'));
-            setFetched(true);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (active && !fetched) load();
-    }, [active, fetched]);
-
-    const selectRow = (c: PurchaseCategory) => {
-        setSelected(c);
-        setForm({ name: c.name });
-        setError(null);
-        if (isMobile) setSheetOpen(true);
-    };
-    const reset = () => {
-        setSelected(null);
-        setForm({ name: '' });
-        setError(null);
-        setSheetOpen(false);
-    };
-
-    useEffect(() => {
-        if (addRef) {
-            addRef.current = () => {
-                setSelected(null);
-                setForm({ name: '' });
-                setError(null);
-                setSheetOpen(true);
-            };
-        }
-        return () => {
-            if (addRef) addRef.current = null;
-        };
-    }, []);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        setError(null);
-        try {
-            if (selected) {
-                await apiFetch(`/api/v1/categories/purchases/${selected.id}`, { method: 'PUT', body: JSON.stringify(form) });
-            } else {
-                await apiFetch('/api/v1/categories/purchases', { method: 'POST', body: JSON.stringify(form) });
-            }
-            reset();
-            setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDelete = async (c: PurchaseCategory) => {
-        try {
-            await apiFetch(`/api/v1/categories/purchases/${c.id}`, { method: 'DELETE' });
-            if (selected?.id === c.id) reset();
-            setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
-        }
-        setConfirm(null);
-    };
-
-    const formContent = (
-        <form onSubmit={handleSubmit} className="space-y-3">
-            {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Name">
-                <input
-                    type="text"
-                    required
-                    maxLength={255}
-                    className={inputCls}
-                    value={form.name}
-                    onChange={(e) => setForm({ name: e.target.value })}
-                />
-            </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
-        </form>
-    );
-
-    return (
-        <>
-            {confirm && (
-                <ConfirmModal
-                    message={`Remove category "${confirm.name}"? It will be unlisted if purchases reference it.`}
-                    onConfirm={() => handleDelete(confirm)}
-                    onCancel={() => setConfirm(null)}
-                />
-            )}
-            <SplitPane
-                sheetOpen={sheetOpen}
-                onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Category' : 'New Category'}
-                list={
-                    <ListStack>
-                        {loading && <LoadingRows />}
-                        {!loading && !cats.length && <EmptyRows label="No purchase categories." />}
-                        {cats.map((c) => (
-                            <ListRow key={c.id} selected={selected?.id === c.id} disabled={!!c.deleted_at}>
-                                <div className="flex items-center justify-between gap-3">
-                                    <span className={rowTitleCls}>{c.name}</span>
-                                    <div className="flex items-center gap-2">
-                                        {c.deleted_at && <StatusChip label="Unlisted" color="amber" />}
-                                        {!c.deleted_at && <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />}
-                                    </div>
-                                </div>
-                            </ListRow>
-                        ))}
-                    </ListStack>
-                }
-                form={formContent}
-            />
-        </>
-    );
-}
-
-// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -627,7 +490,20 @@ export function PurchasesTab({ active }: { active: boolean }) {
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
             {sub === 'Items' && <ItemsTab addRef={addRef} active={active} />}
-            {sub === 'Categories' && <CategoriesTab addRef={addRef} active={active} />}
+            {sub === 'Categories' && (
+                <CategoryTab
+                    active={active}
+                    addRef={addRef}
+                    listUrl="/api/v1/categories/purchases"
+                    storeUrl="/api/v1/categories/purchases"
+                    updateUrl={(id) => `/api/v1/categories/purchases/${id}`}
+                    deleteUrl={(id) => `/api/v1/categories/purchases/${id}`}
+                    emptyLabel="No purchase categories."
+                    deleteConfirmMessage={(name) =>
+                        `Remove category "${name}"? It will be unlisted if purchases reference it.`
+                    }
+                />
+            )}
         </div>
     );
 }

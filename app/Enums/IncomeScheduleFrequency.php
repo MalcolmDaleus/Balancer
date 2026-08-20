@@ -42,20 +42,26 @@ enum IncomeScheduleFrequency: string
     }
 
     /**
-     * Map recurring payment entry frequency values to schedule frequencies.
-     * Accepts a string (or RecurringPaymentFrequency); yearly maps to Annually.
+     * Map recurring payment frequencies onto schedule frequencies.
+     *
+     * Accepts RecurringPaymentFrequency or its string value; yearly → annually.
      */
     public static function fromRecurringPayment(string|RecurringPaymentFrequency $frequency): self
     {
         $value = $frequency instanceof RecurringPaymentFrequency
-            ? $frequency->value
-            : $frequency;
+            ? $frequency
+            : RecurringPaymentFrequency::tryFrom($frequency);
 
         return match ($value) {
-            'weekly'  => self::Weekly,
-            'monthly' => self::Monthly,
-            'yearly'  => self::Annually,
-            default   => throw new \InvalidArgumentException("Unsupported recurring payment frequency: {$value}"),
+            RecurringPaymentFrequency::Weekly  => self::Weekly,
+            RecurringPaymentFrequency::Monthly => self::Monthly,
+            RecurringPaymentFrequency::Yearly  => self::Annually,
+            default => throw new \InvalidArgumentException(
+                'Unsupported recurring payment frequency: '.($frequency instanceof RecurringPaymentFrequency
+                    ? $frequency->value
+                    : $frequency),
+            ),
         };
     }
 }
+

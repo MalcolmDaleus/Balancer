@@ -1,182 +1,38 @@
 /**
- * Shared types, API helpers, and UI primitives for the Creator Suite.
+ * Shared UI primitives and re-exports for the Creator Suite.
  */
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { formatMoney } from '@/lib/money';
-import { ReactNode } from 'react';
+import {
+    Children,
+    cloneElement,
+    isValidElement,
+    useEffect,
+    useId,
+    useRef,
+    type KeyboardEvent,
+    type ReactElement,
+    type ReactNode,
+} from 'react';
 
-// ---------------------------------------------------------------------------
-// Types — matching Laravel API resource output shapes
-// ---------------------------------------------------------------------------
+// Domain types — live in @/types/api; re-export for back-compat
+export type {
+    Debt,
+    DebtCategory,
+    DebtPayment,
+    IncomeEntry,
+    Purchase,
+    PurchaseCategory,
+    RecurringCategory,
+    RecurringEntry,
+    RecurringStream,
+    RegularIncomeSchedule,
+    RegularIncomeScheduleVersion,
+    Saving,
+} from '@/types/api';
 
-export interface RegularIncomeScheduleVersion {
-    id: number;
-    regular_schedule_id: number;
-    amount: number;
-    frequency: string;
-    day_of_month: number | null;
-    day_of_week: number | null;
-    anchor_date: string | null;
-    start_date: string;
-    end_date: string | null;
-    active: boolean;
-}
-export interface RegularIncomeSchedule {
-    id: number;
-    name: string;
-    description: string | null;
-    /** Live balance-sheet state. Generation service may write this after pending flush. */
-    active: boolean;
-    /** Queued change for the next cycle occurrence. null = no change pending. */
-    pending_active: boolean | null;
-    deleted_at: string | null;
-    versions?: RegularIncomeScheduleVersion[];
-}
-export interface IncomeEntry {
-    id: number;
-    type: 'regular' | 'irregular' | 'refund';
-    name: string;
-    description: string | null;
-    amount: number;
-    received_at: string;
-    purchase_id: number | null;
-    purchase_description?: string | null;
-    regular_schedule_id: number | null;
-    regular_schedule_version_id: number | null;
-    regular_schedule?: RegularIncomeSchedule;
-}
-
-export interface PurchaseCategory {
-    id: number;
-    user_id?: number;
-    name: string;
-    deleted_at: string | null;
-}
-export interface Purchase {
-    id: number;
-    category_id: number;
-    amount: number;
-    description: string;
-    date: string;
-    is_refunded: boolean;
-    refunded_total: number;
-    remaining_refundable: number;
-    refund_status: 'none' | 'partial' | 'full';
-    attachment_path?: string | null;
-    url?: string | null;
-    category?: PurchaseCategory;
-}
-
-export interface DebtCategory {
-    id: number;
-    user_id?: number;
-    name: string;
-    deleted_at: string | null;
-}
-export interface Debt {
-    id: number;
-    category_id: number | null;
-    amount: number;
-    description: string;
-    issue_date: string;
-    settle_date: string | null;
-    notes: string | null;
-    remaining_balance: number;
-    is_settled: boolean;
-    is_forgiven: boolean;
-    is_closed: boolean;
-    category?: DebtCategory;
-}
-export interface DebtPayment {
-    id: number;
-    debt_id: number;
-    amount: number;
-    paid_at: string;
-    notes: string | null;
-}
-
-export interface RecurringCategory {
-    id: number;
-    name: string;
-    deleted_at: string | null;
-}
-export interface RecurringEntry {
-    id: number;
-    recurring_payment_stream_id: number;
-    amount: number;
-    frequency: string;
-    day_of_month: number | null;
-    day_of_week: number | null;
-    start_date: string;
-    end_date: string | null;
-    active: boolean;
-}
-export interface RecurringStream {
-    id: number;
-    recurring_payment_category_id: number | null;
-    name: string;
-    description: string | null;
-    /** Live balance-sheet state. Flushed from pending_active on next charge date. */
-    active: boolean;
-    /** Queued pause/resume for the next charge occurrence. null = no change pending. */
-    pending_active: boolean | null;
-    deleted_at: string | null;
-    category?: RecurringCategory;
-    entries?: RecurringEntry[];
-}
-
-export interface Saving {
-    id: number;
-    amount: number;
-    type: 'deposit' | 'withdrawal';
-    notes: string | null;
-    month: string;
-}
-
-// ---------------------------------------------------------------------------
-// API helper
-// ---------------------------------------------------------------------------
-
-export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(url, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...options?.headers },
-        credentials: 'same-origin',
-    });
-
-    if (res.status === 204) return undefined as T;
-
-    const body = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-        // Collect validation messages if present
-        if (body?.details) {
-            const msgs = Object.values(body.details as Record<string, string[]>)
-                .flat()
-                .join(' · ');
-            throw new Error(msgs);
-        }
-        throw new Error(body?.message ?? `HTTP ${res.status}`);
-    }
-
-    return body as T;
-}
-
-// Unwrap Laravel resource collections { data: [...] }
-export async function apiFetchList<T>(url: string): Promise<T[]> {
-    const res = await apiFetch<{ data: T[] } | T[]>(url);
-    return Array.isArray(res) ? res : (res as { data: T[] }).data;
-}
-
-// ---------------------------------------------------------------------------
-// Currency formatter — thin wrapper around shared money helpers
-// ---------------------------------------------------------------------------
-
-/** @deprecated Prefer useFormatMoney() in components for user currency/locale. */
-export function fmt(amount: number, currency = 'USD', locale?: string | null) {
-    return formatMoney(amount, currency, locale);
-}
+// API helpers — live in @/api/client; re-export for back-compat
+export { apiFetch, apiFetchList, ApiClientError, errorMessage, unwrapData } from '@/api/client';
 
 // ---------------------------------------------------------------------------
 // Shared small components
@@ -196,8 +52,8 @@ export const tintChip = {
     amber: 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
     orange: 'bg-orange-400/15 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300',
     violet: 'bg-violet-500/15 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300',
-    teal:   'bg-teal-500/15 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300',
-    slate:  'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
+    teal: 'bg-teal-500/15 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300',
+    slate: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
 } as const;
 
 /** Balance sheet section header pills — slightly softer fill in dark mode */
@@ -247,19 +103,36 @@ export function ListRow({
     disabled?: boolean;
     className?: string;
 }) {
-    const interactive = onClick && !disabled;
-    return (
-        <div
-            onClick={interactive ? onClick : undefined}
-            className={`rounded-xl px-3 py-3.5 transition-colors ${
-                disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50' : ''
-            } ${
-                selected ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-neutral-800/60 dark:ring-neutral-700' : 'bg-slate-50/70 dark:bg-neutral-800/40'
-            } ${className}`}
-        >
-            {children}
-        </div>
-    );
+    const interactive = Boolean(onClick && !disabled);
+    const baseCls = `rounded-xl px-3 py-3.5 transition-colors text-left w-full ${
+        disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50' : ''
+    } ${
+        selected ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-neutral-800/60 dark:ring-neutral-700' : 'bg-slate-50/70 dark:bg-neutral-800/40'
+    } ${className}`;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+        if (!interactive) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick?.();
+        }
+    };
+
+    if (interactive) {
+        return (
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={onClick}
+                onKeyDown={onKeyDown}
+                className={baseCls}
+            >
+                {children}
+            </div>
+        );
+    }
+
+    return <div className={baseCls}>{children}</div>;
 }
 
 /** Action buttons row — full width, wraps on narrow screens */
@@ -274,6 +147,7 @@ export function RowActionBar({ children }: { children: ReactNode }) {
 export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; label?: string }) {
     return (
         <button
+            type="button"
             onClick={onClick}
             className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-emerald-700 active:scale-95 md:hidden dark:bg-emerald-700 dark:hover:bg-emerald-600"
         >
@@ -285,10 +159,13 @@ export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; lab
 /** Secondary tab bar (pill style) used inside each main tab */
 export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
     return (
-        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" role="tablist">
             {tabs.map((tab) => (
                 <button
                     key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={active === tab}
                     onClick={() => onChange(tab)}
                     className={`rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors ${
                         active === tab ? 'bg-slate-800 text-white dark:bg-white/10 dark:text-neutral-100' : tabInactiveCls
@@ -375,10 +252,53 @@ export function ConfirmModal({
         warning: 'bg-amber-500 hover:bg-amber-600',
         primary: 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-500 dark:hover:bg-slate-400',
     }[confirmVariant];
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const prev = document.activeElement as HTMLElement | null;
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        const confirmBtn = focusable?.[focusable.length - 1];
+        confirmBtn?.focus();
+
+        const onKeyDown = (e: globalThis.KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancel();
+                return;
+            }
+            if (e.key !== 'Tab' || !focusable?.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            prev?.focus?.();
+        };
+    }, [onCancel]);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900">
-                <p className="mb-5 text-base text-slate-700 dark:text-neutral-200">{message}</p>
+            <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-describedby="confirm-modal-message"
+                className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900"
+            >
+                <p id="confirm-modal-message" className="mb-5 text-base text-slate-700 dark:text-neutral-200">
+                    {message}
+                </p>
                 <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="sm" className="rounded-full" onClick={onCancel}>
                         Cancel
@@ -395,10 +315,10 @@ export function ConfirmModal({
 /** Inline API error banner */
 export function ApiError({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
     return (
-        <div className="flex items-start justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+        <div className="flex items-start justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" role="alert">
             <span>{message}</span>
             {onDismiss && (
-                <button onClick={onDismiss} className="ml-2 shrink-0 opacity-60 hover:opacity-100">
+                <button type="button" onClick={onDismiss} aria-label="Dismiss error" className="ml-2 shrink-0 opacity-60 hover:opacity-100">
                     ✕
                 </button>
             )}
@@ -406,12 +326,24 @@ export function ApiError({ message, onDismiss }: { message: string; onDismiss?: 
     );
 }
 
-/** Form field row wrapper */
+/** Form field row wrapper — wires label htmlFor to the first focusable child id */
 export function Field({ label, children, error }: { label: string; children: ReactNode; error?: string }) {
+    const autoId = useId();
+    const child = Children.only(isValidElement(children) ? children : <span>{children}</span>);
+    const existingId = isValidElement(child) && typeof (child.props as { id?: string }).id === 'string'
+        ? (child.props as { id?: string }).id
+        : undefined;
+    const id = existingId ?? autoId;
+    const labeled = isValidElement(child)
+        ? cloneElement(child as ReactElement<{ id?: string }>, { id })
+        : child;
+
     return (
         <div className="grid gap-1">
-            <label className="text-sm font-medium text-slate-600 dark:text-neutral-300">{label}</label>
-            {children}
+            <label htmlFor={id} className="text-sm font-medium text-slate-600 dark:text-neutral-300">
+                {label}
+            </label>
+            {labeled}
             {error && <span className="text-sm text-rose-500">{error}</span>}
         </div>
     );
@@ -456,20 +388,12 @@ export function RowActions({
         <div className="flex shrink-0 items-center gap-1">
             {extra}
             {onEdit && (
-                <button
-                    disabled={editDisabled}
-                    onClick={onEdit}
-                    className={editBtnCls}
-                >
+                <button type="button" disabled={editDisabled} onClick={onEdit} className={editBtnCls}>
                     Edit
                 </button>
             )}
             {onDelete && (
-                <button
-                    disabled={deleteDisabled}
-                    onClick={onDelete}
-                    className={deleteBtnCls}
-                >
+                <button type="button" disabled={deleteDisabled} onClick={onDelete} className={deleteBtnCls}>
                     Del
                 </button>
             )}
@@ -489,12 +413,25 @@ export function monthKey(dateOrMonth: string): string {
 }
 
 /** Reusable "Save / Cancel" button row at the bottom of forms */
-export function FormActions({ isEdit, saving, onCancel, saveLabel }: { isEdit: boolean; saving: boolean; onCancel: () => void; saveLabel?: string }) {
+export function FormActions({
+    isEdit,
+    saving,
+    onCancel,
+    saveLabel,
+    disabled,
+}: {
+    isEdit: boolean;
+    saving: boolean;
+    onCancel: () => void;
+    saveLabel?: string;
+    disabled?: boolean;
+}) {
+    const blocked = saving || disabled;
     return (
         <div className="flex gap-2 pt-1">
             <button
                 type="submit"
-                disabled={saving}
+                disabled={blocked}
                 className={`flex-1 rounded-full px-3 py-1.5 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
                     isEdit ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-500 dark:hover:bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}

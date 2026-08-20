@@ -1,4 +1,9 @@
+import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { useIsMobile } from '@/hooks/use-mobile';
+import type { Saving } from '@/types/api';
 import { useEffect, useState } from 'react';
+import { useLockedMonths } from './locked-months';
 import {
     AddButton,
     ApiError,
@@ -10,12 +15,9 @@ import {
     ListStack,
     LoadingRows,
     RowActions,
-    Saving,
     SplitPane,
     StatusChip,
     TabToolbar,
-    apiFetch,
-    apiFetchList,
     inputCls,
     rowAmountCls,
     rowDetailCls,
@@ -23,12 +25,11 @@ import {
     selectCls,
     thisMonthStr,
 } from './shared';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useLockedMonths } from './locked-months';
 
 export function SavingsTab({ active }: { active: boolean }) {
     const isMobile = useIsMobile();
-    const { isLocked } = useLockedMonths();
+    const fmtAmount = useFormatMoney();
+    const { canMutateFact, loaded } = useLockedMonths();
     const [savings, setSavings] = useState<Saving[]>([]);
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
@@ -46,18 +47,19 @@ export function SavingsTab({ active }: { active: boolean }) {
         try {
             setSavings(await apiFetchList<Saving>('/api/v1/savings'));
             setFetched(true);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (active && !fetched) load();
+        if (active && !fetched) void load();
     }, [active, fetched]);
 
     const selectRow = (s: Saving) => {
+        if (!canMutateFact(s.month)) return;
         setSelected(s);
         setForm({ amount: String(s.amount), type: s.type, notes: s.notes ?? '', month: s.month?.slice(0, 7) ?? thisMonthStr() });
         setError(null);
@@ -72,6 +74,10 @@ export function SavingsTab({ active }: { active: boolean }) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canMutateFact(form.month)) {
+            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -83,8 +89,8 @@ export function SavingsTab({ active }: { active: boolean }) {
             }
             reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setSaving(false);
         }
@@ -95,8 +101,8 @@ export function SavingsTab({ active }: { active: boolean }) {
             await apiFetch(`/api/v1/savings/${s.id}`, { method: 'DELETE' });
             if (selected?.id === s.id) reset();
             setFetched(false);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         }
         setConfirm(null);
     };
@@ -145,7 +151,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 />
             </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!canMutateFact(form.month)} />
         </form>
     );
 
@@ -153,7 +159,7 @@ export function SavingsTab({ active }: { active: boolean }) {
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete this ${confirm.type} of $${confirm.amount}?`}
+                    message={`Delete this ${confirm.type} of ${fmtAmount(confirm.amount)}?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -162,7 +168,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                 <TabToolbar>
                     {!loading && savings.length > 0 ? (
                         <span className={rowDetailCls}>
-                            Total: <span className="font-semibold text-slate-800 dark:text-neutral-100">${grandTotal.toFixed(2)}</span>
+                            Total: <span className="font-semibold text-slate-800 dark:text-neutral-100">{fmtAmount(grandTotal)}</span>
                         </span>
                     ) : (
                         <span />
@@ -185,36 +191,37 @@ export function SavingsTab({ active }: { active: boolean }) {
                             {loading && <LoadingRows />}
                             {!loading && !savings.length && <EmptyRows label="No savings transactions yet." />}
                             {savings.map((s) => {
-                                const monthLocked = isLocked(s.month);
+                                const canWrite = canMutateFact(s.month);
                                 return (
-                                <ListRow key={s.id} selected={selected?.id === s.id}>
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0 flex-1">
-                                            {s.notes ? (
-                                                <p className={rowTitleCls}>{s.notes}</p>
-                                            ) : (
-                                                <p className={`${rowTitleCls} italic text-slate-400 dark:text-neutral-400`}>No notes</p>
-                                            )}
-                                            <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                <StatusChip
-                                                    label={s.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
-                                                    color={s.type === 'deposit' ? 'green' : 'red'}
-                                                />
-                                                <span className={rowDetailCls}>{s.month?.slice(0, 7)}</span>
+                                    <ListRow key={s.id} selected={selected?.id === s.id}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                {s.notes ? (
+                                                    <p className={rowTitleCls}>{s.notes}</p>
+                                                ) : (
+                                                    <p className={`${rowTitleCls} italic text-slate-400 dark:text-neutral-400`}>No notes</p>
+                                                )}
+                                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                    <StatusChip
+                                                        label={s.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                                                        color={s.type === 'deposit' ? 'green' : 'red'}
+                                                    />
+                                                    <span className={rowDetailCls}>{s.month?.slice(0, 7)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex shrink-0 flex-col items-stretch gap-1">
+                                                <span
+                                                    className={`${rowAmountCls} text-right ${s.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}
+                                                >
+                                                    {s.type === 'deposit' ? '+' : '-'}
+                                                    {fmtAmount(s.amount)}
+                                                </span>
+                                                {canWrite && (
+                                                    <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex shrink-0 flex-col items-stretch gap-1">
-                                            <span
-                                                className={`${rowAmountCls} text-right ${s.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}
-                                            >
-                                                {s.type === 'deposit' ? '+' : '-'}${s.amount.toFixed(2)}
-                                            </span>
-                                            {!monthLocked && (
-                                                <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />
-                                            )}
-                                        </div>
-                                    </div>
-                                </ListRow>
+                                    </ListRow>
                                 );
                             })}
                         </ListStack>

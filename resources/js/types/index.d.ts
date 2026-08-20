@@ -23,7 +23,6 @@ export interface NavItem {
 }
 
 export interface SharedData {
-    name: string;
     auth: Auth;
     sidebarOpen: boolean;
     [key: string]: unknown;
@@ -34,10 +33,12 @@ export interface User {
     first_name: string;
     last_name: string;
     email: string;
+    currency: 'USD' | 'EUR' | string;
+    /** Saved number-format locale; null → browser default via resolveLocale(). */
+    locale: string | null;
     avatar?: string;
     email_verified_at: string | null;
-    currency: string;
-    locale: string | null;
     created_at: string;
     updated_at: string;
+    [key: string]: unknown;
 }

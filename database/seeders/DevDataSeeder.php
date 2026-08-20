@@ -17,6 +17,8 @@ use App\Models\RegularIncomeScheduleVersion;
 use App\Models\Saving;
 use App\Models\User;
 use App\Services\BalanceSheetService;
+use App\Services\FinanceProcessingService;
+use App\Services\PurchaseRefundService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -209,17 +211,14 @@ class DevDataSeeder extends Seeder
                 ['category_id' => $miscCat->id, 'amount' => 49.99, 'is_refunded' => false]
             );
 
+            // Idempotent: skip if already fully refunded (re-seed safe).
             if (! $refundPurchase->is_refunded) {
-                IncomeEntry::firstOrCreate(
-                    ['user_id' => $user->id, 'purchase_id' => $refundPurchase->id],
-                    [
-                        'type'        => IncomeEntryType::Refund,
-                        'name'        => 'Refund: Faulty headphones',
-                        'amount'      => 49.99,
-                        'received_at' => $lastMonth->toDateString(),
-                    ]
+                app(PurchaseRefundService::class)->refund(
+                    $refundPurchase,
+                    (int) $user->id,
+                    49.99,
+                    $lastMonth->toDateString(),
                 );
-                $refundPurchase->update(['is_refunded' => true]);
             }
         }
 
@@ -384,6 +383,11 @@ class DevDataSeeder extends Seeder
                 ]);
             }
         }
+
+        // Materialize recurring_charges (and due income) before locking past months
+        // so snapshots match the production process-due path.
+        $this->command->line('  → Syncing finance (materialize charges / due income)');
+        app(FinanceProcessingService::class)->syncUser($user->id);
 
         $this->command->info('✓ Dev data seeded successfully.');
         $this->command->line('');

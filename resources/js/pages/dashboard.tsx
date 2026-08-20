@@ -1,11 +1,15 @@
+import { apiFetch, errorMessage } from '@/api/client';
 import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
-import { type SharedData } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
-import { RefreshCw, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
+import { useFormatMoney } from '@/hooks/use-format-money';
+import { edit as editProfile } from '@/routes/profile';
+import { type BalanceSheetExpanded } from '@/types/api';
+import { Head, Link } from '@inertiajs/react';
+import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 const VISIBLE_REGULAR_ENTRIES = 3;
 
@@ -59,6 +63,7 @@ function IncomeBalanceContent({
                                 {!expanded && hiddenCount > 0 && (
                                     <button
                                         type="button"
+                                        aria-expanded={false}
                                         onClick={() => toggleSchedule(key)}
                                         className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
                                     >
@@ -68,6 +73,7 @@ function IncomeBalanceContent({
                                 {expanded && schedule.entries.length > VISIBLE_REGULAR_ENTRIES && (
                                     <button
                                         type="button"
+                                        aria-expanded={true}
                                         onClick={() => toggleSchedule(key)}
                                         className="text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-neutral-400"
                                     >
@@ -254,103 +260,9 @@ const MODULES = [
     { id: 'settings', title: 'Settings', subtitle: 'Account preferences' },
 ];
 
-type BalanceSheetExpanded = {
-    month: string;
-    income: {
-        total: number;
-        by_type: {
-            regular: {
-                total: number;
-                schedules: Array<{
-                    regular_schedule_id: number | null;
-                    name: string;
-                    total: number;
-                    entries: Array<{
-                        id: number;
-                        name: string;
-                        description: string | null;
-                        amount: number;
-                        received_at: string;
-                    }>;
-                }>;
-            };
-            irregular: { total: number };
-            refund: { total: number };
-        };
-    };
-    debt: {
-        total: number;
-        balance_total: number;
-        debts: Array<{
-            id: number;
-            description: string;
-            total_paid_in_period: number;
-            remaining_balance: number;
-            is_settled: boolean;
-            is_forgiven: boolean;
-        }>;
-    };
-    spending: {
-        total: number;
-        categories: Array<{
-            category_name: string;
-            amount: number;
-            items: Array<{ id: number; description: string; amount: number; date: string }>;
-        }>;
-    };
-    recurring_payments: {
-        total: number;
-        charged_total?: number;
-        projected_total?: number;
-        streams: Array<{
-            stream_id: number;
-            stream_name: string;
-            category_name: string;
-            total: number;
-            entries: Array<{
-                id: number;
-                purchase_id?: number;
-                amount: number;
-                frequency: string;
-                day_of_month: number | null;
-                day_of_week: number | null;
-                occurrence_count: number;
-                period_total: number;
-                charged_date?: string;
-            }>;
-        }>;
-        projected?: Array<{
-            stream_id: number;
-            stream_name: string;
-            category_name: string;
-            total: number;
-            entries: Array<{
-                id: number;
-                amount: number;
-                frequency: string;
-                day_of_month: number | null;
-                day_of_week: number | null;
-                occurrence_count: number;
-                period_total: number;
-                charged_date?: string;
-            }>;
-        }>;
-    };
-    savings: {
-        monthly_total: number;
-        monthly_deposits: number;
-        monthly_withdrawals: number;
-        grand_total: number;
-        rows: Array<{ id: number; amount: number; type: 'deposit' | 'withdrawal'; notes: string | null; month: string }>;
-    };
-    roll_over: {
-        total: number;
-    };
-};
-
 function BalanceSheetCard({ className = '' }: { className?: string }) {
-    const { auth } = usePage<SharedData>().props;
-    const userCurrency = String((auth?.user as { currency?: string } | undefined)?.currency ?? 'USD');
+    const amount = useFormatMoney();
+    const { financeEpoch } = useFinanceData();
     const [data, setData] = useState<BalanceSheetExpanded | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -365,20 +277,10 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         }
         setError(null);
         try {
-            const response = await fetch('/api/v1/balance-sheet', {
-                method: 'GET',
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to load balance sheet (${response.status})`);
-            }
-
-            const payload = (await response.json()) as BalanceSheetExpanded;
+            const payload = await apiFetch<BalanceSheetExpanded>('/api/v1/balance-sheet');
             setData(payload);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unable to load data.');
+        } catch (err: unknown) {
+            setError(errorMessage(err));
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -389,23 +291,12 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         void loadBalanceSheet();
     }, [loadBalanceSheet]);
 
-    const formatter = useMemo(() => {
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: userCurrency,
-                minimumFractionDigits: 2,
-            });
-        } catch {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-            });
+    useEffect(() => {
+        if (financeEpoch > 0) {
+            void loadBalanceSheet(true);
         }
-    }, [userCurrency]);
+    }, [financeEpoch, loadBalanceSheet]);
 
-    const amount = (value: number) => formatter.format(value);
     const signed = (value: number, sign: '+' | '-') => `${sign}${amount(Math.abs(value))}`;
 
     const pillBase = 'rounded-full px-2.5 py-0.5 text-sm font-medium';
@@ -616,6 +507,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                 <div key={section.key} className="rounded-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:bg-neutral-800/50 dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]">
                                     <button
                                         type="button"
+                                        aria-expanded={isOpen}
                                         onClick={() => setOpenSection(isOpen ? null : section.key)}
                                         className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
                                     >
@@ -642,70 +534,26 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     );
 }
 
-// ─── Auto-close toast ─────────────────────────────────────────────────────────
-function formatMonthLabel(ym: string): string {
-    const [year, month] = ym.split('-');
-    const date = new Date(Number(year), Number(month) - 1, 1);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-}
-
-function formatClosedMonthsMessage(months: string[]): string {
-    if (months.length === 1) {
-        return `${formatMonthLabel(months[0])} was closed automatically.`;
-    }
-
-    const first = formatMonthLabel(months[0]);
-    const last = formatMonthLabel(months[months.length - 1]);
-
-    if (months.length === 2) {
-        return `${first} and ${last} were closed automatically.`;
-    }
-
-    return `${first} through ${last} (${months.length} months) were closed automatically.`;
-}
-
-function MonthClosedToast({ months, onDismiss }: { months: string[]; onDismiss: () => void }) {
-    useEffect(() => {
-        const timer = window.setTimeout(onDismiss, 6000);
-        return () => window.clearTimeout(timer);
-    }, [onDismiss]);
-
-    return (
-        <div
-            role="status"
-            className="fixed bottom-6 left-1/2 z-50 flex max-w-sm -translate-x-1/2 items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
-        >
-            <p className="flex-1 text-sm text-slate-700 dark:text-neutral-200">{formatClosedMonthsMessage(months)}</p>
-            <button
-                type="button"
-                onClick={onDismiss}
-                aria-label="Dismiss"
-                className="shrink-0 rounded-md p-0.5 text-slate-400 transition-colors hover:text-slate-600 dark:text-neutral-500 dark:hover:text-neutral-300"
-            >
-                <X className="h-4 w-4" />
-            </button>
-        </div>
-    );
-}
-
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-interface DashboardProps {
-    closedMonths?: string[];
-}
-
-export default function Dashboard({ closedMonths = [] }: DashboardProps) {
+export default function Dashboard() {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
         if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
+        if (id === 'settings') {
+            return (
+                <Link href={editProfile()} className={`block ${className}`}>
+                    <ModuleCard title={title} subtitle={subtitle} className="h-full">
+                        Open profile settings
+                    </ModuleCard>
+                </Link>
+            );
+        }
         return <ModuleCard title={title} subtitle={subtitle} className={className} />;
     };
 
     const [activeIndex, setActiveIndex] = useState(0);
-    const [showClosedToast, setShowClosedToast] = useState(closedMonths.length > 0);
     const carouselRef = useRef<HTMLDivElement>(null);
-
-    const dismissClosedToast = useCallback(() => setShowClosedToast(false), []);
 
     const handleScroll = () => {
         const el = carouselRef.current;
@@ -720,7 +568,7 @@ export default function Dashboard({ closedMonths = [] }: DashboardProps) {
     };
 
     return (
-        <>
+        <FinanceDataProvider>
             <Head title="Dashboard" />
             <DashboardHeader />
 
@@ -736,7 +584,7 @@ export default function Dashboard({ closedMonths = [] }: DashboardProps) {
                         {MODULES.map((mod) => (
                             <div key={mod.id} className="w-[calc(100vw-2rem)] shrink-0 snap-start">
                                 {renderModule(mod.id, mod.title, mod.subtitle, 'h-full')}
-                    </div>
+                            </div>
                         ))}
                     </div>
 
@@ -777,10 +625,6 @@ export default function Dashboard({ closedMonths = [] }: DashboardProps) {
                 </div>
 
             </div>
-
-            {showClosedToast && closedMonths.length > 0 && (
-                <MonthClosedToast months={closedMonths} onDismiss={dismissClosedToast} />
-            )}
-        </>
+        </FinanceDataProvider>
     );
 }

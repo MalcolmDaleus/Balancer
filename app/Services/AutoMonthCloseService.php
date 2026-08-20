@@ -13,8 +13,8 @@ use Carbon\Carbon;
 /**
  * Closes all complete calendar months that do not yet have a snapshot.
  *
- * Invoked from FinanceProcessingService / finance:close-months (cron primary).
- * Dashboard catch-up may also call this path until host cron is verified.
+ * Invoked from FinanceProcessingService / finance:close-months (cron primary)
+ * and optional finance:sync.
  */
 class AutoMonthCloseService
 {

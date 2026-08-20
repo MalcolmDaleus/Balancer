@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\IncomeEntryType;
-use App\Exceptions\DomainException;
 use App\Http\Requests\Api\RefundPurchaseRequest;
 use App\Http\Requests\Api\StorePurchaseRequest;
 use App\Http\Requests\Api\UpdatePurchaseRequest;
 use App\Http\Resources\PurchaseResource;
-use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Services\PurchaseRefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -67,57 +65,25 @@ class PurchaseController extends Controller
     /**
      * Record a refund against a purchase and create the corresponding income entry.
      */
-    public function refund(RefundPurchaseRequest $request, Purchase $purchase): JsonResponse
-    {
+    public function refund(
+        RefundPurchaseRequest $request,
+        Purchase $purchase,
+        PurchaseRefundService $refunds,
+    ): JsonResponse {
         $this->authorize('update', $purchase);
 
-        $purchase->loadMissing('refundIncomeEntries');
-
-        if ($purchase->is_refunded) {
-            throw new DomainException('already_refunded', 'This purchase has already been fully refunded.');
-        }
-
-        $remaining = $purchase->remaining_refundable;
-
-        if ($remaining <= 0) {
-            throw new DomainException('nothing_to_refund', 'There is no remaining balance to refund.');
-        }
-
-        $userId = auth()->id();
-        $refundDate = $request->input('refund_date') ? \Carbon\Carbon::parse($request->input('refund_date')) : now();
-
-        $requested = $request->input('amount');
-        $refundAmount = $requested === null
-            ? $remaining
-            : min((float) $requested, $remaining);
-
-        if ($refundAmount <= 0) {
-            throw new DomainException('invalid_amount', 'Refund amount must be greater than zero.');
-        }
-
-        \Illuminate\Support\Facades\DB::transaction(function () use ($purchase, $refundDate, $refundAmount, $userId) {
-            IncomeEntry::create([
-                'user_id'     => $userId,
-                'type'        => IncomeEntryType::Refund,
-                'name'        => 'Refund: ' . $purchase->description,
-                'amount'      => $refundAmount,
-                'received_at' => $refundDate->toDateString(),
-                'purchase_id' => $purchase->id,
-            ]);
-
-            $purchase->load('refundIncomeEntries');
-            $fullyRefunded = $purchase->remaining_refundable <= 0;
-
-            if ($fullyRefunded) {
-                $purchase->update(['is_refunded' => true]);
-            }
-        });
+        $purchase = $refunds->refund(
+            $purchase,
+            (int) auth()->id(),
+            $request->input('amount'),
+            $request->input('refund_date'),
+        );
 
         return response()->json([
-            'message'  => $purchase->fresh()->is_refunded
+            'message'  => $purchase->is_refunded
                 ? 'Purchase fully refunded.'
                 : 'Partial refund recorded.',
-            'purchase' => new PurchaseResource($purchase->refresh()->load(['category', 'refundIncomeEntries'])),
+            'purchase' => new PurchaseResource($purchase),
         ]);
     }
 }

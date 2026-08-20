@@ -13,9 +13,10 @@ use Illuminate\Support\Collection;
 /**
  * Canonical union of Fact rows for Statistics / unified feeds.
  *
- * Maps each domain table onto the shared Fact taxonomy (not a physical mega-table).
+ * Internal foundation for the Statistics product wave — not wired to HTTP yet.
+ * Do not add routes until that wave.
  *
- * @internal Wave 3 foundation for Statistics (after Settings). Do not wire HTTP API yet.
+ * Maps each domain table onto the shared Fact taxonomy (not a physical mega-table).
  */
 class FinancialFlowReadModel
 {

@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Exceptions\MonthLockedException;
 use App\Models\BalanceSheetTotal;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Class MonthLockService
@@ -51,6 +53,48 @@ class MonthLockService
             ->map(fn (BalanceSheetTotal $row) => DateTimeService::normalizeMonth($row->month)->format('Y-m'))
             ->values()
             ->all();
+    }
+
+    /**
+     * True when a classifier (category) is referenced by rows whose date falls
+     * in a locked month — evaluated in SQL (no loading all domain rows into PHP).
+     *
+     * @param  bool  $includeSoftDeleted  When true and the table has deleted_at, include trashed rows.
+     */
+    public static function classifierUsedInLockedMonth(
+        int $userId,
+        string $table,
+        string $categoryColumn,
+        string $dateColumn,
+        int $categoryId,
+        bool $includeSoftDeleted = false,
+    ): bool {
+        $keys = static::lockedMonthKeys($userId);
+
+        if ($keys === []) {
+            return false;
+        }
+
+        $query = DB::table($table)
+            ->where("{$table}.user_id", $userId)
+            ->where("{$table}.{$categoryColumn}", $categoryId);
+
+        if (! $includeSoftDeleted && Schema::hasColumn($table, 'deleted_at')) {
+            $query->whereNull("{$table}.deleted_at");
+        }
+
+        $query->where(function ($q) use ($keys, $table, $dateColumn) {
+            foreach ($keys as $ym) {
+                $start = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+                $end = $start->copy()->endOfMonth();
+                $q->orWhereBetween("{$table}.{$dateColumn}", [
+                    $start->toDateTimeString(),
+                    $end->toDateTimeString(),
+                ]);
+            }
+        });
+
+        return $query->exists();
     }
 
     /**

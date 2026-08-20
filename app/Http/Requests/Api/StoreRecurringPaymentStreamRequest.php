@@ -35,16 +35,13 @@ class StoreRecurringPaymentStreamRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $frequency = RecurringPaymentFrequency::tryFrom((string) $this->input('frequency'));
-            if ($frequency === null) {
-                return;
-            }
+            $freq = RecurringPaymentFrequency::tryFrom((string) $this->input('frequency'));
 
-            if ($frequency->usesDayOfWeek() && $this->input('day_of_week') === null) {
+            if ($freq?->usesDayOfWeek() && $this->input('day_of_week') === null) {
                 $validator->errors()->add('day_of_week', 'Day of week is required for weekly frequency.');
             }
 
-            if ($frequency->usesDayOfMonth() && $this->input('day_of_month') === null) {
+            if ($freq?->usesDayOfMonth() && $this->input('day_of_month') === null) {
                 $validator->errors()->add(
                     'day_of_month',
                     'The day of month field is required when frequency is monthly or yearly.'

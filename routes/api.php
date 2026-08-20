@@ -96,7 +96,7 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->n
         ->parameters(['charges' => 'recurringCharge']);
 
     // ---------------------------------------------------------------
-    // Finance catch-up (cron is primary; this is explicit / pre-host safety)
+    // Optional explicit finance sync (cron is primary)
     // ---------------------------------------------------------------
     Route::post('finance/sync', FinanceSyncController::class)
         ->middleware('throttle:finance-sync')
