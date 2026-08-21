@@ -14,6 +14,7 @@ class RecurringPaymentCategorySeeder extends Seeder
 
         if (! $user) {
             $this->command->warn('RecurringPaymentCategorySeeder: no users found, skipping.');
+
             return;
         }
 
@@ -29,9 +30,13 @@ class RecurringPaymentCategorySeeder extends Seeder
         ];
 
         foreach ($categories as $name) {
-            RecurringPaymentCategory::withTrashed()->firstOrCreate(
+            $category = RecurringPaymentCategory::withTrashed()->firstOrCreate(
                 ['user_id' => $user->id, 'name' => $name]
             );
+
+            if ($category->trashed()) {
+                $category->restore();
+            }
         }
     }
 }

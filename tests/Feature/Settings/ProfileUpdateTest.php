@@ -2,14 +2,12 @@
 
 use App\Models\User;
 
-test('profile page is displayed', function () {
+test('profile settings deep-link redirects to the dashboard drawer', function () {
     $user = User::factory()->create();
 
-    $response = $this
-        ->actingAs($user)
-        ->get(route('profile.edit'));
-
-    $response->assertOk();
+    $this->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertRedirect('/dashboard?settings=1');
 });
 
 test('profile information can be updated', function () {
@@ -17,6 +15,7 @@ test('profile information can be updated', function () {
 
     $response = $this
         ->actingAs($user)
+        ->from(route('dashboard'))
         ->patch(route('profile.update'), [
             'first_name' => 'Test',
             'last_name' => 'User',
@@ -27,7 +26,7 @@ test('profile information can be updated', function () {
 
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('profile.edit'));
+        ->assertRedirect(route('dashboard'));
 
     $user->refresh();
 
@@ -44,6 +43,7 @@ test('email verification status is unchanged when the email address is unchanged
 
     $response = $this
         ->actingAs($user)
+        ->from(route('dashboard'))
         ->patch(route('profile.update'), [
             'first_name' => 'Test',
             'last_name' => 'User',
@@ -54,7 +54,7 @@ test('email verification status is unchanged when the email address is unchanged
 
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('profile.edit'));
+        ->assertRedirect(route('dashboard'));
 
     expect($user->refresh()->email_verified_at)->not->toBeNull();
 });
@@ -81,14 +81,14 @@ test('correct password must be provided to delete account', function () {
 
     $response = $this
         ->actingAs($user)
-        ->from(route('profile.edit'))
+        ->from(route('dashboard'))
         ->delete(route('profile.destroy'), [
             'password' => 'wrong-password',
         ]);
 
     $response
         ->assertSessionHasErrors('password')
-        ->assertRedirect(route('profile.edit'));
+        ->assertRedirect(route('dashboard'));
 
     expect($user->fresh())->not->toBeNull();
 });

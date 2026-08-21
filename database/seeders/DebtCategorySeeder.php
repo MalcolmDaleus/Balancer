@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\DebtCategory;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class DebtCategorySeeder extends Seeder
 {
@@ -14,13 +14,14 @@ class DebtCategorySeeder extends Seeder
 
         if (! $user) {
             $this->command->warn('DebtCategorySeeder: no users found, skipping.');
+
             return;
         }
 
         $categories = ['Personal', 'Loan', 'Payment Plan'];
 
         foreach ($categories as $name) {
-            DebtCategory::firstOrCreate(
+            DebtCategory::withTrashed()->firstOrCreate(
                 ['user_id' => $user->id, 'name' => $name]
             );
         }

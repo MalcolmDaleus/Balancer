@@ -3,11 +3,13 @@ import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
+import SettingsDrawer from '@/components/settings/settings-drawer';
+import SettingsPanel from '@/components/settings/settings-panel';
 import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
+import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { edit as editProfile } from '@/routes/profile';
 import { type BalanceSheetExpanded } from '@/types/api';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -535,25 +537,54 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
+function SettingsModuleCard({
+    title,
+    subtitle,
+    className = '',
+}: {
+    title: string;
+    subtitle: string;
+    className?: string;
+}) {
+    return (
+        <div
+            className={`flex min-h-0 flex-col rounded-2xl bg-white p-6 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+        >
+            <div className="mb-4 shrink-0">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{title}</h2>
+                {subtitle && <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">{subtitle}</p>}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                <SettingsPanel idPrefix="mobile-settings" />
+            </div>
+        </div>
+    );
+}
+
 export default function Dashboard() {
+    return (
+        <FinanceDataProvider>
+            <SettingsProvider>
+                <DashboardShell />
+            </SettingsProvider>
+        </FinanceDataProvider>
+    );
+}
+
+function DashboardShell() {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
         if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
         if (id === 'settings') {
-            return (
-                <Link href={editProfile()} className={`block ${className}`}>
-                    <ModuleCard title={title} subtitle={subtitle} className="h-full">
-                        Open profile settings
-                    </ModuleCard>
-                </Link>
-            );
+            return <SettingsModuleCard title={title} subtitle={subtitle} className={className} />;
         }
         return <ModuleCard title={title} subtitle={subtitle} className={className} />;
     };
 
     const [activeIndex, setActiveIndex] = useState(0);
     const carouselRef = useRef<HTMLDivElement>(null);
+    const { focusSettingsCard, clearFocusSettingsCard } = useSettings();
 
     const handleScroll = () => {
         const el = carouselRef.current;
@@ -567,10 +598,24 @@ export default function Dashboard() {
         el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
     };
 
+    useEffect(() => {
+        if (!focusSettingsCard) {
+            return;
+        }
+
+        const index = MODULES.findIndex((mod) => mod.id === 'settings');
+        if (index >= 0) {
+            // Wait a frame so the carousel has layout width.
+            requestAnimationFrame(() => scrollToSlide(index));
+        }
+        clearFocusSettingsCard();
+    }, [focusSettingsCard, clearFocusSettingsCard]);
+
     return (
-        <FinanceDataProvider>
+        <>
             <Head title="Dashboard" />
             <DashboardHeader />
+            <SettingsDrawer />
 
             <div className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] min-h-screen bg-slate-200 bg-cover bg-center bg-no-repeat pt-20 dark:bg-neutral-950">
 
@@ -582,8 +627,8 @@ export default function Dashboard() {
                         className="flex flex-1 snap-x snap-mandatory gap-3 overflow-x-scroll px-4 [scroll-padding:0_1rem] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                         {MODULES.map((mod) => (
-                            <div key={mod.id} className="w-[calc(100vw-2rem)] shrink-0 snap-start">
-                                {renderModule(mod.id, mod.title, mod.subtitle, 'h-full')}
+                            <div key={mod.id} className="flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col">
+                                {renderModule(mod.id, mod.title, mod.subtitle, 'h-full min-h-0')}
                             </div>
                         ))}
                     </div>
@@ -625,6 +670,6 @@ export default function Dashboard() {
                 </div>
 
             </div>
-        </FinanceDataProvider>
+        </>
     );
 }

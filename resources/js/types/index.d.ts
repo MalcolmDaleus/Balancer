@@ -25,6 +25,9 @@ export interface NavItem {
 export interface SharedData {
     auth: Auth;
     sidebarOpen: boolean;
+    flash?: {
+        status?: string | null;
+    };
     [key: string]: unknown;
 }
 
@@ -36,6 +39,8 @@ export interface User {
     currency: 'USD' | 'EUR' | string;
     /** Saved number-format locale; null → browser default via resolveLocale(). */
     locale: string | null;
+    /** ISO timestamp of last successful finance process/sync, or null. */
+    last_finance_processed_at?: string | null;
     avatar?: string;
     email_verified_at: string | null;
     created_at: string;
