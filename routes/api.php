@@ -14,6 +14,7 @@ use App\Http\Controllers\RecurringPaymentCategoryController;
 use App\Http\Controllers\RecurringPaymentEntryController;
 use App\Http\Controllers\RecurringPaymentStreamController;
 use App\Http\Controllers\SavingController;
+use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
@@ -101,6 +102,12 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->n
     Route::post('finance/sync', FinanceSyncController::class)
         ->middleware('throttle:finance-sync')
         ->name('finance.sync');
+
+    // ---------------------------------------------------------------
+    // Statistics (aggregates; no new tables)
+    // ---------------------------------------------------------------
+    Route::get('statistics', [StatisticsController::class, 'series'])->name('statistics.series');
+    Route::get('statistics/markers', [StatisticsController::class, 'markers'])->name('statistics.markers');
 
     // ---------------------------------------------------------------
     // Balance sheet

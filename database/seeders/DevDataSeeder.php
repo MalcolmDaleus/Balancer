@@ -19,7 +19,6 @@ use App\Models\RegularIncomeSchedule;
 use App\Models\RegularIncomeScheduleVersion;
 use App\Models\Saving;
 use App\Models\User;
-use App\Services\BalanceSheetService;
 use App\Services\DebtSettlementService;
 use App\Services\FinanceProcessingService;
 use App\Services\PurchaseRefundService;
@@ -28,14 +27,16 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Local-only demo dataset for the first user.
+ * Local-only demo dataset for the first user (~24 months).
  *
- * Rebuilds financial rows from a known baseline so Creator Suite / Balance Sheet
- * match current production paths (refund service, settlement, materialization).
+ * Instruments + discretionary Facts are seeded; regular income and recurring
+ * charges are materialized via FinanceProcessingService (one processDue per month).
  * Does not change the user identity fields.
  */
 class DevDataSeeder extends Seeder
 {
+    private const HORIZON_MONTHS = 24;
+
     public function run(): void
     {
         if (! app()->environment('local')) {
@@ -54,7 +55,6 @@ class DevDataSeeder extends Seeder
 
         $this->command->info("Rebuilding demo data for: {$user->email}");
 
-        // Fill profile gaps only — never overwrite existing identity/profile values.
         $gaps = [];
         if ($user->email_verified_at === null) {
             $gaps['email_verified_at'] = now();
@@ -72,31 +72,50 @@ class DevDataSeeder extends Seeder
         $now = Carbon::now()->startOfDay();
         $thisMonth = $now->copy()->startOfMonth();
         $lastMonth = $now->copy()->subMonthNoOverflow()->startOfMonth();
-        $twoAgo = $now->copy()->subMonthsNoOverflow(2)->startOfMonth();
+        $months = $this->monthStarts($thisMonth);
+        $origin = $months[0];
 
-        $this->seedIncome($user, $thisMonth, $lastMonth, $twoAgo);
-        $this->seedPurchases($user, $thisMonth, $lastMonth, $twoAgo);
-        $this->seedRefund($user, $lastMonth, $twoAgo);
-        $this->seedDebts($user, $thisMonth, $lastMonth, $twoAgo);
-        $this->seedSavings($user, $thisMonth, $lastMonth, $twoAgo);
-        $this->seedRecurring($user, $thisMonth, $lastMonth, $twoAgo);
+        $this->seedIncomeInstruments($user, $origin);
+        $this->seedPurchases($user, $months);
+        $this->seedRefund($user, $lastMonth, $months[count($months) - 3] ?? $origin);
+        $this->seedDebts($user, $thisMonth, $lastMonth, $origin, $months);
+        $this->seedSavings($user, $months);
+        $this->seedRecurring($user, $origin);
 
-        $this->command->line('  → Syncing finance (materialize charges / due income / close backlog)');
-        $result = app(FinanceProcessingService::class)->syncUser($user->id);
-        foreach ($result['closed_months'] as $ym) {
+        $this->command->line('  → Materializing income & recurring (process-due per month)');
+        $finance = app(FinanceProcessingService::class);
+        $historical = array_slice($months, 0, -1);
+        foreach ($historical as $month) {
+            $finance->processDueForUser($user->id, $month->copy()->startOfMonth());
+        }
+
+        $this->bumpNetflix($user, $thisMonth, $lastMonth);
+        $finance->processDueForUser($user->id, $thisMonth);
+
+        $this->jitterFreelance($user, $thisMonth);
+        $this->seedIrregularIncome($user, $thisMonth, $lastMonth, $months);
+
+        $this->command->line('  → Closing backlog');
+        $closed = $finance->closeMonthsForUser($user->id) ?? [];
+        foreach ($closed as $ym) {
             $this->command->line("     Closed {$ym}");
         }
 
-        // Ensure the two historical months used by demo purchases/income are locked
-        // even if auto-close already covered them (idempotent upsert).
-        $this->command->line('  → Ensuring history snapshots');
-        foreach ([$twoAgo, $lastMonth] as $closeMonth) {
-            (new BalanceSheetService($user->id, $closeMonth))->persistSnapshot();
-            $this->command->line('     Snapshot '.$closeMonth->format('F Y'));
+        $this->command->info('✓ Dev data rebuilt ('.count($months).' months).');
+        $this->command->line('  Open dashboard or GET /api/v1/balance-sheet?month='.$thisMonth->format('Y-m'));
+    }
+
+    /**
+     * @return list<Carbon>
+     */
+    private function monthStarts(Carbon $thisMonth): array
+    {
+        $months = [];
+        for ($i = self::HORIZON_MONTHS - 1; $i >= 0; $i--) {
+            $months[] = $thisMonth->copy()->subMonthsNoOverflow($i)->startOfMonth();
         }
 
-        $this->command->info('✓ Dev data rebuilt.');
-        $this->command->line('  Open dashboard or GET /api/v1/balance-sheet?month='.$thisMonth->format('Y-m'));
+        return $months;
     }
 
     private function clearFinancialData(User $user): void
@@ -118,7 +137,6 @@ class DevDataSeeder extends Seeder
             RegularIncomeScheduleVersion::where('user_id', $user->id)->delete();
             RegularIncomeSchedule::withTrashed()->where('user_id', $user->id)->forceDelete();
 
-            // Categories are recreated by their seeders next.
             PurchaseCategory::withTrashed()->where('user_id', $user->id)->forceDelete();
             DebtCategory::withTrashed()->where('user_id', $user->id)->forceDelete();
             RecurringPaymentCategory::withTrashed()->where('user_id', $user->id)->forceDelete();
@@ -134,9 +152,9 @@ class DevDataSeeder extends Seeder
         ]);
     }
 
-    private function seedIncome(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $twoAgo): void
+    private function seedIncomeInstruments(User $user, Carbon $origin): void
     {
-        $this->command->line('  → Income schedules & entries');
+        $this->command->line('  → Income schedules');
 
         $salary = RegularIncomeSchedule::create([
             'user_id' => $user->id,
@@ -145,13 +163,13 @@ class DevDataSeeder extends Seeder
             'active' => true,
         ]);
 
-        $salaryVersion = RegularIncomeScheduleVersion::create([
+        RegularIncomeScheduleVersion::create([
             'user_id' => $user->id,
             'regular_schedule_id' => $salary->id,
             'amount' => 2400.00,
             'frequency' => 'monthly',
             'day_of_month' => 1,
-            'start_date' => $twoAgo->toDateString(),
+            'start_date' => $origin->toDateString(),
             'active' => true,
         ]);
 
@@ -162,57 +180,23 @@ class DevDataSeeder extends Seeder
             'active' => true,
         ]);
 
-        $freelanceVersion = RegularIncomeScheduleVersion::create([
+        RegularIncomeScheduleVersion::create([
             'user_id' => $user->id,
             'regular_schedule_id' => $freelance->id,
             'amount' => 500.00,
             'frequency' => 'monthly',
             'day_of_month' => 15,
-            'start_date' => $twoAgo->toDateString(),
+            'start_date' => $origin->toDateString(),
             'active' => true,
-        ]);
-
-        // Historical regular Facts (past months). Current month is filled by finance sync.
-        foreach ([
-            [$salary, $salaryVersion, $twoAgo, 2400.00],
-            [$freelance, $freelanceVersion, $twoAgo->copy()->addDays(14), 320.00],
-            [$salary, $salaryVersion, $lastMonth, 2400.00],
-            [$freelance, $freelanceVersion, $lastMonth->copy()->addDays(14), 580.00],
-        ] as [$schedule, $version, $receivedAt, $amount]) {
-            IncomeEntry::create([
-                'user_id' => $user->id,
-                'type' => IncomeEntryType::Regular,
-                'name' => $schedule->name,
-                'description' => $schedule->description,
-                'amount' => $amount,
-                'received_at' => $receivedAt->toDateString(),
-                'regular_schedule_id' => $schedule->id,
-                'regular_schedule_version_id' => $version->id,
-            ]);
-        }
-
-        IncomeEntry::create([
-            'user_id' => $user->id,
-            'type' => IncomeEntryType::Irregular,
-            'name' => 'Birthday gift',
-            'description' => 'One-time gift from family',
-            'amount' => 100.00,
-            'received_at' => $lastMonth->copy()->addDays(10)->toDateString(),
-        ]);
-
-        IncomeEntry::create([
-            'user_id' => $user->id,
-            'type' => IncomeEntryType::Irregular,
-            'name' => 'Sold old monitor',
-            'description' => 'Marketplace sale',
-            'amount' => 75.00,
-            'received_at' => $thisMonth->copy()->addDays(4)->toDateString(),
         ]);
     }
 
-    private function seedPurchases(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $twoAgo): void
+    /**
+     * @param  list<Carbon>  $months
+     */
+    private function seedPurchases(User $user, array $months): void
     {
-        $this->command->line('  → Purchases');
+        $this->command->line('  → Purchases ('.count($months).' months)');
 
         $cats = PurchaseCategory::where('user_id', $user->id)->get()->keyBy('name');
 
@@ -226,40 +210,60 @@ class DevDataSeeder extends Seeder
                 'user_id' => $user->id,
                 'category_id' => $cat->id,
                 'description' => $desc,
-                'amount' => $amount,
+                'amount' => round($amount, 2),
                 'date' => $date->toDateTimeString(),
             ]);
         };
 
-        $mk('Groceries', 'Lidl weekly shop', 87.43, $twoAgo->copy()->addDays(3));
-        $mk('Groceries', 'Lidl weekly shop', 91.20, $twoAgo->copy()->addDays(10));
-        $mk('Groceries', 'Mercadona top-up', 34.60, $twoAgo->copy()->addDays(16));
-        $mk('Groceries', 'Lidl weekly shop', 79.90, $lastMonth->copy()->addDays(2));
-        $mk('Groceries', 'Mercadona weekly shop', 95.10, $lastMonth->copy()->addDays(9));
-        $mk('Groceries', 'Lidl top-up', 22.40, $lastMonth->copy()->addDays(15));
-        $mk('Groceries', 'Lidl weekly shop', 88.75, $thisMonth->copy()->addDays(3));
+        foreach ($months as $i => $month) {
+            $endDay = $month->copy()->endOfMonth()->day;
+            $clamp = fn (int $d) => min($d, $endDay);
 
-        $mk('Dining', 'Dinner at La Pepita', 42.00, $twoAgo->copy()->addDays(6));
-        $mk('Dining', 'Coffee & pastry', 8.50, $twoAgo->copy()->addDays(13));
-        $mk('Dining', 'Lunch with colleagues', 28.00, $lastMonth->copy()->addDays(4));
-        $mk('Dining', 'Pizza Friday', 19.80, $lastMonth->copy()->addDays(18));
-        $mk('Dining', 'Date night dinner', 67.50, $thisMonth->copy()->addDays(5));
+            $g1 = 82 + (($i * 7) % 18) + ($i % 3) * 0.4;
+            $g2 = 88 + (($i * 5) % 16);
+            $g3 = 28 + (($i * 3) % 12);
+            $mk('Groceries', 'Lidl weekly shop', $g1, $month->copy()->addDays($clamp(3) - 1));
+            $mk('Groceries', 'Mercadona weekly shop', $g2, $month->copy()->addDays($clamp(10) - 1));
+            $mk('Groceries', 'Lidl top-up', $g3, $month->copy()->addDays($clamp(17) - 1));
 
-        $mk('Entertainment', 'Cinema tickets x2', 18.00, $twoAgo->copy()->addDays(8));
-        $mk('Entertainment', 'Concert ticket', 55.00, $lastMonth->copy()->addDays(12));
+            $mk('Dining', 'Lunch / coffee', 9.5 + ($i % 5) * 1.2, $month->copy()->addDays($clamp(6) - 1));
+            $mk('Dining', $i % 2 === 0 ? 'Dinner out' : 'Pizza Friday', 22 + ($i % 7) * 3.5, $month->copy()->addDays($clamp(14) - 1));
 
-        $mk('Adulting', 'Electricity bill', 62.30, $twoAgo->copy()->addDays(5));
-        $mk('Adulting', 'Electricity bill', 58.90, $lastMonth->copy()->addDays(5));
-        $mk('Adulting', 'Electricity bill', 54.40, $thisMonth->copy()->addDays(5));
-        $mk('Adulting', 'Car service / ITV', 155.00, $lastMonth->copy()->addDays(20));
+            $mk('Adulting', 'Electricity bill', 52 + ($i % 8) * 2.1, $month->copy()->addDays($clamp(5) - 1));
 
-        $mk('Miscellaneous', 'Amazon - USB hub', 24.99, $twoAgo->copy()->addDays(14));
-        $mk('Miscellaneous', 'Pharmacist', 11.60, $lastMonth->copy()->addDays(7));
+            if ($i % 2 === 1) {
+                $mk('Entertainment', $i % 4 === 1 ? 'Cinema tickets' : 'Concert / show', 18 + ($i % 6) * 7, $month->copy()->addDays($clamp(12) - 1));
+            }
 
-        $mk('Clothes & Accessories', 'Zara jacket', 89.95, $lastMonth->copy()->addDays(22));
+            if ($i % 5 === 2) {
+                $mk('Miscellaneous', 'Amazon / pharmacy', 12 + ($i % 9) * 2.5, $month->copy()->addDays($clamp(16) - 1));
+            }
+
+            if ($i % 7 === 3) {
+                $mk('Clothes & Accessories', 'Seasonal clothes', 45 + ($i % 4) * 15, $month->copy()->addDays($clamp(20) - 1));
+            }
+
+            if ($i % 11 === 4) {
+                $mk('Household Items', 'Home supplies', 28 + ($i % 5) * 6, $month->copy()->addDays($clamp(11) - 1));
+            }
+
+            // December / late-year bump
+            if ((int) $month->month === 12) {
+                $mk('Gifts', 'Holiday gifts', 120 + ($i % 3) * 20, $month->copy()->addDays($clamp(18) - 1));
+                $mk('Caprichos', 'Year-end treat', 55, $month->copy()->addDays($clamp(22) - 1));
+            }
+
+            // One heavier adulting month
+            if ($i === count($months) - 8) {
+                $mk('Adulting', 'Car service / ITV', 155.00, $month->copy()->addDays($clamp(21) - 1));
+            }
+        }
+
+        $mk('Dining', 'Date night dinner', 67.50, $months[count($months) - 1]->copy()->addDays(5));
+        $mk('Clothes & Accessories', 'Zara jacket', 89.95, $months[count($months) - 2]->copy()->addDays(min(22, $months[count($months) - 2]->daysInMonth)));
     }
 
-    private function seedRefund(User $user, Carbon $lastMonth, Carbon $twoAgo): void
+    private function seedRefund(User $user, Carbon $refundMonth, Carbon $purchaseMonth): void
     {
         $this->command->line('  → Refunded purchase');
 
@@ -273,7 +277,7 @@ class DevDataSeeder extends Seeder
             'category_id' => $misc->id,
             'description' => 'Faulty headphones',
             'amount' => 49.99,
-            'date' => $twoAgo->copy()->addDays(19)->toDateTimeString(),
+            'date' => $purchaseMonth->copy()->addDays(19)->toDateTimeString(),
             'is_refunded' => false,
         ]);
 
@@ -281,11 +285,14 @@ class DevDataSeeder extends Seeder
             $purchase,
             (int) $user->id,
             49.99,
-            $lastMonth->copy()->addDays(3)->toDateString(),
+            $refundMonth->copy()->addDays(3)->toDateString(),
         );
     }
 
-    private function seedDebts(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $twoAgo): void
+    /**
+     * @param  list<Carbon>  $months
+     */
+    private function seedDebts(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $origin, array $months): void
     {
         $this->command->line('  → Debts');
 
@@ -293,15 +300,41 @@ class DevDataSeeder extends Seeder
         $loanCat = DebtCategory::where('user_id', $user->id)->where('name', 'Loan')->first();
         $personalCat = DebtCategory::where('user_id', $user->id)->where('name', 'Personal')->first();
 
+        $earlyPaid = $months[2] ?? $origin;
+        $earlyFinal = $months[3] ?? $earlyPaid;
+
+        $bank = Debt::create([
+            'user_id' => $user->id,
+            'category_id' => $loanCat?->id,
+            'description' => 'Bank micro-loan',
+            'amount' => 300.00,
+            'issue_date' => $origin->copy()->addDays(1)->toDateTimeString(),
+            'notes' => 'Short-term loan — paid off early in the history',
+        ]);
+        DebtPayment::create([
+            'user_id' => $user->id,
+            'debt_id' => $bank->id,
+            'amount' => 150.00,
+            'paid_at' => $earlyPaid->copy()->addDays(20)->toDateTimeString(),
+        ]);
+        DebtPayment::create([
+            'user_id' => $user->id,
+            'debt_id' => $bank->id,
+            'amount' => 150.00,
+            'paid_at' => $earlyFinal->copy()->addDays(5)->toDateTimeString(),
+            'notes' => 'Final payment',
+        ]);
+        $settlement->sync($bank);
+
+        $laptopStart = $months[count($months) - 6] ?? $origin;
         $laptop = Debt::create([
             'user_id' => $user->id,
             'category_id' => $personalCat?->id,
             'description' => 'Laptop loan from friend',
             'amount' => 600.00,
-            'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+            'issue_date' => $laptopStart->copy()->addDays(1)->toDateTimeString(),
             'notes' => 'Interest-free, paying back gradually',
         ]);
-
         DebtPayment::create([
             'user_id' => $user->id,
             'debt_id' => $laptop->id,
@@ -318,77 +351,63 @@ class DevDataSeeder extends Seeder
         ]);
         $settlement->sync($laptop);
 
-        $bank = Debt::create([
-            'user_id' => $user->id,
-            'category_id' => $loanCat?->id,
-            'description' => 'Bank micro-loan',
-            'amount' => 300.00,
-            'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
-            'notes' => 'Short-term loan — now paid off',
-        ]);
-
-        DebtPayment::create([
-            'user_id' => $user->id,
-            'debt_id' => $bank->id,
-            'amount' => 150.00,
-            'paid_at' => $twoAgo->copy()->addDays(20)->toDateTimeString(),
-        ]);
-        DebtPayment::create([
-            'user_id' => $user->id,
-            'debt_id' => $bank->id,
-            'amount' => 150.00,
-            'paid_at' => $lastMonth->copy()->addDays(5)->toDateTimeString(),
-            'notes' => 'Final payment',
-        ]);
-        $settlement->sync($bank);
-
+        $forgiveMonth = $months[4] ?? $lastMonth;
         Debt::create([
             'user_id' => $user->id,
             'category_id' => $personalCat?->id,
             'description' => 'Old gym debt (forgiven)',
             'amount' => 120.00,
-            'issue_date' => $twoAgo->copy()->addDays(1)->toDateTimeString(),
+            'issue_date' => $origin->copy()->addDays(1)->toDateTimeString(),
             'notes' => 'Friend said forget it',
             'is_forgiven' => true,
-            'settle_date' => $lastMonth->copy()->addDays(25)->toDateTimeString(),
+            'settle_date' => $forgiveMonth->copy()->addDays(min(25, $forgiveMonth->daysInMonth))->toDateTimeString(),
         ]);
     }
 
-    private function seedSavings(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $twoAgo): void
+    /**
+     * @param  list<Carbon>  $months
+     */
+    private function seedSavings(User $user, array $months): void
     {
         $this->command->line('  → Savings');
 
+        foreach ($months as $i => $month) {
+            $amount = 200 + (($i * 13) % 80);
+            if ($i === count($months) - 1) {
+                $amount = 150;
+            }
+
+            Saving::create([
+                'user_id' => $user->id,
+                'month' => $month->toDateString(),
+                'type' => 'deposit',
+                'amount' => $amount,
+                'notes' => 'Monthly savings transfer',
+            ]);
+        }
+
+        $raid = $months[count($months) - 2] ?? $months[0];
         Saving::create([
             'user_id' => $user->id,
-            'month' => $twoAgo->toDateString(),
-            'type' => 'deposit',
-            'amount' => 250.00,
-            'notes' => 'Monthly savings transfer',
-        ]);
-        Saving::create([
-            'user_id' => $user->id,
-            'month' => $lastMonth->toDateString(),
-            'type' => 'deposit',
-            'amount' => 300.00,
-            'notes' => 'Monthly savings transfer',
-        ]);
-        Saving::create([
-            'user_id' => $user->id,
-            'month' => $lastMonth->toDateString(),
+            'month' => $raid->toDateString(),
             'type' => 'withdrawal',
             'amount' => 50.00,
             'notes' => 'Emergency withdrawal',
         ]);
-        Saving::create([
-            'user_id' => $user->id,
-            'month' => $thisMonth->toDateString(),
-            'type' => 'deposit',
-            'amount' => 150.00,
-            'notes' => 'Monthly savings transfer',
-        ]);
+
+        $extraRaid = $months[count($months) - 9] ?? null;
+        if ($extraRaid) {
+            Saving::create([
+                'user_id' => $user->id,
+                'month' => $extraRaid->toDateString(),
+                'type' => 'withdrawal',
+                'amount' => 80.00,
+                'notes' => 'Holiday cash',
+            ]);
+        }
     }
 
-    private function seedRecurring(User $user, Carbon $thisMonth, Carbon $lastMonth, Carbon $twoAgo): void
+    private function seedRecurring(User $user, Carbon $origin): void
     {
         $this->command->line('  → Recurring streams');
 
@@ -423,33 +442,11 @@ class DevDataSeeder extends Seeder
                 'frequency' => $def['frequency'],
                 'day_of_month' => $def['day_of_month'] ?? null,
                 'day_of_week' => $def['day_of_week'] ?? null,
-                'start_date' => $twoAgo->toDateString(),
+                'start_date' => $origin->toDateString(),
                 'active' => true,
             ]);
         }
 
-        // Price history demo: Netflix raised this month.
-        $netflix = RecurringPaymentStream::where('user_id', $user->id)->where('name', 'Netflix')->first();
-        if ($netflix) {
-            $old = $netflix->entries()->where('active', true)->first();
-            if ($old) {
-                $old->update([
-                    'end_date' => $lastMonth->copy()->endOfMonth()->toDateString(),
-                    'active' => false,
-                ]);
-                RecurringPaymentEntry::create([
-                    'user_id' => $user->id,
-                    'recurring_payment_stream_id' => $netflix->id,
-                    'amount' => 17.99,
-                    'frequency' => 'monthly',
-                    'day_of_month' => 12,
-                    'start_date' => $thisMonth->toDateString(),
-                    'active' => true,
-                ]);
-            }
-        }
-
-        // Soft-archived stream with no Facts (safe to hard-delete in UI).
         $archivedCat = $cats->get('Online Subscription');
         if ($archivedCat) {
             $oldSub = RecurringPaymentStream::create([
@@ -464,11 +461,93 @@ class DevDataSeeder extends Seeder
                 'amount' => 8.99,
                 'frequency' => 'monthly',
                 'day_of_month' => 3,
-                'start_date' => $twoAgo->toDateString(),
-                'end_date' => $twoAgo->copy()->endOfMonth()->toDateString(),
+                'start_date' => $origin->toDateString(),
+                'end_date' => $origin->copy()->endOfMonth()->toDateString(),
                 'active' => false,
             ]);
             $oldSub->delete();
+        }
+    }
+
+    private function bumpNetflix(User $user, Carbon $thisMonth, Carbon $lastMonth): void
+    {
+        $netflix = RecurringPaymentStream::where('user_id', $user->id)->where('name', 'Netflix')->first();
+        if (! $netflix) {
+            return;
+        }
+
+        $old = $netflix->entries()->where('active', true)->first();
+        if (! $old) {
+            return;
+        }
+
+        $old->update([
+            'end_date' => $lastMonth->copy()->endOfMonth()->toDateString(),
+            'active' => false,
+        ]);
+
+        RecurringPaymentEntry::create([
+            'user_id' => $user->id,
+            'recurring_payment_stream_id' => $netflix->id,
+            'amount' => 17.99,
+            'frequency' => 'monthly',
+            'day_of_month' => 12,
+            'start_date' => $thisMonth->toDateString(),
+            'active' => true,
+        ]);
+    }
+
+    private function jitterFreelance(User $user, Carbon $thisMonth): void
+    {
+        $freelance = RegularIncomeSchedule::where('user_id', $user->id)->where('name', 'Freelance')->first();
+        if (! $freelance) {
+            return;
+        }
+
+        $amounts = [320.00, 480.00, 580.00, 410.00, 540.00, 390.00];
+        $entries = IncomeEntry::where('regular_schedule_id', $freelance->id)
+            ->whereDate('received_at', '<', $thisMonth->toDateString())
+            ->orderBy('received_at')
+            ->get();
+
+        foreach ($entries as $i => $entry) {
+            $entry->update(['amount' => $amounts[$i % count($amounts)]]);
+        }
+    }
+
+    /**
+     * @param  list<Carbon>  $months
+     */
+    private function seedIrregularIncome(User $user, Carbon $thisMonth, Carbon $lastMonth, array $months): void
+    {
+        IncomeEntry::create([
+            'user_id' => $user->id,
+            'type' => IncomeEntryType::Irregular,
+            'name' => 'Birthday gift',
+            'description' => 'One-time gift from family',
+            'amount' => 100.00,
+            'received_at' => $lastMonth->copy()->addDays(10)->toDateString(),
+        ]);
+
+        IncomeEntry::create([
+            'user_id' => $user->id,
+            'type' => IncomeEntryType::Irregular,
+            'name' => 'Sold old monitor',
+            'description' => 'Marketplace sale',
+            'amount' => 75.00,
+            'received_at' => $thisMonth->copy()->addDays(4)->toDateString(),
+        ]);
+
+        $bonusMonth = $months[count($months) - 7] ?? null;
+        if ($bonusMonth) {
+            IncomeEntry::create([
+                'user_id' => $user->id,
+                'type' => IncomeEntryType::Irregular,
+                'name' => 'Tax refund',
+                'description' => 'Annual filing',
+                'amount' => 220.00,
+                'received_at' => $bonusMonth->copy()->addDays(8)->toDateString(),
+            ]);
         }
     }
 }

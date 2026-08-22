@@ -238,3 +238,42 @@ export interface Saving {
     notes: string | null;
     month: string;
 }
+
+export type StatisticsView = 'trend' | 'compare' | 'share';
+export type StatisticsWindow = 1 | 6 | 12;
+export type StatisticsUnit = 'money' | 'percent';
+
+export interface StatisticsPoint {
+    month?: string;
+    name?: string;
+    value: number;
+}
+
+export interface StatisticsSeries {
+    view: StatisticsView;
+    series: string;
+    label: string;
+    window: number;
+    from: string;
+    to: string;
+    unit: StatisticsUnit;
+    points: StatisticsPoint[];
+}
+
+export interface StatisticsMarker {
+    id: string;
+    label: string;
+    value: number;
+    unit: StatisticsUnit;
+    baseline?: number;
+    delta?: number;
+    name?: string | null;
+    month?: string | null;
+}
+
+export interface StatisticsMarkers {
+    window: number;
+    from: string;
+    to: string;
+    markers: StatisticsMarker[];
+}

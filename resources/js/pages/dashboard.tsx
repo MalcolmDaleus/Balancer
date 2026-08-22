@@ -2,6 +2,7 @@ import { apiFetch, errorMessage } from '@/api/client';
 import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
+import StatisticsCard from '@/components/statistics-card';
 import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
 import SettingsDrawer from '@/components/settings/settings-drawer';
 import SettingsPanel from '@/components/settings/settings-panel';
@@ -575,6 +576,7 @@ function DashboardShell() {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
+        if (id === 'statistics') return <StatisticsCard className={className} />;
         if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
         if (id === 'settings') {
             return <SettingsModuleCard title={title} subtitle={subtitle} className={className} />;
@@ -655,11 +657,7 @@ function DashboardShell() {
                     <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
 
                         {/* Row 1 — Statistics (8) + Balance Sheet (4) */}
-                        <ModuleCard
-                            title="Statistics"
-                            subtitle="Trends and insights"
-                            className="col-span-8 min-h-80"
-                        />
+                        <StatisticsCard className="col-span-8 min-h-[32rem]" />
                         <BalanceSheetCard className="col-span-4 h-[32rem]" />
 
                         {/* Row 2 — Past Balance Sheets (4) + Creator Suite (8) */}
