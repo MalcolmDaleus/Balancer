@@ -29,7 +29,10 @@ class StatisticsSeriesRequest extends FormRequest
         return [
             'view' => ['required', 'string', Rule::in(['trend', 'compare', 'share'])],
             'series' => ['required', 'string', Rule::in($allowed)],
-            'window' => ['sometimes', 'integer', Rule::in(StatisticsService::WINDOWS)],
+            'window' => ['sometimes', Rule::in([
+                ...array_map('strval', StatisticsService::WINDOWS),
+                StatisticsService::WINDOW_ALL,
+            ])],
         ];
     }
 }

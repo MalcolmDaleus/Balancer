@@ -3,9 +3,10 @@ import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import StatisticsCard from '@/components/statistics-card';
-import { tintChip, tintSectionPill } from '@/components/creator-suite/shared';
+import { tintChip, tintSectionPill, innerCardCls } from '@/components/creator-suite/shared';
 import SettingsDrawer from '@/components/settings/settings-drawer';
 import SettingsPanel from '@/components/settings/settings-panel';
+import { Spinner } from '@/components/ui/spinner';
 import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { useFormatMoney } from '@/hooks/use-format-money';
@@ -43,7 +44,7 @@ function IncomeBalanceContent({
                 const hiddenCount = schedule.entries.length - VISIBLE_REGULAR_ENTRIES;
 
                 return (
-                    <div key={key} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                    <div key={key} className="rounded-lg bg-slate-100/80 p-3 dark:bg-neutral-950/50">
                         <div className="flex items-center justify-between">
                             <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{schedule.name}</span>
                             <span className="text-base font-medium text-slate-700 dark:text-neutral-200">
@@ -89,7 +90,7 @@ function IncomeBalanceContent({
                 );
             })}
             {income.by_type.irregular.total > 0 && (
-                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 dark:bg-neutral-950/50">
+                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
                     <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Irregular</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
                         {signed(income.by_type.irregular.total, '+')}
@@ -97,7 +98,7 @@ function IncomeBalanceContent({
                 </div>
             )}
             {income.by_type.refund.total > 0 && (
-                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 dark:bg-neutral-950/50">
+                <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
                     <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Refunds</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
                         {signed(income.by_type.refund.total, '+')}
@@ -144,7 +145,7 @@ function RecurringStreamList({
     return (
         <div className="space-y-2">
             {streams.map((stream) => (
-                <div key={stream.stream_id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                <div key={stream.stream_id} className="rounded-lg bg-slate-100/80 p-3 dark:bg-neutral-950/50">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                             <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{stream.stream_name}</span>
@@ -241,7 +242,7 @@ function ModuleCard({
 }) {
     return (
         <div
-            className={`flex flex-col rounded-2xl bg-white p-6 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+            className={`flex flex-col rounded-2xl bg-white p-7 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
         >
             <div className="mb-4">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{title}</h2>
@@ -361,7 +362,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   content: data.debt.debts.length ? (
                       <div className="space-y-2">
                           {data.debt.debts.map((debt) => (
-                              <div key={debt.id} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                              <div key={debt.id} className="rounded-lg bg-slate-100/80 p-3 dark:bg-neutral-950/50">
                                   <div className="mb-1.5 flex items-center justify-between gap-2">
                                       <span className="truncate text-base font-medium text-slate-800 dark:text-neutral-100">{debt.description}</span>
                                       {(debt.is_forgiven || debt.is_settled) && (
@@ -394,7 +395,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   content: data.spending.categories.length ? (
                       <div className="space-y-2">
                           {data.spending.categories.map((category) => (
-                              <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-2.5 dark:bg-neutral-950/50">
+                              <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-3 dark:bg-neutral-950/50">
                                   <div className="flex items-center justify-between">
                                       <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{category.category_name}</span>
                                       <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(category.amount, '-')}</span>
@@ -438,7 +439,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   ),
                   content: (
                       <div className="space-y-2">
-                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-2.5 py-2 text-sm dark:bg-neutral-950/50">
+                          <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 text-sm dark:bg-neutral-950/50">
                               <span className="text-slate-700 dark:text-neutral-200">This month</span>
                               <div className="flex items-center gap-2">
                                   {data.savings.monthly_deposits > 0 && (
@@ -474,8 +475,8 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         : [];
 
     return (
-        <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
-            <div className="mb-3 flex items-start justify-between gap-2">
+        <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
+            <div className="mb-4 flex items-start justify-between gap-2">
                 <div>
                     <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Balance Sheet</h2>
                     <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{data?.month ?? 'Loading month...'}</p>
@@ -491,8 +492,8 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                 </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoading && <p className="text-sm text-slate-500 dark:text-neutral-300">Loading balance sheet...</p>}
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {isLoading && <Spinner label="Loading balance sheet" />}
 
                 {!isLoading && error && !data && (
                     <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
@@ -503,22 +504,22 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                         {error && (
                             <p className="mb-2 text-sm text-rose-600 dark:text-rose-300">{error}</p>
                         )}
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
                         {sections.map((section) => {
                             const isOpen = openSection === section.key;
                             return (
-                                <div key={section.key} className="rounded-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:bg-neutral-800/50 dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]">
+                                <div key={section.key} className={innerCardCls}>
                                     <button
                                         type="button"
                                         aria-expanded={isOpen}
                                         onClick={() => setOpenSection(isOpen ? null : section.key)}
-                                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                                        className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left"
                                     >
                                         <div className={`inline-flex ${pillBase} ${section.pillClass}`}>{section.label}</div>
                                         {section.amountNode}
                                     </button>
 
-                                    {isOpen && <div className="border-t border-slate-100 px-3 py-2.5 dark:border-neutral-700/60">{section.content}</div>}
+                                    {isOpen && <div className="border-t border-slate-100 px-4 py-3.5 dark:border-neutral-700/60">{section.content}</div>}
                                 </div>
                             );
                         })}
@@ -527,7 +528,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                 )}
             </div>
 
-            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-neutral-800">
+            <div className="mt-4 border-t border-slate-200 pt-4 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-neutral-200">Roll over</span>
                     <span className="text-sm font-semibold text-slate-900 dark:text-neutral-100">{amount(data?.roll_over.total ?? 0)}</span>
@@ -549,7 +550,7 @@ function SettingsModuleCard({
 }) {
     return (
         <div
-            className={`flex min-h-0 flex-col rounded-2xl bg-white p-6 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+            className={`flex min-h-0 flex-col rounded-2xl bg-white p-7 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
         >
             <div className="mb-4 shrink-0">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{title}</h2>
@@ -626,10 +627,10 @@ function DashboardShell() {
                     <div
                         ref={carouselRef}
                         onScroll={handleScroll}
-                        className="flex flex-1 snap-x snap-mandatory gap-3 overflow-x-scroll px-4 [scroll-padding:0_1rem] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        className="flex flex-1 snap-x snap-mandatory gap-3 overflow-x-scroll px-5 [scroll-padding:0_1.25rem] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                         {MODULES.map((mod) => (
-                            <div key={mod.id} className="flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col">
+                            <div key={mod.id} className="flex w-[calc(100vw-2.5rem)] shrink-0 snap-start flex-col">
                                 {renderModule(mod.id, mod.title, mod.subtitle, 'h-full min-h-0')}
                             </div>
                         ))}
@@ -653,7 +654,7 @@ function DashboardShell() {
                 </div>
 
                 {/* ── Desktop: 12-column bento grid ────────────────────────── */}
-                <div className="hidden p-6 md:block lg:p-8">
+                <div className="hidden p-7 md:block lg:p-10">
                     <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
 
                         {/* Row 1 — Statistics (8) + Balance Sheet (4) */}
@@ -661,7 +662,7 @@ function DashboardShell() {
                         <BalanceSheetCard className="col-span-4 h-[32rem]" />
 
                         {/* Row 2 — Past Balance Sheets (4) + Creator Suite (8) */}
-                        <BalanceSheetHistoryCard className="col-span-4 min-h-80" />
+                        <BalanceSheetHistoryCard className="col-span-4 h-[42rem] min-h-0" />
                         <CreatorSuiteCard className="col-span-8 h-[42rem]" />
 
                     </div>

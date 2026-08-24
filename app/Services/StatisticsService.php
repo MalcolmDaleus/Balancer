@@ -2,7 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\BalanceSheetTotal;
+use App\Models\DebtPayment;
+use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Models\RecurringCharge;
 use App\Models\Saving;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -15,7 +19,9 @@ use InvalidArgumentException;
  */
 class StatisticsService
 {
-    public const WINDOWS = [1, 6, 12];
+    public const WINDOWS = [1, 3, 6, 12, 24, 60];
+
+    public const WINDOW_ALL = 'all';
 
     public const TREND = [
         'leftover' => 'Monthly leftover',
@@ -28,9 +34,9 @@ class StatisticsService
     ];
 
     public const COMPARE = [
-        'purchase_categories_month' => 'Purchase categories (this month)',
-        'purchase_categories_avg' => 'Purchase categories (window average)',
-        'outflow_domains_month' => 'Outflow domains (this month)',
+        'purchase_categories_month' => 'Purchase categories (total)',
+        'purchase_categories_avg' => 'Purchase categories (monthly avg)',
+        'outflow_domains_month' => 'Outflow domains',
         'leftover_by_month' => 'Leftover by month',
     ];
 
@@ -45,28 +51,31 @@ class StatisticsService
     ) {}
 
     /**
+     * @param  int|string  $window  Month count or "all"
      * @return array{
      *   view: string,
      *   series: string,
      *   label: string,
-     *   window: int,
+     *   window: int|string,
      *   from: string,
      *   to: string,
      *   unit: string,
+     *   span_months: int,
+     *   available_windows: list<int|string>,
      *   points: list<array{month?: string, name?: string, value: float}>
      * }
      */
-    public function series(int $userId, string $view, string $series, int $window, ?Carbon $asOf = null): array
+    public function series(int $userId, string $view, string $series, int|string $window = 12, ?Carbon $asOf = null): array
     {
         $asOf = Carbon::parse($asOf ?? now())->startOfMonth();
-        [$from, $to] = $this->windowBounds($window, $asOf);
+        [$from, $to] = $this->windowBounds($userId, $window, $asOf);
         $label = $this->labelFor($view, $series);
         $unit = $series === 'recurring_load' ? 'percent' : 'money';
 
         $points = match ($view) {
             'trend' => $this->trendPoints($userId, $series, $from, $to),
             'compare' => $this->comparePoints($userId, $series, $from, $to),
-            'share' => $this->sharePoints($userId, $series, $to),
+            'share' => $this->sharePoints($userId, $series, $from, $to),
             default => throw new InvalidArgumentException("Unknown view [{$view}]"),
         };
 
@@ -78,22 +87,27 @@ class StatisticsService
             'from' => $from->format('Y-m'),
             'to' => $to->format('Y-m'),
             'unit' => $unit,
+            'span_months' => $this->spanMonths($userId, $asOf),
+            'available_windows' => $this->availableWindows($userId, $asOf),
             'points' => $points,
         ];
     }
 
     /**
+     * @param  int|string  $window
      * @return array{
-     *   window: int,
+     *   window: int|string,
      *   from: string,
      *   to: string,
+     *   span_months: int,
+     *   available_windows: list<int|string>,
      *   markers: list<array<string, mixed>>
      * }
      */
-    public function markers(int $userId, int $window, ?Carbon $asOf = null): array
+    public function markers(int $userId, int|string $window = 12, ?Carbon $asOf = null): array
     {
         $asOf = Carbon::parse($asOf ?? now())->startOfMonth();
-        [$from, $to] = $this->windowBounds($window, $asOf);
+        [$from, $to] = $this->windowBounds($userId, $window, $asOf);
 
         $leftovers = collect($this->leftoverByMonth($userId, $from, $to));
         $thisMonthLeftover = (float) ($leftovers->last()['value'] ?? 0);
@@ -104,7 +118,7 @@ class StatisticsService
         $best = $leftovers->sortByDesc('value')->first();
         $worst = $leftovers->sortBy('value')->first();
 
-        $monthCats = $this->purchaseCategoryNets($userId, $to, $to);
+        $monthCats = $this->purchaseCategoryNets($userId, $from, $to);
         $avgCats = $this->purchaseCategoryAverages($userId, $from, $to);
         $top = collect($monthCats)->sortByDesc('value')->first();
         $topName = $top['name'] ?? null;
@@ -113,16 +127,20 @@ class StatisticsService
             ? (float) (collect($avgCats)->firstWhere('name', $topName)['value'] ?? 0)
             : 0.0;
 
-        $savingsThisMonth = $this->domainSignedByMonth($userId, 'savings', $to, $to)[$to->format('Y-m')] ?? 0.0;
+        $savingsInPeriod = collect($this->domainSignedByMonth($userId, 'savings', $from, $to))->sum();
 
-        $income = $this->domainInByMonth($userId, 'income', $to, $to)[$to->format('Y-m')] ?? 0.0;
-        $recurring = $this->domainOutByMonth($userId, 'recurring', $to, $to)[$to->format('Y-m')] ?? 0.0;
+        $incomeByMonth = $this->domainInByMonth($userId, 'income', $from, $to);
+        $recurringByMonth = $this->domainOutByMonth($userId, 'recurring', $from, $to);
+        $income = (float) collect($incomeByMonth)->sum();
+        $recurring = (float) collect($recurringByMonth)->sum();
         $load = $income > 0 ? round($recurring / $income, 4) : 0.0;
 
         return [
             'window' => $window,
             'from' => $from->format('Y-m'),
             'to' => $to->format('Y-m'),
+            'span_months' => $this->spanMonths($userId, $asOf),
+            'available_windows' => $this->availableWindows($userId, $asOf),
             'markers' => [
                 [
                     'id' => 'leftover_vs_avg',
@@ -143,8 +161,8 @@ class StatisticsService
                 ],
                 [
                     'id' => 'savings_this_month',
-                    'label' => 'Savings this month',
-                    'value' => $savingsThisMonth,
+                    'label' => 'Savings in period',
+                    'value' => round((float) $savingsInPeriod, 2),
                     'unit' => 'money',
                 ],
                 [
@@ -172,18 +190,100 @@ class StatisticsService
     }
 
     /**
+     * @param  mixed  $raw
+     */
+    public static function parseWindow(mixed $raw): int|string
+    {
+        if ($raw === null || $raw === '') {
+            return 12;
+        }
+
+        if ($raw === self::WINDOW_ALL) {
+            return self::WINDOW_ALL;
+        }
+
+        return (int) $raw;
+    }
+
+    /**
+     * Inclusive months from earliest activity through as-of. Zero when there is no activity.
+     */
+    public function spanMonths(int $userId, Carbon $asOf): int
+    {
+        $earliest = $this->earliestMonth($userId);
+        if ($earliest === null) {
+            return 0;
+        }
+
+        $asOf = $asOf->copy()->startOfMonth();
+        if ($earliest->gt($asOf)) {
+            return 0;
+        }
+
+        return (($asOf->year - $earliest->year) * 12) + ($asOf->month - $earliest->month) + 1;
+    }
+
+    /**
+     * Numeric ranges the history can fill, plus all-time (always present).
+     *
+     * @return list<int|string>
+     */
+    public function availableWindows(int $userId, Carbon $asOf): array
+    {
+        $span = $this->spanMonths($userId, $asOf);
+        $windows = [];
+
+        foreach (self::WINDOWS as $months) {
+            if ($span >= $months) {
+                $windows[] = $months;
+            }
+        }
+
+        $windows[] = self::WINDOW_ALL;
+
+        return $windows;
+    }
+
+    /**
+     * @param  int|string  $window
      * @return array{0: Carbon, 1: Carbon}
      */
-    public function windowBounds(int $window, Carbon $asOf): array
+    public function windowBounds(int $userId, int|string $window, Carbon $asOf): array
     {
+        $to = $asOf->copy()->startOfMonth();
+
+        if ($window === self::WINDOW_ALL) {
+            $from = $this->earliestMonth($userId) ?? $to;
+
+            return [$from->copy()->startOfMonth(), $to];
+        }
+
+        $window = (int) $window;
         if (! in_array($window, self::WINDOWS, true)) {
             throw new InvalidArgumentException("Unknown window [{$window}]");
         }
 
-        $to = $asOf->copy()->startOfMonth();
         $from = $to->copy()->subMonthsNoOverflow($window - 1)->startOfMonth();
 
         return [$from, $to];
+    }
+
+    private function earliestMonth(int $userId): ?Carbon
+    {
+        $candidates = array_filter([
+            Purchase::query()->where('user_id', $userId)->min('date'),
+            IncomeEntry::query()->where('user_id', $userId)->min('received_at'),
+            RecurringCharge::query()->where('user_id', $userId)->min('occurred_on'),
+            DebtPayment::query()->where('user_id', $userId)->min('paid_at'),
+            Saving::query()->where('user_id', $userId)->min('month'),
+            BalanceSheetTotal::query()->where('user_id', $userId)->min('month'),
+        ], fn ($value) => $value !== null && $value !== '');
+
+        if ($candidates === []) {
+            return null;
+        }
+
+        return Carbon::parse(min($candidates))->startOfMonth();
     }
 
     public function labelFor(string $view, string $series): string
@@ -231,9 +331,9 @@ class StatisticsService
     private function comparePoints(int $userId, string $series, Carbon $from, Carbon $to): array
     {
         return match ($series) {
-            'purchase_categories_month' => $this->purchaseCategoryNets($userId, $to, $to),
+            'purchase_categories_month' => $this->purchaseCategoryNets($userId, $from, $to),
             'purchase_categories_avg' => $this->purchaseCategoryAverages($userId, $from, $to),
-            'outflow_domains_month' => $this->outflowDomains($userId, $to),
+            'outflow_domains_month' => $this->outflowDomains($userId, $from, $to),
             'leftover_by_month' => collect($this->leftoverByMonth($userId, $from, $to))
                 ->map(fn (array $row) => [
                     'name' => $row['month'],
@@ -249,12 +349,12 @@ class StatisticsService
     /**
      * @return list<array{name: string, value: float}>
      */
-    private function sharePoints(int $userId, string $series, Carbon $month): array
+    private function sharePoints(int $userId, string $series, Carbon $from, Carbon $to): array
     {
         $points = match ($series) {
-            'outflow_mix' => $this->outflowDomains($userId, $month),
-            'purchase_categories' => $this->purchaseCategoryNets($userId, $month, $month),
-            'income_mix' => $this->incomeMix($userId, $month),
+            'outflow_mix' => $this->outflowDomains($userId, $from, $to),
+            'purchase_categories' => $this->purchaseCategoryNets($userId, $from, $to),
+            'income_mix' => $this->incomeMix($userId, $from, $to),
             default => throw new InvalidArgumentException("Unknown share series [{$series}]"),
         };
 
@@ -421,37 +521,36 @@ class StatisticsService
     /**
      * @return list<array{name: string, value: float}>
      */
-    private function outflowDomains(int $userId, Carbon $month): array
+    private function outflowDomains(int $userId, Carbon $from, Carbon $to): array
     {
-        $from = $month->copy()->startOfMonth();
-        $to = $month->copy()->startOfMonth();
-        $purchases = $this->domainOutByMonth($userId, 'spending', $from, $to)[$month->format('Y-m')] ?? 0.0;
-        $recurring = $this->domainOutByMonth($userId, 'recurring', $from, $to)[$month->format('Y-m')] ?? 0.0;
-        $debt = $this->domainOutByMonth($userId, 'debt', $from, $to)[$month->format('Y-m')] ?? 0.0;
+        $purchases = round((float) collect($this->domainOutByMonth($userId, 'spending', $from, $to))->sum(), 2);
+        $recurring = round((float) collect($this->domainOutByMonth($userId, 'recurring', $from, $to))->sum(), 2);
+        $debt = round((float) collect($this->domainOutByMonth($userId, 'debt', $from, $to))->sum(), 2);
 
-        $savingsDeposits = (float) Saving::query()
+        $savingsDeposits = round((float) Saving::query()
             ->where('user_id', $userId)
             ->where('type', 'deposit')
-            ->whereDate('month', $month->toDateString())
-            ->sum('amount');
+            ->whereDate('month', '>=', $from->toDateString())
+            ->whereDate('month', '<=', $to->toDateString())
+            ->sum('amount'), 2);
 
         return [
-            ['name' => 'Purchases', 'value' => round($purchases, 2)],
-            ['name' => 'Recurring', 'value' => round($recurring, 2)],
-            ['name' => 'Debt payments', 'value' => round($debt, 2)],
-            ['name' => 'Savings deposits', 'value' => round($savingsDeposits, 2)],
+            ['name' => 'Purchases', 'value' => $purchases],
+            ['name' => 'Recurring', 'value' => $recurring],
+            ['name' => 'Debt payments', 'value' => $debt],
+            ['name' => 'Savings deposits', 'value' => $savingsDeposits],
         ];
     }
 
     /**
      * @return list<array{name: string, value: float}>
      */
-    private function incomeMix(int $userId, Carbon $month): array
+    private function incomeMix(int $userId, Carbon $from, Carbon $to): array
     {
         $facts = $this->readModel->forUser(
             $userId,
-            $month->copy()->startOfMonth(),
-            $month->copy()->endOfMonth(),
+            $from->copy()->startOfMonth(),
+            $to->copy()->endOfMonth(),
         );
 
         $totals = [

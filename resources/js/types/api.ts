@@ -240,7 +240,7 @@ export interface Saving {
 }
 
 export type StatisticsView = 'trend' | 'compare' | 'share';
-export type StatisticsWindow = 1 | 6 | 12;
+export type StatisticsWindow = 1 | 3 | 6 | 12 | 24 | 60 | 'all';
 export type StatisticsUnit = 'money' | 'percent';
 
 export interface StatisticsPoint {
@@ -253,10 +253,12 @@ export interface StatisticsSeries {
     view: StatisticsView;
     series: string;
     label: string;
-    window: number;
+    window: StatisticsWindow;
     from: string;
     to: string;
     unit: StatisticsUnit;
+    span_months: number;
+    available_windows: StatisticsWindow[];
     points: StatisticsPoint[];
 }
 
@@ -272,8 +274,10 @@ export interface StatisticsMarker {
 }
 
 export interface StatisticsMarkers {
-    window: number;
+    window: StatisticsWindow;
     from: string;
     to: string;
+    span_months: number;
+    available_windows: StatisticsWindow[];
     markers: StatisticsMarker[];
 }

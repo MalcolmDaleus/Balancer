@@ -22,7 +22,7 @@ class StatisticsController extends Controller
                 (int) $request->user()->id,
                 $data['view'],
                 $data['series'],
-                (int) ($data['window'] ?? 6),
+                StatisticsService::parseWindow($data['window'] ?? 12),
             )
         );
     }
@@ -34,7 +34,7 @@ class StatisticsController extends Controller
         return response()->json(
             $this->statistics->markers(
                 (int) $request->user()->id,
-                (int) ($data['window'] ?? 6),
+                StatisticsService::parseWindow($data['window'] ?? 12),
             )
         );
     }

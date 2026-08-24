@@ -53,7 +53,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
                 className={`flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
             >
             {/* Card header */}
-            <div className="shrink-0 border-b border-slate-100 px-4 pt-4 pb-3 dark:border-neutral-800">
+            <div className="shrink-0 border-b border-slate-100 px-5 pt-5 pb-4 dark:border-neutral-800">
                 <h2 className="mb-3 text-base font-semibold text-slate-900 dark:text-neutral-50">Creator Suite</h2>
 
                 {/* Main tab bar */}
@@ -78,7 +78,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
             </div>
 
             {/* Tab content — lazy-mount: once loaded, always kept in DOM (hidden) to preserve state */}
-            <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-3">
+            <div className="flex min-h-0 flex-1 flex-col px-5 pt-3 pb-4">
                 {loaded.has('Income') && (
                     <div className={`h-full ${activeTab !== 'Income' ? 'hidden' : 'flex flex-col'}`}>
                         <IncomeTab active={activeTab === 'Income'} />

@@ -3,6 +3,7 @@
  */
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Spinner } from '@/components/ui/spinner';
 import {
     Children,
     cloneElement,
@@ -70,13 +71,17 @@ export const tintSectionPill = {
 export const tabInactiveCls =
     'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-neutral-300 dark:hover:bg-white/5 dark:hover:text-neutral-100';
 
-/** Opaque row action buttons — same look in light and dark mode */
+/** Nested cards — downward lift, not a grey halo. Parent scroll area must pad so it isn’t clipped. */
+export const innerCardCls =
+    'rounded-xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05),0_6px_16px_rgba(15,23,42,0.10)] dark:bg-neutral-800/50 dark:shadow-[0_2px_10px_rgba(0,0,0,0.40)]';
+
+/** Row action buttons */
 export const editBtnCls =
     'rounded-full bg-sky-700 px-3 py-1 text-sm font-medium text-sky-50 hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40';
 export const deleteBtnCls =
     'rounded-full bg-rose-700 px-3 py-1 text-sm font-medium text-rose-50 hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-40';
 export const secondaryBtnCls =
-    'rounded-full bg-violet-500 px-3 py-1 text-sm font-medium text-violet-50 hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40';
+    'rounded-full bg-slate-500 px-3 py-1 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-neutral-600 dark:hover:bg-neutral-500';
 export const secondaryBtnFullCls = `${secondaryBtnCls} w-full text-center`;
 
 /** Vertical stack for list items */
@@ -104,7 +109,7 @@ export function ListRow({
     className?: string;
 }) {
     const interactive = Boolean(onClick && !disabled);
-    const baseCls = `rounded-xl px-3 py-3.5 transition-colors text-left w-full ${
+    const baseCls = `rounded-xl px-4 py-4 transition-colors text-left w-full ${
         disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50' : ''
     } ${
         selected ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-neutral-800/60 dark:ring-neutral-700' : 'bg-slate-50/70 dark:bg-neutral-800/40'
@@ -200,7 +205,7 @@ export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, sh
                 </div>
 
                 {/* Desktop form panel — hidden on mobile */}
-                <div className="hidden border-l border-slate-100 pl-4 md:block md:w-[40%] dark:border-neutral-800 dark:bg-neutral-950/40">
+                <div className="hidden border-l border-slate-100 pl-5 md:block md:w-[40%] dark:border-neutral-800 dark:bg-neutral-950/40">
                     {sheetTitle && <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-neutral-300">{sheetTitle}</p>}
                     <div className="overflow-y-auto">{form}</div>
                 </div>
@@ -362,7 +367,7 @@ export const selectCls = inputCls;
 
 /** Loading row */
 export function LoadingRows() {
-    return <p className="py-4 text-center text-sm text-slate-400">Loading…</p>;
+    return <Spinner className="min-h-20 py-4" label="Loading" />;
 }
 
 /** Empty row */

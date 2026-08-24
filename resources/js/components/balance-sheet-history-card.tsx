@@ -1,5 +1,6 @@
 import { apiFetchList, errorMessage } from '@/api/client';
-import { tintSectionPill } from '@/components/creator-suite/shared';
+import { innerCardCls, tintSectionPill } from '@/components/creator-suite/shared';
+import { Spinner } from '@/components/ui/spinner';
 import { useFinanceDataOptional } from '@/contexts/finance-data';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { type BalanceSheetSnapshot } from '@/types/api';
@@ -66,9 +67,9 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
 
     return (
         <div
-            className={`flex flex-col overflow-hidden rounded-2xl bg-white p-4 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+            className={`flex flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
         >
-            <div className="mb-3 flex items-start justify-between gap-2">
+            <div className="mb-4 flex shrink-0 items-start justify-between gap-2">
                 <div>
                     <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Past Balance Sheets</h2>
                     <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">Closed monthly snapshots</p>
@@ -84,8 +85,8 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                 </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-                {isLoading && <p className="text-sm text-slate-500 dark:text-neutral-300">Loading history...</p>}
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {isLoading && <Spinner label="Loading history" />}
 
                 {!isLoading && error && !snapshots.length && (
                     <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
@@ -98,20 +99,17 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                 )}
 
                 {!isLoading && snapshots.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                         {error && <p className="mb-2 text-sm text-rose-600 dark:text-rose-300">{error}</p>}
                         {snapshots.map((snap) => {
                             const isOpen = expandedId === snap.id;
                             return (
-                                <div
-                                    key={snap.id}
-                                    className="rounded-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] dark:bg-neutral-800/50 dark:shadow-[0_2px_12px_rgba(0,0,0,0.30)]"
-                                >
+                                <div key={snap.id} className={innerCardCls}>
                                     <button
                                         type="button"
                                         aria-expanded={isOpen}
                                         onClick={() => setExpandedId(isOpen ? null : snap.id)}
-                                        className="flex w-full flex-col gap-2 px-3 py-2.5 text-left sm:flex-row sm:items-center sm:justify-between"
+                                        className="flex w-full flex-col gap-2 px-4 py-3.5 text-left sm:flex-row sm:items-center sm:justify-between"
                                     >
                                         <div>
                                             <p className="text-base font-medium text-slate-900 dark:text-neutral-100">
@@ -137,7 +135,7 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                                     </button>
 
                                     {isOpen && (
-                                        <div className="space-y-2 border-t border-slate-100 px-3 py-2.5 dark:border-neutral-700/60">
+                                        <div className="space-y-2 border-t border-slate-100 px-4 py-3.5 dark:border-neutral-700/60">
                                             <DetailRow label="Income" value={signed(snap.total_income, '+')} className="text-emerald-600 dark:text-emerald-300" />
                                             <DetailRow label="Debt paid" value={signed(snap.total_debt_paid, '-')} className="text-red-600 dark:text-red-300" />
                                             <DetailRow label="Purchases" value={signed(snap.total_spending, '-')} className="text-yellow-700 dark:text-yellow-300" />

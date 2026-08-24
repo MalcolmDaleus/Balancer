@@ -19,7 +19,10 @@ class StatisticsMarkersRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'window' => ['sometimes', 'integer', Rule::in(StatisticsService::WINDOWS)],
+            'window' => ['sometimes', Rule::in([
+                ...array_map('strval', StatisticsService::WINDOWS),
+                StatisticsService::WINDOW_ALL,
+            ])],
         ];
     }
 }

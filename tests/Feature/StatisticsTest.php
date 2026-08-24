@@ -130,6 +130,55 @@ test('series requires a matching view and series', function () {
         ->assertJsonPath('error', 'validation_failed');
 });
 
+test('available windows omit ranges longer than history', function () {
+    $user = User::factory()->create();
+    seedStatsFixture($user);
+
+    $payload = app(StatisticsService::class)->series($user->id, 'trend', 'leftover', 6);
+
+    expect($payload['span_months'])->toBe(2)
+        ->and($payload['available_windows'])->toBe([1, 'all'])
+        ->and($payload['from'])->toBe('2026-03')
+        ->and($payload['points'])->toHaveCount(6);
+});
+
+test('all-time window spans from earliest activity', function () {
+    $user = User::factory()->create();
+    seedStatsFixture($user);
+
+    $payload = app(StatisticsService::class)->series($user->id, 'trend', 'leftover', 'all');
+
+    expect($payload['window'])->toBe('all')
+        ->and($payload['from'])->toBe('2026-07')
+        ->and($payload['to'])->toBe('2026-08')
+        ->and($payload['points'])->toHaveCount(2);
+});
+
+test('two year window is omitted when history is shorter than 24 months', function () {
+    $user = User::factory()->create();
+    IncomeEntry::factory()->create([
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Regular,
+        'name' => 'Salary',
+        'amount' => 2000,
+        'received_at' => '2024-12-01',
+    ]);
+
+    $payload = app(StatisticsService::class)->series($user->id, 'trend', 'income_total', 12);
+
+    expect($payload['span_months'])->toBe(21)
+        ->and($payload['available_windows'])->toBe([1, 3, 6, 12, 'all']);
+});
+
+test('user with no activity only gets the all-time window', function () {
+    $user = User::factory()->create();
+
+    $payload = app(StatisticsService::class)->series($user->id, 'trend', 'leftover', 'all');
+
+    expect($payload['span_months'])->toBe(0)
+        ->and($payload['available_windows'])->toBe(['all']);
+});
+
 test('leftover trend includes each month in the window', function () {
     $user = User::factory()->create();
     seedStatsFixture($user);
@@ -155,16 +204,21 @@ test('spend_net subtracts refunds from the purchase month', function () {
         ->and($byMonth['2026-07']['value'])->toBe(70.0);
 });
 
-test('purchase category share uses net spend', function () {
+test('share and compare totals follow the selected window', function () {
     $user = User::factory()->create();
     seedStatsFixture($user);
 
-    $payload = app(StatisticsService::class)->series($user->id, 'share', 'purchase_categories', 1);
-    $byName = collect($payload['points'])->keyBy('name');
+    $month = app(StatisticsService::class)->series($user->id, 'share', 'purchase_categories', 1);
+    $halfYear = app(StatisticsService::class)->series($user->id, 'share', 'purchase_categories', 6);
 
-    expect($byName->has('Groceries'))->toBeTrue()
-        ->and($byName['Groceries']['value'])->toBe(80.0)
-        ->and($byName->has('Miscellaneous'))->toBeFalse();
+    expect(collect($month['points'])->firstWhere('name', 'Groceries')['value'])->toBe(80.0)
+        ->and(collect($halfYear['points'])->firstWhere('name', 'Groceries')['value'])->toBe(150.0);
+
+    $incomeMonth = app(StatisticsService::class)->series($user->id, 'share', 'income_mix', 1);
+    $incomeYear = app(StatisticsService::class)->series($user->id, 'share', 'income_mix', 6);
+
+    expect(collect($incomeMonth['points'])->firstWhere('name', 'Regular')['value'])->toBe(2000.0)
+        ->and(collect($incomeYear['points'])->firstWhere('name', 'Regular')['value'])->toBe(4000.0);
 });
 
 test('outflow mix keeps domain labels', function () {
@@ -235,5 +289,11 @@ test('authenticated users can fetch series and markers', function () {
         ->getJson('/api/v1/statistics/markers?window=6')
         ->assertOk()
         ->assertJsonPath('window', 6)
-        ->assertJsonStructure(['markers']);
+        ->assertJsonStructure(['markers', 'available_windows']);
+
+    $this->actingAs($user)
+        ->getJson('/api/v1/statistics?view=trend&series=leftover&window=all')
+        ->assertOk()
+        ->assertJsonPath('window', 'all')
+        ->assertJsonPath('from', '2026-07');
 });
