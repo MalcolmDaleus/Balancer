@@ -3,6 +3,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Spinner } from '@/components/ui/spinner';
 import { useFinanceDataOptional } from '@/contexts/finance-data';
 import { useFormatMoney } from '@/hooks/use-format-money';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
     type StatisticsMarker,
     type StatisticsMarkers,
@@ -34,26 +35,26 @@ const VIEWS: { id: StatisticsView | 'markers'; title: string; color: string }[] 
 ];
 
 const TREND_SERIES = [
-    { id: 'leftover', label: 'Monthly leftover', color: '#8b5cf6' },
-    { id: 'income_total', label: 'Total income', color: '#10b981' },
-    { id: 'spend_net', label: 'Discretionary spend (net)', color: '#eab308' },
-    { id: 'recurring_total', label: 'Recurring charged', color: '#fb923c' },
-    { id: 'savings_net', label: 'Savings net', color: '#0ea5e9' },
-    { id: 'savings_running', label: 'Running savings pot', color: '#38bdf8' },
-    { id: 'recurring_load', label: 'Recurring as % of income', color: '#f97316' },
+    { id: 'leftover', label: 'What’s leftover', color: '#8b5cf6' },
+    { id: 'income_total', label: 'Income', color: '#10b981' },
+    { id: 'spend_net', label: 'Purchases', color: '#eab308' },
+    { id: 'recurring_total', label: 'Recurring charges', color: '#fb923c' },
+    { id: 'savings_net', label: 'Savings', color: '#0ea5e9' },
+    { id: 'savings_running', label: 'Savings total', color: '#38bdf8' },
+    { id: 'recurring_load', label: 'Recurring vs income', color: '#f97316' },
 ];
 
 const COMPARE_SERIES = [
-    { id: 'purchase_categories_month', label: 'Purchase categories (total)' },
-    { id: 'purchase_categories_avg', label: 'Purchase categories (monthly avg)' },
-    { id: 'outflow_domains_month', label: 'Outflow domains' },
+    { id: 'purchase_categories_month', label: 'Purchases by category' },
+    { id: 'purchase_categories_avg', label: 'Average by category' },
+    { id: 'outflow_domains_month', label: 'Spending by type' },
     { id: 'leftover_by_month', label: 'Leftover by month' },
 ];
 
 const SHARE_SERIES = [
-    { id: 'outflow_mix', label: 'Outflow mix' },
-    { id: 'purchase_categories', label: 'Purchase category share' },
-    { id: 'income_mix', label: 'Income mix' },
+    { id: 'outflow_mix', label: 'How money was used' },
+    { id: 'purchase_categories', label: 'Share of purchases' },
+    { id: 'income_mix', label: 'Types of income' },
 ];
 
 const WINDOWS: { id: StatisticsWindow; label: string }[] = [
@@ -73,8 +74,8 @@ const DOMAIN_COLORS: Record<string, string> = {
     'Debt payments': '#ef4444',
     'Savings deposits': '#0ea5e9',
     Regular: '#10b981',
-    Irregular: '#14b8a6',
-    Refund: '#84cc16',
+    Irregular: '#6366f1',
+    Refund: '#f59e0b',
 };
 
 /** Mixed hues so category slices don't walk the rainbow in order. */
@@ -169,15 +170,21 @@ function formatMonthTick(ym: string): string {
     return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
 }
 
-function markerTone(id: string): string {
-    if (id === 'leftover_vs_avg') return 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-200';
-    if (id === 'top_category') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-400/20 dark:text-yellow-200';
-    if (id === 'savings_this_month') return 'bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200';
-    if (id === 'recurring_load') return 'bg-orange-100 text-orange-800 dark:bg-orange-400/20 dark:text-orange-200';
-    if (id === 'best_leftover_month') return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200';
-    if (id === 'worst_leftover_month') return 'bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-200';
-    return 'bg-slate-100 text-slate-800 dark:bg-neutral-800 dark:text-neutral-200';
+function compactFormattedMoney(value: number, formatMoney: (value: number) => string): string {
+    const formatted = formatMoney(value);
+    const abs = Math.abs(value);
+    if (abs < 1000) {
+        return formatted.replace(/[.,]00\b/, '');
+    }
+
+    const compact = `${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1).replace(/\.0$/, '')}k`;
+    const prefix = formatted.match(/^[^\d-]+/)?.[0] ?? '';
+    const suffix = formatted.match(/[^\d.,\s]+$/)?.[0] ?? '';
+    const sign = value < 0 ? '-' : '';
+    return `${prefix}${sign}${compact}${suffix === prefix ? '' : suffix}`;
 }
+
+const MARKER_CARD_CLS = 'rounded-xl bg-slate-100 px-4 py-3.5 dark:bg-neutral-800/80';
 
 function markerDeltaClass(delta: number | undefined): string {
     if (delta === undefined || delta === 0) {
@@ -188,6 +195,7 @@ function markerDeltaClass(delta: number | undefined): string {
 
 export default function StatisticsCard({ className = '' }: { className?: string }) {
     const amount = useFormatMoney();
+    const isMobile = useIsMobile();
     const finance = useFinanceDataOptional();
 
     const [viewIndex, setViewIndex] = useState(0);
@@ -212,6 +220,16 @@ export default function StatisticsCard({ className = '' }: { className?: string 
             return amount(value);
         },
         [amount],
+    );
+
+    const formatAxisValue = useCallback(
+        (value: number, unit: 'money' | 'percent' = 'money') => {
+            if (unit === 'percent') {
+                return `${(value * 100).toFixed(0)}%`;
+            }
+            return isMobile ? compactFormattedMoney(value, amount) : amount(value);
+        },
+        [amount, isMobile],
     );
 
     const compareOptions = useMemo(
@@ -320,12 +338,20 @@ export default function StatisticsCard({ className = '' }: { className?: string 
 
     const yAxisWidth = useMemo(() => {
         if (!series || chartData.length === 0) {
+            return isMobile ? 44 : 96;
+        }
+        const ticks = chartData.map((d) => formatAxisValue(d.value, series.unit));
+        const longest = Math.max(...ticks.map((t) => t.length), 4);
+        return isMobile ? Math.min(52, Math.max(42, longest * 7 + 10)) : Math.min(128, Math.max(72, longest * 8 + 16));
+    }, [chartData, formatAxisValue, isMobile, series]);
+
+    const categoryAxisWidth = useMemo(() => {
+        if (!isMobile || chartData.length === 0) {
             return 96;
         }
-        const ticks = chartData.map((d) => formatValue(d.value, series.unit));
-        const longest = Math.max(...ticks.map((t) => t.length), 8);
-        return Math.min(128, Math.max(72, longest * 8 + 16));
-    }, [chartData, formatValue, series]);
+        const longest = Math.max(...chartData.map((d) => d.label.length), 8);
+        return Math.min(108, Math.max(72, longest * 6.5));
+    }, [chartData, isMobile]);
 
     const chartConfig = {
         value: { label: series?.label ?? 'Value', color: trendColor },
@@ -367,7 +393,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                 </button>
             </div>
 
-            <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
+            <div className="mb-6 flex shrink-0 flex-wrap items-center gap-2">
                 <select
                     className={selectCls}
                     value={String(windowSize)}
@@ -397,14 +423,14 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                 )}
             </div>
 
-            <div className="min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 flex-col">
                 {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
                 {!error && !seriesReady && !markersReady && <Spinner label="Loading statistics" />}
                 {!error && markersReady && markers && (
                     <MarkersGrid markers={markers.markers} formatValue={formatValue} />
                 )}
                 {!error && seriesReady && series && (
-                    <div className={`w-full ${activeView === 'share' ? 'h-64 sm:h-72' : 'h-56 sm:h-64'}`}>
+                    <div className="flex min-h-0 w-full flex-1 flex-col">
                         {chartData.length === 0 ? (
                             <p className="text-sm text-slate-400 dark:text-neutral-500">No data in this window.</p>
                         ) : activeView === 'trend' && chartData.length < 2 ? (
@@ -413,7 +439,10 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                             </p>
                         ) : activeView === 'trend' ? (
                             <ChartContainer config={chartConfig} className="h-full w-full">
-                                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
+                                <AreaChart
+                                    data={chartData}
+                                    margin={{ top: 8, right: 6, left: 4, bottom: 0 }}
+                                >
                                     <defs>
                                         <linearGradient id="statsTrendFill" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="0%" stopColor={trendColor} stopOpacity={0.4} />
@@ -421,12 +450,20 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                                    <XAxis
+                                        dataKey="label"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickMargin={8}
+                                        interval={isMobile ? 'preserveStartEnd' : 0}
+                                        minTickGap={isMobile ? 28 : 8}
+                                    />
                                     <YAxis
                                         tickLine={false}
                                         axisLine={false}
                                         width={yAxisWidth}
-                                        tickFormatter={(v) => formatValue(Number(v), series.unit)}
+                                        tickMargin={4}
+                                        tickFormatter={(v) => formatAxisValue(Number(v), series.unit)}
                                     />
                                     <ChartTooltip
                                         content={
@@ -442,21 +479,66 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                         stroke={trendColor}
                                         strokeWidth={2.5}
                                         fill="url(#statsTrendFill)"
-                                        dot={{ r: 3, fill: trendColor, stroke: '#fff', strokeWidth: 1 }}
+                                        dot={isMobile ? false : { r: 3, fill: trendColor, stroke: '#fff', strokeWidth: 1 }}
+                                        activeDot={{ r: 4, fill: trendColor, stroke: '#fff', strokeWidth: 1 }}
                                     />
                                 </AreaChart>
                             </ChartContainer>
                         ) : activeView === 'compare' ? (
                             <ChartContainer config={chartConfig} className="h-full w-full">
-                                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 16 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
-                                    <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} angle={-20} textAnchor="end" height={48} />
-                                    <YAxis
-                                        tickLine={false}
-                                        axisLine={false}
-                                        width={yAxisWidth}
-                                        tickFormatter={(v) => formatValue(Number(v), series.unit)}
+                                <BarChart
+                                    data={chartData}
+                                    layout={isMobile ? 'vertical' : 'horizontal'}
+                                    margin={{
+                                        top: 8,
+                                        right: isMobile ? 12 : 8,
+                                        left: isMobile ? 4 : 4,
+                                        bottom: isMobile ? 0 : 0,
+                                    }}
+                                >
+                                    <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        vertical={!isMobile}
+                                        horizontal={isMobile}
+                                        stroke="#cbd5e1"
                                     />
+                                    {isMobile ? (
+                                        <>
+                                            <XAxis
+                                                type="number"
+                                                tickLine={false}
+                                                axisLine={false}
+                                                tickFormatter={(v) => formatAxisValue(Number(v), series.unit)}
+                                            />
+                                            <YAxis
+                                                type="category"
+                                                dataKey="label"
+                                                tickLine={false}
+                                                axisLine={false}
+                                                width={categoryAxisWidth}
+                                                interval={0}
+                                            />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XAxis
+                                                dataKey="label"
+                                                tickLine={false}
+                                                axisLine={false}
+                                                interval={0}
+                                                angle={-20}
+                                                textAnchor="end"
+                                                height={36}
+                                                tickMargin={4}
+                                            />
+                                            <YAxis
+                                                tickLine={false}
+                                                axisLine={false}
+                                                width={yAxisWidth}
+                                                tickFormatter={(v) => formatAxisValue(Number(v), series.unit)}
+                                            />
+                                        </>
+                                    )}
                                     <ChartTooltip
                                         content={
                                             <ChartTooltipContent
@@ -465,7 +547,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                             />
                                         }
                                     />
-                                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                                    <Bar dataKey="value" radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}>
                                         {chartData.map((d, i) => (
                                             <Cell key={d.label + i} fill={d.fill} />
                                         ))}
@@ -474,14 +556,18 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                             </ChartContainer>
                         ) : (
                             <div
-                                className={`flex h-full min-h-0 items-center ${legendCols === 1 ? 'gap-3' : 'gap-4'}`}
+                                className={`flex h-full min-h-0 flex-col md:flex-row md:items-center ${
+                                    legendCols === 1 ? 'gap-3' : legendCols === 2 ? 'gap-5' : 'gap-4'
+                                }`}
                             >
                                 <ChartContainer
                                     config={chartConfig}
                                     className={
                                         legendCols === 1
-                                            ? 'h-full min-w-0 flex-1'
-                                            : 'h-full w-[32%] max-w-[14rem] shrink-0'
+                                            ? 'h-[52%] min-h-[10rem] w-full shrink-0 md:h-full md:min-h-0 md:min-w-0 md:flex-1'
+                                            : legendCols === 2
+                                              ? 'h-[52%] min-h-[10rem] w-full shrink-0 md:h-full md:min-h-0 md:w-[46%] md:flex-none'
+                                              : 'h-[52%] min-h-[10rem] w-full shrink-0 md:h-full md:min-h-0 md:w-[30%] md:flex-none'
                                     }
                                 >
                                     <PieChart>
@@ -498,7 +584,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                             dataKey="value"
                                             nameKey="label"
                                             innerRadius={0}
-                                            outerRadius="80%"
+                                            outerRadius="82%"
                                             paddingAngle={1}
                                             stroke="#fff"
                                             strokeWidth={1}
@@ -512,10 +598,10 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                 <ul
                                     className={
                                         legendCols === 1
-                                            ? 'flex max-h-full w-[42%] shrink-0 flex-col justify-center gap-1.5 overflow-y-auto pr-1 text-xs'
-                                            : `grid max-h-full min-w-0 flex-1 content-center gap-x-4 gap-y-2 overflow-y-auto pr-1 text-xs ${
-                                                  legendCols === 2 ? 'grid-cols-2' : 'grid-cols-3'
-                                              }`
+                                            ? 'flex min-h-0 w-full flex-1 flex-col justify-start gap-3 overflow-y-auto pr-1 text-left text-xs md:max-h-full md:w-[42%] md:flex-none md:justify-center'
+                                            : legendCols === 2
+                                              ? 'grid min-h-0 w-full flex-1 grid-cols-1 content-start justify-items-start gap-x-6 gap-y-3 overflow-y-auto pr-1 text-left text-xs md:w-fit md:max-h-full md:max-w-full md:flex-none md:grid-cols-2 md:content-center'
+                                              : 'grid min-h-0 w-full flex-1 grid-cols-1 content-start justify-items-start gap-x-5 gap-y-3 overflow-y-auto pr-1 text-left text-xs md:w-fit md:max-h-full md:max-w-full md:flex-none md:grid-cols-3 md:content-center'
                                     }
                                 >
                                     {chartData.map((d) => {
@@ -575,10 +661,16 @@ function MarkersGrid({
     return (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {markers.map((m) => (
-                <div key={m.id} className={`rounded-xl px-4 py-3.5 ${markerTone(m.id)}`}>
-                    <p className="text-[11px] font-semibold tracking-wide uppercase opacity-80">{m.label}</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums">{formatValue(m.value, m.unit)}</p>
-                    {m.month && <p className="text-xs opacity-70">{formatMonthTick(m.month)}</p>}
+                <div key={m.id} className={MARKER_CARD_CLS}>
+                    <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-500 dark:text-neutral-400">
+                        {m.label}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900 dark:text-neutral-100">
+                        {formatValue(m.value, m.unit)}
+                    </p>
+                    {m.month && (
+                        <p className="text-xs text-slate-500 dark:text-neutral-400">{formatMonthTick(m.month)}</p>
+                    )}
                     {m.delta !== undefined && m.baseline !== undefined && Math.abs(m.delta) >= 0.005 && (
                         <p className={`text-xs tabular-nums ${markerDeltaClass(m.delta)}`}>
                             {m.delta > 0 ? '+' : ''}
@@ -586,7 +678,9 @@ function MarkersGrid({
                         </p>
                     )}
                     {m.baseline !== undefined && (m.delta === undefined || Math.abs(m.delta) < 0.005) && (
-                        <p className="text-xs opacity-70">avg {formatValue(m.baseline, m.unit)}/mo</p>
+                        <p className="text-xs text-slate-500 dark:text-neutral-400">
+                            avg {formatValue(m.baseline, m.unit)}/mo
+                        </p>
                     )}
                 </div>
             ))}

@@ -16,12 +16,12 @@ export function Spinner({
         >
             <div className="relative h-12 w-12">
                 <span
-                    className="absolute inset-0 rounded-full border-[3px] border-violet-200 dark:border-violet-500/25"
+                    className="absolute inset-0 rounded-full border-[3px] border-slate-200 dark:border-neutral-700"
                     aria-hidden
                 />
                 <Loader2
-                    className="relative h-12 w-12 animate-spin text-violet-500 dark:text-violet-400"
-                    strokeWidth={2.5}
+                    className="relative h-12 w-12 animate-spin text-violet-400/80 dark:text-violet-300/70"
+                    strokeWidth={2.25}
                 />
             </div>
         </div>

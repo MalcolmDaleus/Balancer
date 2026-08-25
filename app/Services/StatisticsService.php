@@ -24,26 +24,26 @@ class StatisticsService
     public const WINDOW_ALL = 'all';
 
     public const TREND = [
-        'leftover' => 'Monthly leftover',
-        'income_total' => 'Total income',
-        'spend_net' => 'Discretionary spend (net)',
-        'recurring_total' => 'Recurring charged',
-        'savings_net' => 'Savings net',
-        'savings_running' => 'Running savings pot',
-        'recurring_load' => 'Recurring as % of income',
+        'leftover' => 'What’s leftover',
+        'income_total' => 'Income',
+        'spend_net' => 'Purchases',
+        'recurring_total' => 'Recurring charges',
+        'savings_net' => 'Savings',
+        'savings_running' => 'Savings total',
+        'recurring_load' => 'Recurring vs income',
     ];
 
     public const COMPARE = [
-        'purchase_categories_month' => 'Purchase categories (total)',
-        'purchase_categories_avg' => 'Purchase categories (monthly avg)',
-        'outflow_domains_month' => 'Outflow domains',
+        'purchase_categories_month' => 'Purchases by category',
+        'purchase_categories_avg' => 'Average by category',
+        'outflow_domains_month' => 'Spending by type',
         'leftover_by_month' => 'Leftover by month',
     ];
 
     public const SHARE = [
-        'outflow_mix' => 'Outflow mix',
-        'purchase_categories' => 'Purchase category share',
-        'income_mix' => 'Income mix',
+        'outflow_mix' => 'How money was used',
+        'purchase_categories' => 'Share of purchases',
+        'income_mix' => 'Types of income',
     ];
 
     public function __construct(
