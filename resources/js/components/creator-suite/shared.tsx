@@ -198,16 +198,23 @@ export interface SplitPaneProps {
 export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, sheetTitle }: SplitPaneProps) {
     return (
         <>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row" data-cs-split>
                 {/* List panel — full width on mobile, 60 % on desktop */}
-                <div className="flex min-h-0 flex-col md:w-[60%]">
+                <div className="flex min-h-0 flex-col md:w-[58%]">
                     <div className="min-h-0 flex-1 overflow-y-auto">{list}</div>
                 </div>
 
                 {/* Desktop form panel — hidden on mobile */}
-                <div className="hidden border-l border-slate-100 pl-5 md:block md:w-[40%] dark:border-neutral-800 dark:bg-neutral-950/40">
-                    {sheetTitle && <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-neutral-300">{sheetTitle}</p>}
-                    <div className="overflow-y-auto">{form}</div>
+                <div
+                    data-cs-form-pane
+                    className="hidden min-h-0 flex-col overflow-hidden border-l border-slate-100 pl-5 md:flex md:w-[42%] dark:border-neutral-800 dark:bg-neutral-950/40"
+                >
+                    {sheetTitle && (
+                        <p className="mb-2 shrink-0 text-sm font-semibold text-slate-600 dark:text-neutral-300">
+                            {sheetTitle}
+                        </p>
+                    )}
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">{form}</div>
                 </div>
             </div>
 

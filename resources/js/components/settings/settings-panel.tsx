@@ -15,6 +15,7 @@ import { logout } from '@/routes';
 import { Form, Link, router, usePage } from '@inertiajs/react';
 import { Loader2, LogOut, RefreshCw } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
+import { useDashboardDensity, type DashboardDensity } from '@/hooks/use-dashboard-density';
 
 const selectCls =
     'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900';
@@ -41,6 +42,33 @@ function formatProcessedAt(iso: string | null | undefined): string {
     } catch {
         return iso;
     }
+}
+
+function DashboardDensityTabs() {
+    const { density, updateDensity } = useDashboardDensity();
+    const tabs: { value: DashboardDensity; label: string }[] = [
+        { value: 'comfortable', label: 'Big' },
+        { value: 'compact', label: 'Small' },
+    ];
+
+    return (
+        <div className="inline-flex gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800">
+            {tabs.map(({ value, label }) => (
+                <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateDensity(value)}
+                    className={`rounded-md px-3.5 py-1.5 text-sm transition-colors ${
+                        density === value
+                            ? 'bg-white shadow-xs dark:bg-neutral-700 dark:text-neutral-100'
+                            : 'text-neutral-500 hover:bg-neutral-200/60 hover:text-black dark:text-neutral-400 dark:hover:bg-neutral-700/60'
+                    }`}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
 }
 
 /** Shared settings body — used by desktop drawer and mobile Settings card. */
@@ -241,6 +269,13 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
 
             <Section title="Appearance">
                 <AppearanceTabs />
+            </Section>
+
+            <Section title="Desktop layout">
+                <DashboardDensityTabs />
+                <p className="text-sm text-muted-foreground">
+                    Compact keeps a 5∶3 wide-to-thin ratio, shrinks type and padding, and leaves a thin-card slot on each row. The second row can sit partly below the fold. Mobile is unchanged.
+                </p>
             </Section>
 
             <Section title="Finance">

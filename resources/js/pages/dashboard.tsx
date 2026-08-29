@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { useFormatMoney } from '@/hooks/use-format-money';
+import { useDashboardDensity } from '@/hooks/use-dashboard-density';
 import { type BalanceSheetExpanded } from '@/types/api';
 import { Head } from '@inertiajs/react';
 import { RefreshCw } from 'lucide-react';
@@ -563,6 +564,17 @@ function SettingsModuleCard({
     );
 }
 
+function ReservedModuleSlot({ className = '' }: { className?: string }) {
+    return (
+        <div
+            className={`col-span-3 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300/80 bg-white/40 px-4 text-center dark:border-neutral-600/70 dark:bg-neutral-900/30 ${className}`}
+        >
+            <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Open slot</p>
+            <p className="mt-1 text-xs text-slate-400 dark:text-neutral-500">Balance Sheet width — budgets, goals, accounts…</p>
+        </div>
+    );
+}
+
 export default function Dashboard() {
     return (
         <FinanceDataProvider>
@@ -588,6 +600,7 @@ function DashboardShell() {
     const [activeIndex, setActiveIndex] = useState(0);
     const carouselRef = useRef<HTMLDivElement>(null);
     const { focusSettingsCard, clearFocusSettingsCard } = useSettings();
+    const { compact } = useDashboardDensity();
 
     const handleScroll = () => {
         const el = carouselRef.current;
@@ -653,19 +666,29 @@ function DashboardShell() {
                     </div>
                 </div>
 
-                {/* ── Desktop: 12-column bento grid ────────────────────────── */}
-                <div className="hidden p-7 md:block lg:p-10">
-                    <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
+                {/* ── Desktop: 12-column bento, or compact 11-column 5∶3 with a reserved slot ─ */}
+                <div className={`hidden md:block ${compact ? 'p-4 lg:p-5' : 'p-7 lg:p-10'}`}>
+                    {compact ? (
+                        <div
+                            data-density="compact"
+                            className="mx-auto grid max-w-screen-xl grid-cols-[repeat(11,minmax(0,1fr))] gap-3"
+                        >
+                            <StatisticsCard className="col-span-5 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <BalanceSheetCard className="col-span-3 h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <ReservedModuleSlot className="h-[calc((100dvh-7.5rem)*0.7)]" />
 
-                        {/* Row 1 — Statistics (8) + Balance Sheet (4) */}
-                        <StatisticsCard className="col-span-8 min-h-[32rem]" />
-                        <BalanceSheetCard className="col-span-4 h-[32rem]" />
+                            <BalanceSheetHistoryCard className="col-span-3 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <CreatorSuiteCard className="col-span-8 h-[calc((100dvh-7.5rem)*0.7)]" />
+                        </div>
+                    ) : (
+                        <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
+                            <StatisticsCard className="col-span-8 min-h-[32rem]" />
+                            <BalanceSheetCard className="col-span-4 h-[32rem]" />
 
-                        {/* Row 2 — Past Balance Sheets (4) + Creator Suite (8) */}
-                        <BalanceSheetHistoryCard className="col-span-4 h-[42rem] min-h-0" />
-                        <CreatorSuiteCard className="col-span-8 h-[42rem]" />
-
-                    </div>
+                            <BalanceSheetHistoryCard className="col-span-4 h-[42rem] min-h-0" />
+                            <CreatorSuiteCard className="col-span-8 h-[42rem]" />
+                        </div>
+                    )}
                 </div>
 
             </div>

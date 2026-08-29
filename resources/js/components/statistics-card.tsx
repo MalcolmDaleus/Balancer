@@ -393,7 +393,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                 </button>
             </div>
 
-            <div className="mb-6 flex shrink-0 flex-wrap items-center gap-2">
+            <div className="stats-toolbar mb-7 flex shrink-0 flex-wrap items-center gap-2">
                 <select
                     className={selectCls}
                     value={String(windowSize)}
@@ -485,15 +485,18 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                 </AreaChart>
                             </ChartContainer>
                         ) : activeView === 'compare' ? (
-                            <ChartContainer config={chartConfig} className="h-full w-full">
+                            <ChartContainer
+                                config={chartConfig}
+                                className="h-full w-full min-h-0 [&_.recharts-responsive-container]:overflow-visible [&_.recharts-wrapper]:overflow-visible [&_.recharts-surface]:overflow-visible"
+                            >
                                 <BarChart
                                     data={chartData}
                                     layout={isMobile ? 'vertical' : 'horizontal'}
                                     margin={{
-                                        top: 8,
+                                        top: 16,
                                         right: isMobile ? 12 : 8,
                                         left: isMobile ? 4 : 4,
-                                        bottom: isMobile ? 0 : 0,
+                                        bottom: isMobile ? 0 : 12,
                                     }}
                                 >
                                     <CartesianGrid
@@ -526,10 +529,11 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                                 tickLine={false}
                                                 axisLine={false}
                                                 interval={0}
-                                                angle={-20}
+                                                angle={-22}
                                                 textAnchor="end"
-                                                height={36}
-                                                tickMargin={4}
+                                                height={76}
+                                                tickMargin={10}
+                                                tick={{ fontSize: 11 }}
                                             />
                                             <YAxis
                                                 tickLine={false}
@@ -630,7 +634,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                 )}
             </div>
 
-            <div className="mt-4 flex shrink-0 items-center justify-center gap-2">
+            <div className="mt-5 flex shrink-0 items-center justify-center gap-2">
                 {VIEWS.map((v, i) => (
                     <button
                         key={v.id}

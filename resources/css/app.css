@@ -139,3 +139,132 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Compact desktop bento — smaller type/padding so more modules can fit. */
+[data-density='compact'] {
+    font-size: 0.8125rem;
+    line-height: 1.25;
+}
+
+[data-density='compact'] h2 {
+    font-size: 0.8125rem !important;
+    line-height: 1.2 !important;
+}
+
+[data-density='compact'] .text-base {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+}
+
+[data-density='compact'] .text-lg {
+    font-size: 0.9375rem;
+    line-height: 1.3rem;
+}
+
+[data-density='compact'] .text-sm {
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+}
+
+[data-density='compact'] .text-xs {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+}
+
+[data-density='compact'] .p-7,
+[data-density='compact'] .p-6,
+[data-density='compact'] .p-5 {
+    padding: 0.75rem;
+}
+
+[data-density='compact'] .px-5 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+}
+
+[data-density='compact'] .pt-5 {
+    padding-top: 0.75rem;
+}
+
+[data-density='compact'] .pb-4,
+[data-density='compact'] .pt-4,
+[data-density='compact'] .py-3\.5 {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+[data-density='compact'] .px-4 {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+}
+
+[data-density='compact'] .mb-4,
+[data-density='compact'] .mb-6 {
+    margin-bottom: 0.55rem;
+}
+
+[data-density='compact'] .stats-toolbar {
+    margin-bottom: 1.05rem;
+}
+
+[data-density='compact'] .space-y-2\.5 > :not([hidden]) ~ :not([hidden]),
+[data-density='compact'] .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.4rem;
+}
+
+[data-density='compact'] .gap-2 {
+    gap: 0.35rem;
+}
+
+[data-density='compact'] [data-cs-header] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-top: 0.6rem;
+    padding-bottom: 0.55rem;
+}
+
+[data-density='compact'] [data-cs-header] h2 {
+    margin-bottom: 0 !important;
+}
+
+[data-density='compact'] [data-cs-body] {
+    padding-top: 0.4rem;
+    padding-bottom: 0.5rem;
+}
+
+[data-density='compact'] [data-cs-split] {
+    gap: 0.65rem;
+}
+
+[data-density='compact'] [data-cs-form-pane] {
+    padding-left: 0.75rem;
+}
+
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 0.75rem;
+    align-items: start;
+}
+
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0;
+}
+
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > [role='alert'],
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .flex {
+    grid-column: 1 / -1;
+}
+
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .grid.gap-1:nth-last-child(2):nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+[data-density='compact'] [data-cs-form-pane] input,
+[data-density='compact'] [data-cs-form-pane] select {
+    width: 100%;
+    height: 1.85rem;
+}
