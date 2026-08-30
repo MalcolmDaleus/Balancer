@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\DateScopeable;
 use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
+use App\Services\MonthLockService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -82,7 +83,33 @@ class Debt extends Model
 
     public function hasPaymentFacts(): bool
     {
+        if ($this->relationLoaded('payments')) {
+            return $this->payments->isNotEmpty();
+        }
+
         return $this->payments()->exists();
+    }
+
+    /**
+     * Permanent delete is allowed only for open debts with no payment Facts
+     * and an unlocked issue month. Closed debts are archived instead.
+     */
+    public function canHardDelete(): bool
+    {
+        if ($this->is_closed || $this->hasPaymentFacts()) {
+            return false;
+        }
+
+        return ! MonthLockService::isLocked((int) $this->user_id, $this->issue_date);
+    }
+
+    /**
+     * Soft-archive is only for settled or forgiven debts. An open liability
+     * must be paid or forgiven, not hidden.
+     */
+    public function canArchive(): bool
+    {
+        return $this->is_closed;
     }
 
     // ----------------------------------------------------------

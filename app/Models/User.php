@@ -101,4 +101,9 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(RecurringOccurrenceSkip::class);
     }
+
+    public function bugReports(): HasMany
+    {
+        return $this->hasMany(BugReport::class);
+    }
 }

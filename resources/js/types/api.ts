@@ -131,6 +131,8 @@ export interface RegularIncomeSchedule {
     /** Queued change for the next cycle occurrence. null = no change pending. */
     pending_active: boolean | null;
     deleted_at: string | null;
+    /** True when month-lock / fact rules allow a permanent delete. */
+    can_hard_delete: boolean;
     versions?: RegularIncomeScheduleVersion[];
 }
 
@@ -188,6 +190,10 @@ export interface Debt {
     is_settled: boolean;
     is_forgiven: boolean;
     is_closed: boolean;
+    /** True when there are no payments, the issue month is open, and the debt is not closed. */
+    can_hard_delete: boolean;
+    /** True when the debt is settled or forgiven (open debts cannot be archived). */
+    can_archive: boolean;
     category?: DebtCategory;
 }
 
@@ -227,6 +233,8 @@ export interface RecurringStream {
     /** Queued pause/resume for the next charge occurrence. null = no change pending. */
     pending_active: boolean | null;
     deleted_at: string | null;
+    /** True when month-lock / fact rules allow a permanent delete. */
+    can_hard_delete: boolean;
     category?: RecurringCategory;
     entries?: RecurringEntry[];
 }
@@ -280,4 +288,25 @@ export interface StatisticsMarkers {
     span_months: number;
     available_windows: StatisticsWindow[];
     markers: StatisticsMarker[];
+}
+
+export type BugReportType = 'visual' | 'functional' | 'composite';
+export type BugReportZone =
+    | 'balance-sheet'
+    | 'creator-suite'
+    | 'statistics'
+    | 'past-balance-sheets'
+    | 'settings'
+    | 'dashboard'
+    | 'login'
+    | 'other';
+export type BugReportView = 'desktop' | 'mobile';
+
+export interface BugReport {
+    id: number;
+    type: BugReportType;
+    zone: BugReportZone;
+    view: BugReportView;
+    description: string;
+    created_at: string;
 }

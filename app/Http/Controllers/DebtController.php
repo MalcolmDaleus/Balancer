@@ -57,12 +57,17 @@ class DebtController extends Controller
     {
         $this->authorize('delete', $debt);
 
-        // Soft-archive when payment Facts exist (preserves locked-month history).
-        // Hard-delete only when the instrument has never produced Facts.
-        if ($debt->hasPaymentFacts()) {
+        // Open unused debts in an open month can be erased. Open debts with
+        // history cannot be hidden — settle or forgive first. Closed debts archive.
+        if ($debt->canHardDelete()) {
+            $debt->forceDelete();
+        } elseif ($debt->canArchive()) {
             $debt->delete();
         } else {
-            $debt->forceDelete();
+            throw new DomainException(
+                'debt_open',
+                'Open debts cannot be archived. Pay them off or forgive them first.',
+            );
         }
 
         return response()->json(null, 204);
@@ -92,7 +97,7 @@ class DebtController extends Controller
         $debt->update([
             'is_forgiven' => true,
             'settle_date' => $forgiveDate,
-            'notes'       => $request->input('notes', $debt->notes),
+            'notes' => $request->input('notes', $debt->notes),
         ]);
 
         return new DebtResource($debt->fresh()->load(['category', 'payments']));

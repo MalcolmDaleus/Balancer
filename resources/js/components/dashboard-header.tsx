@@ -1,16 +1,17 @@
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
 import { Button } from '@/components/ui/button';
+import { useBugReport } from '@/contexts/bug-report';
 import { useSettings } from '@/contexts/settings';
-import { Settings } from 'lucide-react';
+import { Bug, Settings } from 'lucide-react';
 
 export default function DashboardHeader() {
     const { openSettings } = useSettings();
+    const { openBugReport } = useBugReport();
 
     return (
         <header className="fixed inset-x-0 top-3 z-30 mx-4 h-14 rounded-full bg-white/40 shadow-sm backdrop-blur-md dark:bg-neutral-950/70 dark:shadow-neutral-950/60 md:mx-8">
-            <div className="flex h-full items-center justify-between px-4">
-                {/* Left — theme (+ settings gear on desktop only) */}
-                <div className="flex items-center gap-1">
+            <div className="grid h-full grid-cols-[1fr_auto_1fr] items-center px-4">
+                <div className="flex items-center gap-1 justify-self-start">
                     <AppearanceToggleDropdown />
                     <Button
                         type="button"
@@ -22,10 +23,19 @@ export default function DashboardHeader() {
                     >
                         <Settings className="h-4 w-4" />
                     </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={openBugReport}
+                        aria-label="Report a problem"
+                        className="h-9 w-9 text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+                    >
+                        <Bug className="h-4 w-4" />
+                    </Button>
                 </div>
 
-                {/* Centre — logo switches with theme */}
-                <div className="flex flex-1 items-center justify-center">
+                <div className="flex items-center justify-center">
                     <img
                         src="/branding/logo_dark.svg"
                         alt="Balancer"
@@ -38,8 +48,7 @@ export default function DashboardHeader() {
                     />
                 </div>
 
-                {/* Right — balance for logo centering */}
-                <div className="w-[4.5rem]" aria-hidden />
+                <div aria-hidden />
             </div>
         </header>
     );

@@ -7,7 +7,7 @@ Greenfield / `migrate:fresh` / Pest (`sqlite :memory:`) load the final schema fr
 - `database/schema/sqlite-schema.sql`
 - `database/schema/mysql-schema.sql`
 
-Do **not** delete those schema files. Existing databases that already ran the historical chain keep working — their `migrations` table rows still match the archived filenames.
+New tables after the squash are ordinary PHP files in this folder (they run after the dump). Do **not** delete the schema files.
 
 Regenerate dumps (optional):
 1. Restore archived migrations into this folder temporarily, migrate a clean DB

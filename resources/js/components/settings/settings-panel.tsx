@@ -16,6 +16,7 @@ import { Form, Link, router, usePage } from '@inertiajs/react';
 import { Loader2, LogOut, RefreshCw } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { useDashboardDensity, type DashboardDensity } from '@/hooks/use-dashboard-density';
+import { toastError, toastSuccess, toastWarning } from '@/lib/toast';
 
 const selectCls =
     'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900';
@@ -78,17 +79,13 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
     const { notifyFinanceMutated } = useFinanceData();
 
     const [moneyBusy, setMoneyBusy] = useState(false);
-    const [moneyError, setMoneyError] = useState<string | null>(null);
     const [syncBusy, setSyncBusy] = useState(false);
-    const [syncMessage, setSyncMessage] = useState<string | null>(null);
-    const [syncError, setSyncError] = useState<string | null>(null);
 
     const passwordInput = useRef<HTMLInputElement>(null);
     const currentPasswordInput = useRef<HTMLInputElement>(null);
 
     const patchProfile = (partial: { currency?: string; locale?: string | null }) => {
         setMoneyBusy(true);
-        setMoneyError(null);
 
         router.patch(
             ProfileController.update.url(),
@@ -102,8 +99,9 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
             {
                 preserveScroll: true,
                 preserveState: true,
+                onSuccess: () => toastSuccess('Saved'),
                 onError: (errors) => {
-                    setMoneyError(errors.currency ?? errors.locale ?? 'Could not update.');
+                    toastError(errors.currency ?? errors.locale ?? 'Could not update.');
                 },
                 onFinish: () => setMoneyBusy(false),
             },
@@ -112,27 +110,25 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
 
     const handleSync = async () => {
         setSyncBusy(true);
-        setSyncError(null);
-        setSyncMessage(null);
 
         try {
             const result = await apiFetch<{ closed_months: string[]; skipped: boolean }>(
                 '/api/v1/finance/sync',
-                { method: 'POST' },
+                { method: 'POST', toast: false },
             );
 
             notifyFinanceMutated();
             router.reload({ only: ['auth'] });
 
             if (result.skipped) {
-                setSyncMessage('Sync skipped — another process is already running.');
+                toastWarning('Sync skipped — another process is already running.');
             } else if (result.closed_months.length > 0) {
-                setSyncMessage(`Synced. Closed: ${result.closed_months.join(', ')}`);
+                toastSuccess(`Synced. Closed: ${result.closed_months.join(', ')}`);
             } else {
-                setSyncMessage('Synced. No months needed closing.');
+                toastSuccess('Synced.');
             }
         } catch (err: unknown) {
-            setSyncError(errorMessage(err));
+            toastError(errorMessage(err));
         } finally {
             setSyncBusy(false);
         }
@@ -144,9 +140,11 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                 <Form
                     {...ProfileController.update.form()}
                     options={{ preserveScroll: true, preserveState: true }}
+                    onSuccess={() => toastSuccess('Saved')}
+                    onError={() => toastError('Could not save profile.')}
                     className="space-y-3"
                 >
-                    {({ processing, recentlySuccessful, errors }) => (
+                    {({ processing, errors }) => (
                         <>
                             <input type="hidden" name="currency" value={user.currency ?? 'USD'} />
                             <input type="hidden" name="locale" value={user.locale ?? ''} />
@@ -212,9 +210,6 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                 <Button type="submit" size="sm" disabled={processing}>
                                     Save
                                 </Button>
-                                {recentlySuccessful && (
-                                    <span className="text-sm text-muted-foreground">Saved</span>
-                                )}
                             </div>
                         </>
                     )}
@@ -257,7 +252,6 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                         </select>
                     </div>
 
-                    {moneyError && <p className="text-sm text-destructive">{moneyError}</p>}
                     {moneyBusy && (
                         <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -300,8 +294,6 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     )}
                     Sync now
                 </Button>
-                {syncMessage && <p className="text-sm text-muted-foreground">{syncMessage}</p>}
-                {syncError && <p className="text-sm text-destructive">{syncError}</p>}
             </Section>
 
             <Section title="Security">
@@ -313,10 +305,12 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     onError={(errors) => {
                         if (errors.password) passwordInput.current?.focus();
                         if (errors.current_password) currentPasswordInput.current?.focus();
+                        toastError(errors.current_password ?? errors.password ?? errors.password_confirmation ?? 'Could not update password.');
                     }}
+                    onSuccess={() => toastSuccess('Password updated')}
                     className="space-y-3"
                 >
-                    {({ errors, processing, recentlySuccessful }) => (
+                    {({ errors, processing }) => (
                         <>
                             <div className="grid gap-1.5">
                                 <Label htmlFor={`${idPrefix}-current-password`}>Current password</Label>
@@ -354,9 +348,6 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                 <Button type="submit" size="sm" disabled={processing}>
                                     Update password
                                 </Button>
-                                {recentlySuccessful && (
-                                    <span className="text-sm text-muted-foreground">Saved</span>
-                                )}
                             </div>
                         </>
                     )}

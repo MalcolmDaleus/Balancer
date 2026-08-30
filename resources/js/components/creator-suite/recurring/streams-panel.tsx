@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchList, errorMessage, unwrapData } from '@/api/client';
+import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RecurringCategory, RecurringEntry, RecurringStream } from '@/types/api';
@@ -24,6 +24,9 @@ import {
     RowActions,
     SplitPane,
     StatusChip,
+    dropById,
+    instrumentDanger,
+    instrumentRemoveConfirm,
     rowAmountCls,
     rowDetailCls,
     rowTitleCls,
@@ -74,7 +77,8 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<RecurringStream | null>(null);
-    const [archiveTarget, setArchiveTarget] = useState<RecurringStream | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<RecurringStream | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [toggleAction, setToggleAction] = useState<ToggleAction | null>(null);
     const [saving, setSaving] = useState(false);
     const [toggling, setToggling] = useState(false);
@@ -161,6 +165,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                 await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
+                    toast: 'Saved',
                 });
             } else {
                 const body: Record<string, unknown> = {
@@ -178,7 +183,11 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                 } else {
                     body.day_of_month = Number(priceForm.day_of_month);
                 }
-                await apiFetch('/api/v1/recurring-payments/streams', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/recurring-payments/streams', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Stream added',
+                });
             }
             reset();
             setFetched(false);
@@ -208,6 +217,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
             await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}/update-price`, {
                 method: 'POST',
                 body: JSON.stringify(body),
+                toast: 'Price updated',
             });
             setShowPriceUpdate(false);
             setPriceForm(blankPrice());
@@ -219,15 +229,27 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
         }
     };
 
-    const handleArchive = async (s: RecurringStream) => {
+    const handleRemove = async (s: RecurringStream) => {
+        const hard = Boolean(s.can_hard_delete);
+        setRemoveTarget(null);
+        setRemovingId(s.id);
         try {
-            await apiFetch(`/api/v1/recurring-payments/streams/${s.id}`, { method: 'DELETE' });
+            await apiFetch(
+                hard ? `/api/v1/recurring-payments/streams/${s.id}/force` : `/api/v1/recurring-payments/streams/${s.id}`,
+                { method: 'DELETE', toast: hard ? 'Deleted' : 'Archived' },
+            );
+            setStreams(dropById(s.id));
             if (selected?.id === s.id) reset();
-            setFetched(false);
         } catch (err: unknown) {
+            if (isNotFound(err)) {
+                setStreams(dropById(s.id));
+                if (selected?.id === s.id) reset();
+                return;
+            }
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setArchiveTarget(null);
     };
 
     const execToggle = async (s: RecurringStream) => {
@@ -236,7 +258,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
         try {
             const res = await apiFetch<RecurringStream | { data: RecurringStream }>(
                 `/api/v1/recurring-payments/streams/${s.id}/toggle`,
-                { method: 'PATCH' },
+                { method: 'PATCH', toast: 'Updated' },
             );
             const updated = unwrapData(res);
             setStreams((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
@@ -399,13 +421,15 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
 
     return (
         <>
-            {archiveTarget && (
+            {removeTarget && (
                 <ConfirmModal
-                    message={`Archive "${archiveTarget.name}"? You can restore it later from the Archive tab.`}
-                    confirmLabel="Archive"
-                    confirmVariant="warning"
-                    onConfirm={() => handleArchive(archiveTarget)}
-                    onCancel={() => setArchiveTarget(null)}
+                    {...instrumentRemoveConfirm(
+                        removeTarget.name,
+                        removeTarget.can_hard_delete,
+                        `Archive "${removeTarget.name}"? You can restore it later from the Archive tab.`,
+                    )}
+                    onConfirm={() => handleRemove(removeTarget)}
+                    onCancel={() => setRemoveTarget(null)}
                 />
             )}
 
@@ -429,13 +453,14 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                 sheetTitle={selected ? 'Edit Stream' : 'New Stream'}
                 list={
                     <ListStack>
-                        {loading && <LoadingRows />}
+                        {loading && !streams.length && <LoadingRows />}
                         {!loading && !streams.length && <EmptyRows label="No recurring streams yet." />}
                         {streams.map((s) => {
                             const e = currentEntry(s);
                             const m = toggleMeta(s);
+                            const busy = removingId === s.id;
                             return (
-                                <ListRow key={s.id} selected={selected?.id === s.id}>
+                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
@@ -459,11 +484,17 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                                                 <ToggleSwitch
                                                     size="sm"
                                                     on={m.switchOn}
-                                                    disabled={toggling}
+                                                    disabled={toggling || busy}
                                                     label={s.active ? 'Pause stream' : 'Resume stream'}
                                                     onClick={(ev) => requestToggle(s, ev)}
                                                 />
-                                                <RowActions onEdit={() => selectRow(s)} onDelete={() => setArchiveTarget(s)} />
+                                                <RowActions
+                                                    onEdit={() => selectRow(s)}
+                                                    onDelete={() => setRemoveTarget(s)}
+                                                    editDisabled={busy}
+                                                    deleteDisabled={busy}
+                                                    {...instrumentDanger(s.can_hard_delete)}
+                                                />
                                             </div>
                                         </div>
                                     </div>

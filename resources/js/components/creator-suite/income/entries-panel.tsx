@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { IncomeEntry } from '@/types/api';
@@ -19,6 +20,7 @@ import {
     RowActions,
     SplitPane,
     StatusChip,
+    dropById,
     rowAmountCls,
     rowDetailCls,
     rowTitleCls,
@@ -40,6 +42,7 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<IncomeEntry | null>(null);
     const [confirm, setConfirm] = useState<IncomeEntry | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
@@ -110,7 +113,9 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.received_at)) {
-            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            setError(msg);
+            toastError(msg);
             return;
         }
         setSaving(true);
@@ -124,9 +129,17 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                 received_at: form.received_at,
             };
             if (selected) {
-                await apiFetch(`/api/v1/income/entries/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/income/entries/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
-                await apiFetch('/api/v1/income/entries', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/income/entries', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Income added',
+                });
             }
             reset();
             setFetched(false);
@@ -138,14 +151,17 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
     };
 
     const handleDelete = async (entry: IncomeEntry) => {
+        setConfirm(null);
+        setRemovingId(entry.id);
         try {
-            await apiFetch(`/api/v1/income/entries/${entry.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/v1/income/entries/${entry.id}`, { method: 'DELETE', toast: 'Deleted' });
+            setEntries(dropById(entry.id));
             if (selected?.id === entry.id) reset();
-            setFetched(false);
         } catch (err: unknown) {
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setConfirm(null);
     };
 
     const formContent = (
@@ -219,12 +235,12 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                 sheetTitle={selected ? 'Edit Entry' : 'New Irregular Entry'}
                 list={
                     <ListStack>
-                        {loading && <LoadingRows />}
+                        {loading && !entries.length && <LoadingRows />}
                         {!loading && !entries.length && <EmptyRows label="No income entries yet." />}
                         {entries.map((entry) => {
                             const canEdit = entry.type !== 'refund' && canMutateFact(entry.received_at);
                             return (
-                                <ListRow key={entry.id} selected={selected?.id === entry.id} onClick={() => canEdit && selectRow(entry)}>
+                                <ListRow key={entry.id} selected={selected?.id === entry.id} busy={removingId === entry.id}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">

@@ -3,6 +3,8 @@
  * Centralizes JSON fetch, validation errors, and 423 month_locked handling.
  */
 
+import { emitApiToasts } from '@/lib/api-toasts';
+
 export type ApiErrorBody = {
     error?: string;
     message?: string;
@@ -31,6 +33,10 @@ export class ApiClientError extends Error {
 }
 
 /** Prefer over `err: any` in catch blocks. */
+export function isNotFound(err: unknown): boolean {
+    return err instanceof ApiClientError && err.status === 404;
+}
+
 export function errorMessage(err: unknown): string {
     if (err instanceof ApiClientError) return err.message;
     if (err instanceof Error) return err.message;
@@ -65,48 +71,67 @@ function joinDetails(details: Record<string, string[]>): string {
     return Object.values(details).flat().join(' · ');
 }
 
-export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
-    const method = options?.method ?? 'GET';
+export type ApiFetchOptions = RequestInit & {
+    notifyFinance?: boolean;
+    /** Success copy. Writes also toast errors unless `false`. */
+    toast?: false | string;
+};
+
+export async function apiFetch<T = unknown>(url: string, options?: ApiFetchOptions): Promise<T> {
+    const { notifyFinance = true, toast: toastOpt, ...init } = options ?? {};
+    const method = init.method ?? 'GET';
     const res = await fetch(url, {
-        ...options,
+        ...init,
         headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
-            ...options?.headers,
+            ...init.headers,
         },
         credentials: 'same-origin',
     });
 
     if (res.status === 204) {
-        notifyMutationIfNeeded(method, true);
+        emitApiToasts(method, toastOpt, { ok: true });
+        if (notifyFinance) {
+            notifyMutationIfNeeded(method, true);
+        }
         return undefined as T;
     }
 
     const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
 
     if (!res.ok) {
+        let err: ApiClientError;
         if (res.status === 422 && body?.details) {
-            throw new ApiClientError(422, joinDetails(body.details), {
+            err = new ApiClientError(422, joinDetails(body.details), {
                 error: body.error ?? 'validation_error',
                 details: body.details,
                 month: body.month,
             });
-        }
-        if (res.status === 423) {
-            throw new ApiClientError(423, body.message ?? 'This month is locked.', {
+        } else if (res.status === 423) {
+            err = new ApiClientError(423, body.message ?? 'This month is locked.', {
                 error: body.error ?? 'month_locked',
                 month: body.month,
             });
+        } else {
+            err = new ApiClientError(res.status, body.message ?? `HTTP ${res.status}`, {
+                error: body.error,
+                details: body.details,
+                month: body.month,
+            });
         }
-        throw new ApiClientError(res.status, body.message ?? `HTTP ${res.status}`, {
-            error: body.error,
-            details: body.details,
-            month: body.month,
-        });
+        const silentDeleteMiss = method.toUpperCase() === 'DELETE' && res.status === 404;
+        if (!silentDeleteMiss) {
+            emitApiToasts(method, toastOpt, { ok: false, message: err.message });
+        }
+        throw err;
     }
 
-    notifyMutationIfNeeded(method, true);
+    emitApiToasts(method, toastOpt, { ok: true });
+    if (notifyFinance) {
+        notifyMutationIfNeeded(method, true);
+    }
     return body as T;
 }
 

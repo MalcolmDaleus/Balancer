@@ -17,6 +17,28 @@ use Carbon\Carbon;
  */
 class InstrumentHardDeleteService
 {
+    public function canHardDeleteStream(RecurringPaymentStream $stream): bool
+    {
+        try {
+            $this->assertCanHardDeleteStream($stream);
+
+            return true;
+        } catch (DomainException) {
+            return false;
+        }
+    }
+
+    public function canHardDeleteSchedule(RegularIncomeSchedule $schedule): bool
+    {
+        try {
+            $this->assertCanHardDeleteSchedule($schedule);
+
+            return true;
+        } catch (DomainException) {
+            return false;
+        }
+    }
+
     /**
      * @throws DomainException locked_month|has_facts
      */

@@ -13,7 +13,7 @@ import {
     type StatisticsWindow,
 } from '@/types/api';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
     Area,
     AreaChart,
@@ -170,6 +170,29 @@ function formatMonthTick(ym: string): string {
     return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
 }
 
+/**
+ * Integer stride from the first month. Every gap is the same number of months.
+ * The current month is unlabeled unless it lands on the stride (hover still shows it).
+ */
+function pickEvenTicks(labels: string[], maxTicks: number): string[] {
+    const n = labels.length;
+    if (n <= 2) {
+        return labels;
+    }
+    const max = Math.min(Math.max(2, maxTicks), n);
+    let step = 1;
+    while (Math.floor((n - 1) / step) + 1 > max) {
+        step += 1;
+    }
+    const ticks: string[] = [];
+    for (let i = 0; i < n; i += step) {
+        ticks.push(labels[i]);
+    }
+    return ticks;
+}
+
+const TREND_TICK_SLOT_PX = 58;
+
 function compactFormattedMoney(value: number, formatMoney: (value: number) => string): string {
     const formatted = formatMoney(value);
     const abs = Math.abs(value);
@@ -209,6 +232,8 @@ export default function StatisticsCard({ className = '' }: { className?: string 
     const [markers, setMarkers] = useState<StatisticsMarkers | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const chartBoxRef = useRef<HTMLDivElement>(null);
+    const [plotWidth, setPlotWidth] = useState(0);
 
     const activeView = VIEWS[viewIndex].id;
 
@@ -345,6 +370,25 @@ export default function StatisticsCard({ className = '' }: { className?: string 
         return isMobile ? Math.min(52, Math.max(42, longest * 7 + 10)) : Math.min(128, Math.max(72, longest * 8 + 16));
     }, [chartData, formatAxisValue, isMobile, series]);
 
+    useLayoutEffect(() => {
+        const el = chartBoxRef.current;
+        if (!el) {
+            return;
+        }
+        const update = () => setPlotWidth(el.clientWidth);
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [seriesReady, markersReady, activeView]);
+
+    const trendAxisTicks = useMemo(() => {
+        const labels = chartData.map((d) => d.label);
+        const xBudget = Math.max(0, plotWidth - yAxisWidth - 24);
+        const maxTicks = Math.max(2, Math.floor(xBudget / TREND_TICK_SLOT_PX));
+        return pickEvenTicks(labels, maxTicks);
+    }, [chartData, plotWidth, yAxisWidth]);
+
     const categoryAxisWidth = useMemo(() => {
         if (!isMobile || chartData.length === 0) {
             return 96;
@@ -430,7 +474,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                     <MarkersGrid markers={markers.markers} formatValue={formatValue} />
                 )}
                 {!error && seriesReady && series && (
-                    <div className="flex min-h-0 w-full flex-1 flex-col">
+                    <div ref={chartBoxRef} className="flex min-h-0 w-full flex-1 flex-col">
                         {chartData.length === 0 ? (
                             <p className="text-sm text-slate-400 dark:text-neutral-500">No data in this window.</p>
                         ) : activeView === 'trend' && chartData.length < 2 ? (
@@ -441,7 +485,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                             <ChartContainer config={chartConfig} className="h-full w-full">
                                 <AreaChart
                                     data={chartData}
-                                    margin={{ top: 8, right: 6, left: 4, bottom: 0 }}
+                                    margin={{ top: 8, right: 28, left: 4, bottom: 4 }}
                                 >
                                     <defs>
                                         <linearGradient id="statsTrendFill" x1="0" y1="0" x2="0" y2="1">
@@ -452,11 +496,13 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" />
                                     <XAxis
                                         dataKey="label"
+                                        ticks={trendAxisTicks}
                                         tickLine={false}
                                         axisLine={false}
                                         tickMargin={8}
-                                        interval={isMobile ? 'preserveStartEnd' : 0}
-                                        minTickGap={isMobile ? 28 : 8}
+                                        interval={0}
+                                        padding={{ left: 4, right: 8 }}
+                                        tick={{ fontSize: 11 }}
                                     />
                                     <YAxis
                                         tickLine={false}

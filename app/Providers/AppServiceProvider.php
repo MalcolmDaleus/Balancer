@@ -23,5 +23,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('finance-sync', function (Request $request) {
             return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
         });
+
+        RateLimiter::for('bug-reports', function (Request $request) {
+            return Limit::perMinute(10)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

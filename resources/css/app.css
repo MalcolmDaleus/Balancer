@@ -255,7 +255,9 @@
 }
 
 [data-density='compact'] [data-cs-form-pane] form.space-y-3 > [role='alert'],
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .flex {
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .flex,
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .rounded-xl,
+[data-density='compact'] [data-cs-form-pane] form.space-y-3 > [data-cs-form-span] {
     grid-column: 1 / -1;
 }
 

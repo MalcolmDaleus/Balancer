@@ -289,7 +289,7 @@ export function RecurringPriceScheduleFields({
     const isWeekly = priceForm.frequency === 'weekly';
 
     return (
-        <>
+        <div data-cs-form-span className="space-y-3">
             <Field label={amountLabel}>
                 <input
                     type="number"
@@ -358,6 +358,6 @@ export function RecurringPriceScheduleFields({
                     onChange={(e) => setPriceForm((f) => ({ ...f, start_date: e.target.value }))}
                 />
             </Field>
-        </>
+        </div>
     );
 }

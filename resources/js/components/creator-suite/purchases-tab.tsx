@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { toastError } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,6 +22,7 @@ import {
     StatusChip,
     SubTabBar,
     TabToolbar,
+    dropById,
     dateCls,
     inputCls,
     rowAmountCls,
@@ -210,6 +212,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<Purchase | null>(null);
     const [confirm, setConfirm] = useState<Purchase | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [refundTarget, setRefundTarget] = useState<Purchase | null>(null);
     const [refundSaving, setRefundSaving] = useState(false);
     const [refundError, setRefundError] = useState<string | null>(null);
@@ -278,7 +281,9 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.date)) {
-            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            setError(msg);
+            toastError(msg);
             return;
         }
         setSaving(true);
@@ -292,9 +297,17 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                 url: form.url.trim() || null,
             };
             if (selected) {
-                await apiFetch(`/api/v1/purchases/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/purchases/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
-                await apiFetch('/api/v1/purchases', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/purchases', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Purchase added',
+                });
             }
             reset();
             setFetched(false);
@@ -306,14 +319,17 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
     };
 
     const handleDelete = async (p: Purchase) => {
+        setConfirm(null);
+        setRemovingId(p.id);
         try {
-            await apiFetch(`/api/v1/purchases/${p.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/v1/purchases/${p.id}`, { method: 'DELETE', toast: 'Deleted' });
+            setPurchases(dropById(p.id));
             if (selected?.id === p.id) reset();
-            setFetched(false);
         } catch (err: unknown) {
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setConfirm(null);
     };
 
     const handleRefund = async (p: Purchase, amount: number | null) => {
@@ -321,7 +337,11 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
         setRefundError(null);
         try {
             const body = amount !== null ? { amount } : {};
-            await apiFetch(`/api/v1/purchases/${p.id}/refund`, { method: 'POST', body: JSON.stringify(body) });
+            await apiFetch(`/api/v1/purchases/${p.id}/refund`, {
+                method: 'POST',
+                body: JSON.stringify(body),
+                toast: 'Refund recorded',
+            });
             setRefundTarget(null);
             setFetched(false);
         } catch (err: unknown) {
@@ -423,7 +443,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                 sheetTitle={selected ? 'Edit Purchase' : 'New Purchase'}
                 list={
                     <ListStack>
-                        {loading && <LoadingRows />}
+                        {loading && !purchases.length && <LoadingRows />}
                         {!loading && !purchases.length && <EmptyRows label="No purchases yet." />}
                         {purchases.map((p) => {
                             const fullyRefunded = p.refund_status === 'full' || p.is_refunded;
@@ -432,7 +452,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                             const canEdit = !partiallyRefunded && canWrite;
                             const refundOnly = !canEdit && !partiallyRefunded;
                             return (
-                                <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded}>
+                                <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded} busy={removingId === p.id}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{p.description}</p>

@@ -4,9 +4,12 @@ import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import StatisticsCard from '@/components/statistics-card';
 import { tintChip, tintSectionPill, innerCardCls } from '@/components/creator-suite/shared';
+import BugReportDrawer from '@/components/bug-report/bug-report-drawer';
+import BugReportForm from '@/components/bug-report/bug-report-form';
 import SettingsDrawer from '@/components/settings/settings-drawer';
 import SettingsPanel from '@/components/settings/settings-panel';
 import { Spinner } from '@/components/ui/spinner';
+import { BugReportProvider, useBugReport } from '@/contexts/bug-report';
 import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
 import { useFormatMoney } from '@/hooks/use-format-money';
@@ -263,6 +266,7 @@ const MODULES = [
     { id: 'statistics', title: 'Statistics', subtitle: 'Trends and insights' },
     { id: 'sheet-history', title: 'Past Balance Sheets', subtitle: 'Closed monthly snapshots' },
     { id: 'settings', title: 'Settings', subtitle: 'Account preferences' },
+    { id: 'bug-report', title: 'Report a problem', subtitle: 'Tell us what went wrong' },
 ];
 
 function BalanceSheetCard({ className = '' }: { className?: string }) {
@@ -564,6 +568,30 @@ function SettingsModuleCard({
     );
 }
 
+function BugReportModuleCard({
+    title,
+    subtitle,
+    className = '',
+}: {
+    title: string;
+    subtitle: string;
+    className?: string;
+}) {
+    return (
+        <div
+            className={`flex min-h-0 flex-col rounded-2xl bg-white p-7 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}
+        >
+            <div className="mb-4 shrink-0">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{title}</h2>
+                {subtitle && <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">{subtitle}</p>}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                <BugReportForm idPrefix="mobile-bug-report" />
+            </div>
+        </div>
+    );
+}
+
 function ReservedModuleSlot({ className = '' }: { className?: string }) {
     return (
         <div
@@ -579,7 +607,9 @@ export default function Dashboard() {
     return (
         <FinanceDataProvider>
             <SettingsProvider>
-                <DashboardShell />
+                <BugReportProvider>
+                    <DashboardShell />
+                </BugReportProvider>
             </SettingsProvider>
         </FinanceDataProvider>
     );
@@ -594,12 +624,16 @@ function DashboardShell() {
         if (id === 'settings') {
             return <SettingsModuleCard title={title} subtitle={subtitle} className={className} />;
         }
+        if (id === 'bug-report') {
+            return <BugReportModuleCard title={title} subtitle={subtitle} className={className} />;
+        }
         return <ModuleCard title={title} subtitle={subtitle} className={className} />;
     };
 
     const [activeIndex, setActiveIndex] = useState(0);
     const carouselRef = useRef<HTMLDivElement>(null);
     const { focusSettingsCard, clearFocusSettingsCard } = useSettings();
+    const { focusBugReportCard, clearFocusBugReportCard } = useBugReport();
     const { compact } = useDashboardDensity();
 
     const handleScroll = () => {
@@ -627,11 +661,24 @@ function DashboardShell() {
         clearFocusSettingsCard();
     }, [focusSettingsCard, clearFocusSettingsCard]);
 
+    useEffect(() => {
+        if (!focusBugReportCard) {
+            return;
+        }
+
+        const index = MODULES.findIndex((mod) => mod.id === 'bug-report');
+        if (index >= 0) {
+            requestAnimationFrame(() => scrollToSlide(index));
+        }
+        clearFocusBugReportCard();
+    }, [focusBugReportCard, clearFocusBugReportCard]);
+
     return (
         <>
             <Head title="Dashboard" />
             <DashboardHeader />
             <SettingsDrawer />
+            <BugReportDrawer />
 
             <div className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] min-h-screen bg-slate-200 bg-cover bg-center bg-no-repeat pt-20 dark:bg-neutral-950">
 

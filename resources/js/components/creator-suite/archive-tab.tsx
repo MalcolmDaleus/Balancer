@@ -1,13 +1,14 @@
 /**
  * Generic archive list for soft-deleted income schedules / recurring streams.
  */
-import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { apiFetch, apiFetchList, errorMessage, isNotFound } from '@/api/client';
 import { ReactNode, useEffect, useState } from 'react';
-import { ApiError, ConfirmModal, EmptyRows, ListRow, ListStack, LoadingRows, rowDetailCls, rowTitleCls } from './shared';
+import { ApiError, ConfirmModal, EmptyRows, ListRow, ListStack, LoadingRows, dropById, rowDetailCls, rowTitleCls } from './shared';
 
 export type ArchiveItem = {
     id: number;
     name: string;
+    can_hard_delete?: boolean;
 };
 
 type Props<T extends ArchiveItem> = {
@@ -54,8 +55,8 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
     const handleRestore = async (item: T) => {
         setRestoring(item.id);
         try {
-            await apiFetch(restoreUrl(item.id), { method: 'PATCH' });
-            setFetched(false);
+            await apiFetch(restoreUrl(item.id), { method: 'PATCH', toast: 'Restored' });
+            setItems(dropById(item.id));
         } catch (err: unknown) {
             setError(errorMessage(err));
         } finally {
@@ -67,10 +68,14 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
         setHardDeleting(item.id);
         setHardDeleteTarget(null);
         try {
-            await apiFetch(forceUrl(item.id), { method: 'DELETE' });
-            setFetched(false);
+            await apiFetch(forceUrl(item.id), { method: 'DELETE', toast: 'Permanently deleted' });
+            setItems(dropById(item.id));
         } catch (err: unknown) {
-            setError(errorMessage(err));
+            if (isNotFound(err)) {
+                setItems(dropById(item.id));
+            } else {
+                setError(errorMessage(err));
+            }
         } finally {
             setHardDeleting(null);
         }
@@ -94,13 +99,14 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
             )}
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <ListStack>
-                    {loading && <LoadingRows />}
+                    {loading && !items.length && <LoadingRows />}
                     {!loading && !items.length && <EmptyRows label={emptyLabel} />}
                     {items.map((item) => {
                         const isRestoring = restoring === item.id;
                         const isDeleting = hardDeleting === item.id;
+                        const canHardDelete = Boolean(item.can_hard_delete);
                         return (
-                            <ListRow key={item.id} disabled>
+                            <ListRow key={item.id} disabled busy={isRestoring || isDeleting}>
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                         <p className={`${rowTitleCls} line-through opacity-60`}>{item.name}</p>
@@ -115,14 +121,16 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
                                         >
                                             {isRestoring ? 'Restoring…' : 'Restore'}
                                         </button>
-                                        <button
-                                            type="button"
-                                            disabled={isRestoring || isDeleting}
-                                            onClick={() => setHardDeleteTarget(item)}
-                                            className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 disabled:opacity-50 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
-                                        >
-                                            {isDeleting ? 'Deleting…' : 'Delete'}
-                                        </button>
+                                        {canHardDelete && (
+                                            <button
+                                                type="button"
+                                                disabled={isRestoring || isDeleting}
+                                                onClick={() => setHardDeleteTarget(item)}
+                                                className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 disabled:opacity-50 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </ListRow>

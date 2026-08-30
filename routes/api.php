@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BalanceSheetTotalController;
+use App\Http\Controllers\BugReportController;
 use App\Http\Controllers\DebtCategoryController;
 use App\Http\Controllers\DebtController;
 use App\Http\Controllers\DebtPaymentController;
@@ -8,11 +9,11 @@ use App\Http\Controllers\FinanceSyncController;
 use App\Http\Controllers\IncomeEntryController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchaseController;
-use App\Http\Controllers\RegularIncomeScheduleController;
 use App\Http\Controllers\RecurringChargeController;
 use App\Http\Controllers\RecurringPaymentCategoryController;
 use App\Http\Controllers\RecurringPaymentEntryController;
 use App\Http\Controllers\RecurringPaymentStreamController;
+use App\Http\Controllers\RegularIncomeScheduleController;
 use App\Http\Controllers\SavingController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
@@ -102,6 +103,13 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->n
     Route::post('finance/sync', FinanceSyncController::class)
         ->middleware('throttle:finance-sync')
         ->name('finance.sync');
+
+    // ---------------------------------------------------------------
+    // Bug reports (friend testing; write-only)
+    // ---------------------------------------------------------------
+    Route::post('bug-reports', [BugReportController::class, 'store'])
+        ->middleware('throttle:bug-reports')
+        ->name('bug-reports.store');
 
     // ---------------------------------------------------------------
     // Statistics (aggregates; no new tables)

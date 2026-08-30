@@ -4,6 +4,7 @@
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
+import { Loader2 } from 'lucide-react';
 import {
     Children,
     cloneElement,
@@ -11,6 +12,7 @@ import {
     useEffect,
     useId,
     useRef,
+    useState,
     type KeyboardEvent,
     type ReactElement,
     type ReactNode,
@@ -75,13 +77,16 @@ export const tabInactiveCls =
 export const innerCardCls =
     'rounded-xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05),0_6px_16px_rgba(15,23,42,0.10)] dark:bg-neutral-800/50 dark:shadow-[0_2px_10px_rgba(0,0,0,0.40)]';
 
-/** Row action buttons */
+/** Filled grey — archive, secondary pills, Save Changes, confirm primary. */
+export const greyBtnFillCls =
+    'bg-slate-600 text-white hover:bg-slate-500 dark:bg-neutral-600 dark:hover:bg-neutral-500';
+
 export const editBtnCls =
     'rounded-full bg-sky-700 px-3 py-1 text-sm font-medium text-sky-50 hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40';
 export const deleteBtnCls =
     'rounded-full bg-rose-700 px-3 py-1 text-sm font-medium text-rose-50 hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-40';
-export const secondaryBtnCls =
-    'rounded-full bg-slate-500 px-3 py-1 text-sm font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-neutral-600 dark:hover:bg-neutral-500';
+export const archiveBtnCls = `rounded-full px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${greyBtnFillCls}`;
+export const secondaryBtnCls = archiveBtnCls;
 export const secondaryBtnFullCls = `${secondaryBtnCls} w-full text-center`;
 
 /** Vertical stack for list items */
@@ -100,17 +105,25 @@ export function ListRow({
     selected,
     onClick,
     disabled,
+    busy = false,
     className = '',
 }: {
     children: ReactNode;
     selected?: boolean;
     onClick?: () => void;
     disabled?: boolean;
+    busy?: boolean;
     className?: string;
 }) {
-    const interactive = Boolean(onClick && !disabled);
-    const baseCls = `rounded-xl px-4 py-4 transition-colors text-left w-full ${
-        disabled ? 'cursor-default opacity-70' : interactive ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50' : ''
+    const interactive = Boolean(onClick && !disabled && !busy);
+    const baseCls = `relative overflow-hidden rounded-xl px-4 py-4 transition-colors text-left w-full ${
+        busy
+            ? 'cursor-wait'
+            : disabled
+              ? 'cursor-default opacity-70'
+              : interactive
+                ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-neutral-800/50'
+                : ''
     } ${
         selected ? 'bg-slate-100 ring-1 ring-slate-200 dark:bg-neutral-800/60 dark:ring-neutral-700' : 'bg-slate-50/70 dark:bg-neutral-800/40'
     } ${className}`;
@@ -123,6 +136,21 @@ export function ListRow({
         }
     };
 
+    const body = (
+        <>
+            {children}
+            {busy && (
+                <div
+                    className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[2px] dark:bg-neutral-950/60"
+                    role="status"
+                    aria-label="Removing"
+                >
+                    <Loader2 className="h-6 w-6 animate-spin text-violet-400/80 dark:text-violet-300/70" strokeWidth={2.25} />
+                </div>
+            )}
+        </>
+    );
+
     if (interactive) {
         return (
             <div
@@ -131,13 +159,23 @@ export function ListRow({
                 onClick={onClick}
                 onKeyDown={onKeyDown}
                 className={baseCls}
+                aria-busy={busy}
             >
-                {children}
+                {body}
             </div>
         );
     }
 
-    return <div className={baseCls}>{children}</div>;
+    return (
+        <div className={baseCls} aria-busy={busy}>
+            {body}
+        </div>
+    );
+}
+
+/** Drop a row from a CS list after a successful delete/archive. */
+export function dropById<T extends { id: number }>(id: number) {
+    return (prev: T[]) => prev.filter((item) => item.id !== id);
 }
 
 /** Action buttons row — full width, wraps on narrow screens */
@@ -262,17 +300,24 @@ export function ConfirmModal({
     const variantCls = {
         danger: 'bg-rose-500 hover:bg-rose-600',
         warning: 'bg-amber-500 hover:bg-amber-600',
-        primary: 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-500 dark:hover:bg-slate-400',
+        primary: greyBtnFillCls,
     }[confirmVariant];
     const dialogRef = useRef<HTMLDivElement>(null);
+    const [busy, setBusy] = useState(false);
+
+    const confirm = () => {
+        if (busy) return;
+        setBusy(true);
+        onConfirm();
+    };
 
     useEffect(() => {
         const prev = document.activeElement as HTMLElement | null;
-        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        );
-        const confirmBtn = focusable?.[focusable.length - 1];
-        confirmBtn?.focus();
+        dialogRef.current?.focus();
+        const focusable = () =>
+            dialogRef.current?.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            );
 
         const onKeyDown = (e: globalThis.KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -280,9 +325,10 @@ export function ConfirmModal({
                 onCancel();
                 return;
             }
-            if (e.key !== 'Tab' || !focusable?.length) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
+            const nodes = focusable();
+            if (e.key !== 'Tab' || !nodes?.length) return;
+            const first = nodes[0];
+            const last = nodes[nodes.length - 1];
             if (e.shiftKey && document.activeElement === first) {
                 e.preventDefault();
                 last.focus();
@@ -306,16 +352,17 @@ export function ConfirmModal({
                 role="dialog"
                 aria-modal="true"
                 aria-describedby="confirm-modal-message"
-                className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900"
+                tabIndex={-1}
+                className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl outline-none dark:bg-neutral-900"
             >
                 <p id="confirm-modal-message" className="mb-5 text-base text-slate-700 dark:text-neutral-200">
                     {message}
                 </p>
                 <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" className="rounded-full" onClick={onCancel}>
+                    <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={onCancel} disabled={busy}>
                         Cancel
                     </Button>
-                    <Button size="sm" className={`rounded-full text-white ${variantCls}`} onClick={onConfirm}>
+                    <Button type="button" size="sm" className={`rounded-full text-white ${variantCls}`} onClick={confirm} disabled={busy}>
                         {confirmLabel}
                     </Button>
                 </div>
@@ -389,28 +436,82 @@ export function RowActions({
     editDisabled,
     deleteDisabled,
     extra,
+    dangerLabel = 'Delete',
+    dangerKind = 'delete',
 }: {
     onEdit?: () => void;
     onDelete?: () => void;
     editDisabled?: boolean;
     deleteDisabled?: boolean;
     extra?: ReactNode;
+    dangerLabel?: string;
+    dangerKind?: 'delete' | 'archive';
 }) {
+    const dangerCls = dangerKind === 'archive' ? archiveBtnCls : deleteBtnCls;
+
     return (
         <div className="flex shrink-0 items-center gap-1">
             {extra}
             {onEdit && (
-                <button type="button" disabled={editDisabled} onClick={onEdit} className={editBtnCls}>
+                <button
+                    type="button"
+                    disabled={editDisabled}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit();
+                    }}
+                    className={editBtnCls}
+                >
                     Edit
                 </button>
             )}
             {onDelete && (
-                <button type="button" disabled={deleteDisabled} onClick={onDelete} className={deleteBtnCls}>
-                    Del
+                <button
+                    type="button"
+                    disabled={deleteDisabled}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                    }}
+                    className={dangerCls}
+                >
+                    {dangerLabel}
                 </button>
             )}
         </div>
     );
+}
+
+/** Instrument row danger: red Delete when a hard delete is allowed, else grey Archive. */
+export function instrumentDanger(canHardDelete: boolean | undefined): {
+    dangerLabel: string;
+    dangerKind: 'delete' | 'archive';
+} {
+    return canHardDelete
+        ? { dangerLabel: 'Delete', dangerKind: 'delete' }
+        : { dangerLabel: 'Archive', dangerKind: 'archive' };
+}
+
+export function instrumentRemoveConfirm(
+    name: string,
+    canHardDelete: boolean | undefined,
+    archiveMessage: string,
+): {
+    message: string;
+    confirmLabel: string;
+    confirmVariant: 'danger' | 'warning';
+} {
+    return canHardDelete
+        ? {
+              message: `Permanently delete "${name}"? This cannot be undone.`,
+              confirmLabel: 'Delete',
+              confirmVariant: 'danger',
+          }
+        : {
+              message: archiveMessage,
+              confirmLabel: 'Archive',
+              confirmVariant: 'warning',
+          };
 }
 
 /** Utility: today's date as YYYY-MM-DD */
@@ -445,7 +546,7 @@ export function FormActions({
                 type="submit"
                 disabled={blocked}
                 className={`flex-1 rounded-full px-3 py-1.5 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
-                    isEdit ? 'bg-slate-700 hover:bg-slate-800 dark:bg-slate-500 dark:hover:bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-700'
+                    isEdit ? greyBtnFillCls : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}
             >
                 {saving ? 'Saving…' : (saveLabel ?? (isEdit ? 'Save Changes' : 'Add'))}

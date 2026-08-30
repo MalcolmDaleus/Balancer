@@ -7,7 +7,6 @@ use App\Http\Middleware\HandleInertiaRequests;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -42,7 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (DomainException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return new JsonResponse(array_merge([
-                    'error'   => $e->error,
+                    'error' => $e->error,
                     'message' => $e->getMessage(),
                 ], $e->extra), $e->status);
             }
@@ -52,7 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (InvalidFormatException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return new JsonResponse([
-                    'error'   => 'invalid_date',
+                    'error' => 'invalid_date',
                     'message' => 'The given date or month could not be parsed.',
                 ], 422);
             }
@@ -61,9 +61,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Month locked — 423 (applies everywhere, but most relevant on API)
         $exceptions->render(function (MonthLockedException $e) {
             return new JsonResponse([
-                'error'   => 'month_locked',
+                'error' => 'month_locked',
                 'message' => $e->getMessage(),
-                'month'   => $e->month->toDateString(),
+                'month' => $e->month->toDateString(),
             ], JsonResponse::HTTP_LOCKED);
         });
 
@@ -71,7 +71,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $e, $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return new JsonResponse([
-                    'error'   => 'unauthenticated',
+                    'error' => 'unauthenticated',
                     'message' => 'Authentication required.',
                 ], 401);
             }
@@ -86,7 +86,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     : 'forbidden';
 
                 return new JsonResponse([
-                    'error'   => $error,
+                    'error' => $error,
                     'message' => $message !== '' ? $message : 'This action is unauthorized.',
                 ], 403);
             }
@@ -96,18 +96,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (ValidationException $e, $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return new JsonResponse([
-                    'error'   => 'validation_failed',
+                    'error' => 'validation_failed',
                     'message' => 'The given data was invalid.',
                     'details' => $e->errors(),
                 ], 422);
             }
         });
 
-        // Model not found — 404
-        $exceptions->render(function (ModelNotFoundException $e, $request) {
+        // Model not found is wrapped as NotFoundHttpException; keep the JSON clean.
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return new JsonResponse([
-                    'error'   => 'not_found',
+                    'error' => 'not_found',
                     'message' => 'The requested resource was not found.',
                 ], 404);
             }

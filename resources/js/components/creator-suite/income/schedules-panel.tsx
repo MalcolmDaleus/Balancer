@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchList, errorMessage, unwrapData } from '@/api/client';
+import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RegularIncomeSchedule, RegularIncomeScheduleVersion } from '@/types/api';
@@ -27,8 +27,12 @@ import {
     ListRow,
     ListStack,
     LoadingRows,
+    RowActions,
     SplitPane,
     StatusChip,
+    dropById,
+    instrumentDanger,
+    instrumentRemoveConfirm,
     rowDetailCls,
     rowTitleCls,
     secondaryBtnCls,
@@ -64,7 +68,8 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<RegularIncomeSchedule | null>(null);
-    const [archiveTarget, setArchiveTarget] = useState<RegularIncomeSchedule | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<RegularIncomeSchedule | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [toggleAction, setToggleAction] = useState<ToggleAction | null>(null);
     const [saving, setSaving] = useState(false);
     const [toggling, setToggling] = useState(false);
@@ -151,14 +156,22 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         try {
             if (selected) {
                 const body = { name: form.name, description: form.description || null };
-                await apiFetch(`/api/v1/income/schedules/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/income/schedules/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
                 const body = {
                     name: form.name,
                     description: form.description || null,
                     ...buildVersionPayload(versionForm),
                 };
-                await apiFetch('/api/v1/income/schedules', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/income/schedules', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Schedule added',
+                });
             }
             reset();
             setFetched(false);
@@ -178,6 +191,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
             await apiFetch(`/api/v1/income/schedules/${selected.id}/update-amount`, {
                 method: 'POST',
                 body: JSON.stringify(buildVersionPayload(versionForm)),
+                toast: 'Amount updated',
             });
             setShowVersionUpdate(false);
             setVersionForm(blankIncomeVersionForm(todayStr()));
@@ -189,15 +203,27 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         }
     };
 
-    const handleArchive = async (s: RegularIncomeSchedule) => {
+    const handleRemove = async (s: RegularIncomeSchedule) => {
+        const hard = Boolean(s.can_hard_delete);
+        setRemoveTarget(null);
+        setRemovingId(s.id);
         try {
-            await apiFetch(`/api/v1/income/schedules/${s.id}`, { method: 'DELETE' });
+            await apiFetch(hard ? `/api/v1/income/schedules/${s.id}/force` : `/api/v1/income/schedules/${s.id}`, {
+                method: 'DELETE',
+                toast: hard ? 'Deleted' : 'Archived',
+            });
+            setSchedules(dropById(s.id));
             if (selected?.id === s.id) reset();
-            setFetched(false);
         } catch (err: unknown) {
+            if (isNotFound(err)) {
+                setSchedules(dropById(s.id));
+                if (selected?.id === s.id) reset();
+                return;
+            }
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setArchiveTarget(null);
     };
 
     const execToggle = async (s: RegularIncomeSchedule) => {
@@ -206,7 +232,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         try {
             const res = await apiFetch<RegularIncomeSchedule | { data: RegularIncomeSchedule }>(
                 `/api/v1/income/schedules/${s.id}/toggle`,
-                { method: 'PATCH' },
+                { method: 'PATCH', toast: 'Updated' },
             );
             const updated = unwrapData(res);
             setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
@@ -292,7 +318,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                     />
                 </Field>
                 {!selected && (
-                    <div className="rounded-xl border border-slate-200 p-3 dark:border-neutral-700">
+                    <div data-cs-form-span className="rounded-xl border border-slate-200 p-3 dark:border-neutral-700">
                         <p className="mb-3 text-sm font-semibold text-slate-700 dark:text-neutral-200">Initial schedule</p>
                         <IncomeVersionScheduleFields versionForm={versionForm} setVersionForm={setVersionForm} startDateLabel="Starts on" />
                     </div>
@@ -347,11 +373,6 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                             </form>
                         )}
                     </div>
-                    <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
-                        <button type="button" className={secondaryBtnCls} onClick={() => setArchiveTarget(selected)}>
-                            Archive schedule
-                        </button>
-                    </div>
                 </>
             )}
         </div>
@@ -370,11 +391,15 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                     onCancel={() => setToggleAction(null)}
                 />
             )}
-            {archiveTarget && (
+            {removeTarget && (
                 <ConfirmModal
-                    message={`Archive "${archiveTarget.name}"? Generated entries remain; no new occurrences will be created.`}
-                    onConfirm={() => handleArchive(archiveTarget)}
-                    onCancel={() => setArchiveTarget(null)}
+                    {...instrumentRemoveConfirm(
+                        removeTarget.name,
+                        removeTarget.can_hard_delete,
+                        `Archive "${removeTarget.name}"? Generated entries remain; no new occurrences will be created.`,
+                    )}
+                    onConfirm={() => handleRemove(removeTarget)}
+                    onCancel={() => setRemoveTarget(null)}
                 />
             )}
             <SplitPane
@@ -383,13 +408,14 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                 sheetTitle={selected ? 'Edit Schedule' : 'New Schedule'}
                 list={
                     <ListStack>
-                        {loading && <LoadingRows />}
+                        {loading && !schedules.length && <LoadingRows />}
                         {!loading && !schedules.length && <EmptyRows label="No regular income schedules yet." />}
                         {schedules.map((s) => {
                             const v = currentVersion(s);
                             const m = toggleMeta(s);
+                            const busy = removingId === s.id;
                             return (
-                                <ListRow key={s.id} selected={selected?.id === s.id} onClick={() => selectRow(s)}>
+                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{s.name}</p>
@@ -399,15 +425,24 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                                 </p>
                                             )}
                                         </div>
-                                        <div className="flex shrink-0 items-center gap-1.5">
-                                            {m.badge && <StatusChip label={m.badge.label} color={m.badge.color} />}
-                                            {!s.active && !m.badge && <StatusChip label="Paused" color="amber" />}
-                                            <ToggleSwitch
-                                                on={m.switchOn}
-                                                size="sm"
-                                                disabled={toggling}
-                                                label={s.active ? 'Pause schedule' : 'Resume schedule'}
-                                                onClick={(e) => requestToggle(s, e)}
+                                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                {m.badge && <StatusChip label={m.badge.label} color={m.badge.color} />}
+                                                {!s.active && !m.badge && <StatusChip label="Paused" color="amber" />}
+                                                <ToggleSwitch
+                                                    on={m.switchOn}
+                                                    size="sm"
+                                                    disabled={toggling || busy}
+                                                    label={s.active ? 'Pause schedule' : 'Resume schedule'}
+                                                    onClick={(e) => requestToggle(s, e)}
+                                                />
+                                            </div>
+                                            <RowActions
+                                                onEdit={() => selectRow(s)}
+                                                onDelete={() => setRemoveTarget(s)}
+                                                editDisabled={busy}
+                                                deleteDisabled={busy}
+                                                {...instrumentDanger(s.can_hard_delete)}
                                             />
                                         </div>
                                     </div>

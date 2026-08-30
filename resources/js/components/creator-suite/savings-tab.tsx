@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Saving } from '@/types/api';
@@ -17,6 +18,7 @@ import {
     RowActions,
     SplitPane,
     StatusChip,
+    dropById,
     TabToolbar,
     inputCls,
     rowAmountCls,
@@ -35,6 +37,7 @@ export function SavingsTab({ active }: { active: boolean }) {
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<Saving | null>(null);
     const [confirm, setConfirm] = useState<Saving | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
@@ -75,7 +78,9 @@ export function SavingsTab({ active }: { active: boolean }) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.month)) {
-            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            setError(msg);
+            toastError(msg);
             return;
         }
         setSaving(true);
@@ -83,9 +88,17 @@ export function SavingsTab({ active }: { active: boolean }) {
         try {
             const body = { amount: Number(form.amount), type: form.type, notes: form.notes || null, month: form.month };
             if (selected) {
-                await apiFetch(`/api/v1/savings/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/savings/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
-                await apiFetch('/api/v1/savings', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/savings', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: form.type === 'withdrawal' ? 'Withdrawal added' : 'Deposit added',
+                });
             }
             reset();
             setFetched(false);
@@ -97,14 +110,17 @@ export function SavingsTab({ active }: { active: boolean }) {
     };
 
     const handleDelete = async (s: Saving) => {
+        setConfirm(null);
+        setRemovingId(s.id);
         try {
-            await apiFetch(`/api/v1/savings/${s.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/v1/savings/${s.id}`, { method: 'DELETE', toast: 'Deleted' });
+            setSavings(dropById(s.id));
             if (selected?.id === s.id) reset();
-            setFetched(false);
         } catch (err: unknown) {
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setConfirm(null);
     };
 
     const grandTotal = savings.reduce((acc, s) => acc + (s.type === 'deposit' ? s.amount : -s.amount), 0);
@@ -188,12 +204,12 @@ export function SavingsTab({ active }: { active: boolean }) {
                     sheetTitle={selected ? 'Edit Transaction' : 'New Transaction'}
                     list={
                         <ListStack>
-                            {loading && <LoadingRows />}
+                            {loading && !savings.length && <LoadingRows />}
                             {!loading && !savings.length && <EmptyRows label="No savings transactions yet." />}
                             {savings.map((s) => {
                                 const canWrite = canMutateFact(s.month);
                                 return (
-                                    <ListRow key={s.id} selected={selected?.id === s.id}>
+                                    <ListRow key={s.id} selected={selected?.id === s.id} busy={removingId === s.id}>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1">
                                                 {s.notes ? (

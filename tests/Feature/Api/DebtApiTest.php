@@ -108,21 +108,107 @@ test('user can hard-delete a debt with no payments', function () {
     expect(Debt::withTrashed()->find($debt->id))->toBeNull();
 });
 
-test('deleting a debt with payments soft-archives and keeps payment Facts', function () {
+test('debt list marks unused unlocked debts as can_hard_delete', function () {
+    $user = User::factory()->create();
+    Debt::factory()->create([
+        'user_id' => $user->id,
+        'issue_date' => '2026-08-01',
+    ]);
+
+    $this->actingAs($user)->getJson('/api/v1/debts')
+        ->assertOk()
+        ->assertJsonPath('data.0.can_hard_delete', true)
+        ->assertJsonPath('data.0.can_archive', false);
+});
+
+test('debt list marks debts with payments as not can_hard_delete', function () {
     $user = User::factory()->create();
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
-    $payment = DebtPayment::factory()->create([
+    DebtPayment::factory()->create([
         'user_id' => $user->id,
         'debt_id' => $debt->id,
-        'amount'  => 100,
+        'amount' => 100,
     ]);
+
+    $this->actingAs($user)->getJson('/api/v1/debts')
+        ->assertOk()
+        ->assertJsonPath('data.0.can_hard_delete', false)
+        ->assertJsonPath('data.0.can_archive', false);
+});
+
+test('open debts cannot be archived', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
+    DebtPayment::factory()->create([
+        'user_id' => $user->id,
+        'debt_id' => $debt->id,
+        'amount' => 100,
+    ]);
+
+    $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
+        ->assertStatus(422)
+        ->assertJsonPath('error', 'debt_open');
+
+    expect(Debt::find($debt->id))->not->toBeNull();
+});
+
+test('open debts in a locked issue month cannot be archived', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create([
+        'user_id' => $user->id,
+        'issue_date' => '2026-01-01',
+    ]);
+    BalanceSheetTotal::factory()->create([
+        'user_id' => $user->id,
+        'month' => '2026-01-01',
+    ]);
+
+    $this->actingAs($user)->getJson('/api/v1/debts')
+        ->assertOk()
+        ->assertJsonPath('data.0.can_hard_delete', false)
+        ->assertJsonPath('data.0.can_archive', false);
+
+    $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
+        ->assertStatus(422)
+        ->assertJsonPath('error', 'debt_open');
+
+    expect(Debt::find($debt->id))->not->toBeNull();
+});
+
+test('user can archive a settled debt', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
+    DebtPayment::factory()->create([
+        'user_id' => $user->id,
+        'debt_id' => $debt->id,
+        'amount' => 500,
+    ]);
+
+    $this->actingAs($user)->getJson('/api/v1/debts')
+        ->assertOk()
+        ->assertJsonPath('data.0.is_settled', true)
+        ->assertJsonPath('data.0.can_archive', true)
+        ->assertJsonPath('data.0.can_hard_delete', false);
 
     $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
         ->assertNoContent();
 
     expect(Debt::find($debt->id))->toBeNull();
     expect(Debt::withTrashed()->find($debt->id)->trashed())->toBeTrue();
-    expect(DebtPayment::find($payment->id))->not->toBeNull();
+    expect(DebtPayment::where('debt_id', $debt->id)->exists())->toBeTrue();
+});
+
+test('user can archive a forgiven debt', function () {
+    $user = User::factory()->create();
+    $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 500]);
+
+    $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/forgive")
+        ->assertOk();
+
+    $this->actingAs($user)->deleteJson("/api/v1/debts/{$debt->id}")
+        ->assertNoContent();
+
+    expect(Debt::withTrashed()->find($debt->id)->trashed())->toBeTrue();
 });
 
 // ---------------------------------------------------------------------------
@@ -296,7 +382,7 @@ test('deleting a settling payment clears settle_date', function () {
     $payment = DebtPayment::factory()->create([
         'user_id' => $user->id,
         'debt_id' => $debt->id,
-        'amount'  => 200,
+        'amount' => 200,
         'paid_at' => '2026-04-15',
     ]);
 

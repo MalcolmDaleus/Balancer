@@ -1,4 +1,5 @@
-import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { apiFetch, apiFetchList, errorMessage, isNotFound } from '@/api/client';
+import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Debt, DebtCategory, DebtPayment } from '@/types/api';
@@ -19,10 +20,13 @@ import {
     RowActions,
     SplitPane,
     StatusChip,
+    dropById,
     SubTabBar,
     TabToolbar,
     dateCls,
     inputCls,
+    instrumentDanger,
+    instrumentRemoveConfirm,
     rowDetailCls,
     rowTitleCls,
     selectCls,
@@ -44,6 +48,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<Debt | null>(null);
     const [confirm, setConfirm] = useState<Debt | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [forgiving, setForgiving] = useState<Debt | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -107,7 +112,9 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.issue_date)) {
-            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            setError(msg);
+            toastError(msg);
             return;
         }
         setSaving(true);
@@ -121,9 +128,17 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                 notes: form.notes || null,
             };
             if (selected) {
-                await apiFetch(`/api/v1/debts/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/debts/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
-                await apiFetch('/api/v1/debts', { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch('/api/v1/debts', {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Debt added',
+                });
             }
             reset();
             setFetched(false);
@@ -135,19 +150,30 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     };
 
     const handleDelete = async (d: Debt) => {
-        try {
-            await apiFetch(`/api/v1/debts/${d.id}`, { method: 'DELETE' });
-            if (selected?.id === d.id) reset();
-            setFetched(false);
-        } catch (err: unknown) {
-            setError(errorMessage(err));
-        }
         setConfirm(null);
+        setRemovingId(d.id);
+        try {
+            await apiFetch(`/api/v1/debts/${d.id}`, {
+                method: 'DELETE',
+                toast: d.can_hard_delete ? 'Deleted' : 'Archived',
+            });
+            setDebts(dropById(d.id));
+            if (selected?.id === d.id) reset();
+        } catch (err: unknown) {
+            if (isNotFound(err)) {
+                setDebts(dropById(d.id));
+                if (selected?.id === d.id) reset();
+                return;
+            }
+            setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
+        }
     };
 
     const handleForgive = async (d: Debt) => {
         try {
-            await apiFetch(`/api/v1/debts/${d.id}/forgive`, { method: 'POST' });
+            await apiFetch(`/api/v1/debts/${d.id}/forgive`, { method: 'POST', toast: 'Forgiven' });
             setFetched(false);
         } catch (err: unknown) {
             setError(errorMessage(err));
@@ -221,7 +247,11 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete debt "${confirm.description}"?`}
+                    {...instrumentRemoveConfirm(
+                        confirm.description,
+                        confirm.can_hard_delete,
+                        `Archive "${confirm.description}"? It stays on past balance sheets.`,
+                    )}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -239,16 +269,19 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                 sheetTitle={selected ? 'Edit Debt' : 'New Debt'}
                 list={
                     <ListStack>
-                        {loading && <LoadingRows />}
+                        {loading && !debts.length && <LoadingRows />}
                         {!loading && !debts.length && <EmptyRows label="No debts yet." />}
                         {debts.map((d) => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
                             const monthLocked = !canMutateFact(d.issue_date);
                             const canEdit = !closed && !monthLocked;
                             const canForgive = !closed;
-                            const forgiveOnly = canForgive && !canEdit;
+                            const canDelete = d.can_hard_delete;
+                            const canArchive = Boolean(d.can_archive);
+                            const forgiveOnly = canForgive && !canEdit && !canDelete;
+                            const busy = removingId === d.id;
                             return (
-                                <ListRow key={d.id} selected={selected?.id === d.id} disabled={closed}>
+                                <ListRow key={d.id} selected={selected?.id === d.id} busy={busy}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{d.description}</p>
@@ -257,13 +290,25 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                                             </p>
                                         </div>
                                         {closed ? (
-                                            statusChip(d)
-                                        ) : canEdit || canForgive ? (
+                                            <div className="flex shrink-0 flex-col items-stretch gap-2.5">
+                                                {statusChip(d)}
+                                                {canArchive && (
+                                                    <RowActions
+                                                        onDelete={() => setConfirm(d)}
+                                                        {...instrumentDanger(false)}
+                                                    />
+                                                )}
+                                            </div>
+                                        ) : (
                                             <div
                                                 className={`flex shrink-0 flex-col items-stretch gap-2.5 ${forgiveOnly ? 'self-center' : ''}`}
                                             >
-                                                {canEdit && (
-                                                    <RowActions onEdit={() => selectRow(d)} onDelete={() => setConfirm(d)} />
+                                                {(canEdit || canDelete) && (
+                                                    <RowActions
+                                                        onEdit={canEdit ? () => selectRow(d) : undefined}
+                                                        onDelete={canDelete ? () => setConfirm(d) : undefined}
+                                                        {...instrumentDanger(true)}
+                                                    />
                                                 )}
                                                 {canForgive && (
                                                     <button
@@ -278,7 +323,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                                                     </button>
                                                 )}
                                             </div>
-                                        ) : null}
+                                        )}
                                     </div>
                                 </ListRow>
                             );
@@ -307,6 +352,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<DebtPayment | null>(null);
     const [confirm, setConfirm] = useState<DebtPayment | null>(null);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sheetOpen, setSheetOpen] = useState(false);
@@ -381,7 +427,9 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         if (!debtId) return;
         e.preventDefault();
         if (!canMutateFact(form.paid_at)) {
-            setError(loaded ? 'This month is locked.' : 'Checking month locks…');
+            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            setError(msg);
+            toastError(msg);
             return;
         }
         setSaving(true);
@@ -389,9 +437,17 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         try {
             const body = { amount: Number(form.amount), paid_at: form.paid_at, notes: form.notes || null };
             if (selected) {
-                await apiFetch(`/api/v1/debt-payments/${selected.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/debt-payments/${selected.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                    toast: 'Saved',
+                });
             } else {
-                await apiFetch(`/api/v1/debts/${debtId}/payments`, { method: 'POST', body: JSON.stringify(body) });
+                await apiFetch(`/api/v1/debts/${debtId}/payments`, {
+                    method: 'POST',
+                    body: JSON.stringify(body),
+                    toast: 'Payment added',
+                });
             }
             reset();
             reloadPayments();
@@ -403,14 +459,17 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
     };
 
     const handleDelete = async (p: DebtPayment) => {
+        setConfirm(null);
+        setRemovingId(p.id);
         try {
-            await apiFetch(`/api/v1/debt-payments/${p.id}`, { method: 'DELETE' });
+            await apiFetch(`/api/v1/debt-payments/${p.id}`, { method: 'DELETE', toast: 'Deleted' });
+            setPayments(dropById(p.id));
             if (selected?.id === p.id) reset();
-            reloadPayments();
         } catch (err: unknown) {
             setError(errorMessage(err));
+        } finally {
+            setRemovingId(null);
         }
-        setConfirm(null);
     };
 
     const selectedDebt = debts.find((d) => d.id === debtId);
@@ -494,12 +553,12 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                         sheetTitle={selected ? 'Edit Payment' : 'New Payment'}
                         list={
                             <ListStack>
-                                {payLoading && <LoadingRows />}
+                                {payLoading && !payments.length && <LoadingRows />}
                                 {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
                                 {payments.map((p) => {
                                     const paymentLocked = !canMutateFact(p.paid_at);
                                     return (
-                                    <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed}>
+                                    <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed} busy={removingId === p.id}>
                                         <div className="flex items-start justify-between gap-3">
                                             <p className={rowTitleCls}>{fmtAmount(p.amount)}</p>
                                         </div>
