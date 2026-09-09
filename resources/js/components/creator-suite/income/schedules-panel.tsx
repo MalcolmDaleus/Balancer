@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RegularIncomeSchedule, RegularIncomeScheduleVersion } from '@/types/api';
@@ -133,7 +134,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
 
     const buildVersionPayload = (vf: IncomeVersionForm) => {
         const body: Record<string, unknown> = {
-            amount: Number(vf.amount),
+            amount_cents: majorInputToCents(vf.amount),
             frequency: vf.frequency,
             start_date: vf.start_date,
         };
@@ -263,7 +264,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <p className="text-xl font-bold tracking-tight text-slate-800 dark:text-neutral-100">
-                                {fmtAmount(version.amount)}
+                                {fmtAmount(version.amount_cents)}
                                 <span className="ml-1 text-sm font-normal text-slate-500 dark:text-neutral-400">
                                     / {fmtIncomeFreq(version.frequency)}
                                 </span>
@@ -339,7 +340,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                 onClick={() => {
                                     const v = currentVersion(selected);
                                     setVersionForm({
-                                        amount: v ? String(v.amount) : '',
+                                        amount: v ? centsToInput(v.amount_cents) : '',
                                         start_date: todayStr(),
                                         frequency: v?.frequency ?? 'monthly',
                                         day_of_month: v?.day_of_month != null ? String(v.day_of_month) : defaultDayOfMonth(),
@@ -421,7 +422,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                             <p className={rowTitleCls}>{s.name}</p>
                                             {v && (
                                                 <p className={`mt-0.5 ${rowDetailCls}`}>
-                                                    {fmtIncomeFreq(v.frequency)} · {fmtAmount(v.amount)}
+                                                    {fmtIncomeFreq(v.frequency)} · {fmtAmount(v.amount_cents)}
                                                 </p>
                                             )}
                                         </div>

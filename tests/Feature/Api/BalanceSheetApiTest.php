@@ -42,9 +42,9 @@ test('user can get simplified balance sheet for a month', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/summary?month=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['user_id', 'month', 'total_income', 'total_debt_paid', 'total_spending', 'total_recurring', 'savings_snapshot', 'roll_over']);
-    $this->assertEquals(3000, $response->json('total_income'));
-    $this->assertEquals(500, $response->json('total_spending'));
+        ->assertJsonStructure(['user_id', 'month', 'total_income_cents', 'total_debt_paid_cents', 'total_spending_cents', 'total_recurring_cents', 'savings_snapshot_cents', 'roll_over_cents']);
+    $this->assertEquals(300000, $response->json('total_income_cents'));
+    $this->assertEquals(50000, $response->json('total_spending_cents'));
 });
 
 test('user can get expanded balance sheet', function () {
@@ -53,8 +53,10 @@ test('user can get expanded balance sheet', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet?month=2026-04');
 
     $response->assertOk()
-        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'recurring_payments', 'savings', 'roll_over'])
-        ->assertJsonStructure(['income' => ['total', 'by_type' => ['regular', 'irregular', 'refund']]]);
+        ->assertJsonStructure(['user_id', 'month', 'income', 'debt', 'spending', 'recurring_payments', 'savings', 'roll_over', 'wallet'])
+        ->assertJsonStructure(['income' => ['total_cents', 'by_type' => ['regular', 'irregular', 'refund']]])
+        ->assertJsonPath('wallet.available_cash_cents', 0)
+        ->assertJsonPath('wallet.savings_total_cents', 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,7 @@ test('user can close a month creating a snapshot', function () {
 
     $response->assertCreated()
         ->assertJsonPath('data.month', '2026-03-01')
-        ->assertJsonStructure(['data' => ['id', 'user_id', 'month', 'total_income', 'roll_over']]);
+        ->assertJsonStructure(['data' => ['id', 'user_id', 'month', 'total_income_cents', 'roll_over_cents']]);
 
     $this->assertTrue(
         \Illuminate\Support\Facades\DB::table('balance_sheet_totals')
@@ -182,7 +184,7 @@ test('user can get balance sheet history', function () {
     $response = $this->actingAs($user)->getJson('/api/v1/balance-sheet/history?months=12');
 
     $response->assertOk()->assertJsonCount(5, 'data');
-    $response->assertJsonStructure(['data' => [['total_recurring']]]);
+    $response->assertJsonStructure(['data' => [['total_recurring_cents']]]);
 });
 
 // ---------------------------------------------------------------------------

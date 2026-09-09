@@ -5,12 +5,13 @@ namespace App\Models;
 use App\Models\Traits\DateScopeable;
 use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
+use App\Support\MoneyCents;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Saving extends Model
 {
-    use HasFactory, UserScopable, DateScopeable, MonthLockable;
+    use DateScopeable, HasFactory, MonthLockable, UserScopable;
 
     protected string $monthLockColumn = 'month';
 
@@ -23,9 +24,9 @@ class Saving extends Model
     ];
 
     protected $casts = [
-        'month'  => 'date',
+        'month' => 'date',
         'amount' => 'decimal:2',
-        'type'   => 'string',
+        'type' => 'string',
     ];
 
     public function user()
@@ -34,9 +35,9 @@ class Saving extends Model
     }
 
     /**
-     * Signed running savings balance (deposits − withdrawals) through as-of month.
+     * Signed running savings balance in cents (deposits − withdrawals) through as-of month.
      */
-    public static function runningBalance(int $userId, ?string $asOfMonth = null, ?int $excludeId = null): float
+    public static function runningBalance(int $userId, ?string $asOfMonth = null, ?int $excludeId = null): int
     {
         $query = static::query()
             ->where('user_id', $userId)
@@ -50,6 +51,6 @@ class Saving extends Model
             $query->where('id', '!=', $excludeId);
         }
 
-        return (float) $query->value('net');
+        return MoneyCents::fromMajor($query->value('net'));
     }
 }

@@ -1,10 +1,13 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Debt, DebtCategory, DebtPayment } from '@/types/api';
-import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryTab } from './category-tab';
+import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from './fact-filters';
+import type { LedgerFocus } from './ledger-focus';
 import { useLockedMonths } from './locked-months';
 import {
     AddButton,
@@ -81,7 +84,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
         setForm({
             description: d.description,
             category_id: String(d.category_id ?? ''),
-            amount: String(d.amount),
+            amount: centsToInput(d.amount_cents),
             issue_date: d.issue_date,
             notes: d.notes ?? '',
         });
@@ -123,7 +126,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             const body = {
                 description: form.description,
                 category_id: form.category_id ? Number(form.category_id) : null,
-                amount: Number(form.amount),
+                amount_cents: majorInputToCents(form.amount),
                 issue_date: form.issue_date,
                 notes: form.notes || null,
             };
@@ -286,7 +289,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{d.description}</p>
                                             <p className={`mt-1 ${rowDetailCls}`}>
-                                                Balance: {fmtAmount(d.remaining_balance)} / {fmtAmount(d.amount)}
+                                                Balance: {fmtAmount(d.remaining_cents)} / {fmtAmount(d.amount_cents)}
                                             </p>
                                         </div>
                                         {closed ? (
@@ -340,7 +343,17 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
 // Sub-tab: Payments
 // ---------------------------------------------------------------------------
 
-function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+function PaymentsTab({
+    active,
+    addRef,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    addRef?: MutableRefObject<(() => void) | null>;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
@@ -359,6 +372,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
 
     const blank = { amount: '', paid_at: todayStr(), notes: '' };
     const [form, setForm] = useState(blank);
+    const [filter, setFilter] = useState<FactFilterValues>(blankFactFilter);
 
     useEffect(() => {
         if (!active || fetched) return;
@@ -395,13 +409,43 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
             .finally(() => setPayLoading(false));
     };
 
+    const visiblePayments = useMemo(
+        () =>
+            payments.filter((p) =>
+                matchesFactFilter(
+                    {
+                        date: p.paid_at,
+                        amountCents: p.amount_cents,
+                        text: p.notes ?? '',
+                    },
+                    filter,
+                ),
+            ),
+        [payments, filter],
+    );
+
     const selectRow = (p: DebtPayment) => {
-        if (!canMutateFact(p.paid_at)) return;
         setSelected(p);
-        setForm({ amount: String(p.amount), paid_at: p.paid_at, notes: p.notes ?? '' });
+        setForm({ amount: centsToInput(p.amount_cents), paid_at: p.paid_at, notes: p.notes ?? '' });
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        if (isMobile && canMutateFact(p.paid_at)) setSheetOpen(true);
     };
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'debt') return;
+        if (focus.instrumentId) {
+            setDebtId(focus.instrumentId);
+        }
+        setFilter((f) => ({ ...f, ...monthRangeContaining(focus.occurredOn) }));
+    }, [focus]);
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'debt' || !debtId) return;
+        const p = payments.find((row) => row.id === focus.sourceId);
+        if (!p) return;
+        selectRow(p);
+        onFocusConsumed?.();
+    }, [focus, payments, debtId]);
     const reset = () => {
         setSelected(null);
         setForm(blank);
@@ -435,7 +479,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         setSaving(true);
         setError(null);
         try {
-            const body = { amount: Number(form.amount), paid_at: form.paid_at, notes: form.notes || null };
+            const body = { amount_cents: majorInputToCents(form.amount), paid_at: form.paid_at, notes: form.notes || null };
             if (selected) {
                 await apiFetch(`/api/v1/debt-payments/${selected.id}`, {
                     method: 'PUT',
@@ -517,7 +561,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete payment of ${fmtAmount(confirm.amount)}?`}
+                    message={`Delete payment of ${fmtAmount(confirm.amount_cents)}?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -540,13 +584,15 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                             <option value="">— select a debt —</option>
                             {debts.map((d) => (
                                 <option key={d.id} value={d.id}>
-                                    {d.description} ({fmtAmount(d.remaining_balance)} left)
+                                    {d.description} ({fmtAmount(d.remaining_cents)} left)
                                 </option>
                             ))}
                         </select>
                     )}
                 </div>
                 {debtId && (
+                    <>
+                    <FactFilterBar value={filter} onChange={setFilter} />
                     <SplitPane
                         sheetOpen={sheetOpen}
                         onSheetOpenChange={setSheetOpen}
@@ -555,12 +601,15 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                             <ListStack>
                                 {payLoading && !payments.length && <LoadingRows />}
                                 {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
-                                {payments.map((p) => {
+                                {!payLoading && payments.length > 0 && !visiblePayments.length && (
+                                    <EmptyRows label="No payments match these filters." />
+                                )}
+                                {visiblePayments.map((p) => {
                                     const paymentLocked = !canMutateFact(p.paid_at);
                                     return (
                                     <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed} busy={removingId === p.id}>
                                         <div className="flex items-start justify-between gap-3">
-                                            <p className={rowTitleCls}>{fmtAmount(p.amount)}</p>
+                                            <p className={rowTitleCls}>{fmtAmount(p.amount_cents)}</p>
                                         </div>
                                         <p className={`mt-2 truncate ${rowDetailCls}`}>
                                             {p.paid_at}
@@ -578,6 +627,7 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
                         }
                         form={paymentForm}
                     />
+                    </>
                 )}
             </div>
         </>
@@ -591,9 +641,24 @@ function PaymentsTab({ active, addRef }: { active: boolean; addRef?: MutableRefO
 const SUBTABS = ['Debts', 'Payments', 'Categories'] as const;
 type SubTab = (typeof SUBTABS)[number];
 
-export function DebtsTab({ active }: { active: boolean }) {
+export function DebtsTab({
+    active,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const [sub, setSub] = useState<SubTab>('Debts');
     const addRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        if (focus?.domain === 'debt') {
+            setSub('Payments');
+        }
+    }, [focus]);
+
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
@@ -601,7 +666,9 @@ export function DebtsTab({ active }: { active: boolean }) {
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
             {sub === 'Debts' && <DebtsListTab addRef={addRef} active={active} />}
-            {sub === 'Payments' && <PaymentsTab addRef={addRef} active={active} />}
+            {sub === 'Payments' && (
+                <PaymentsTab addRef={addRef} active={active} focus={focus} onFocusConsumed={onFocusConsumed} />
+            )}
             {sub === 'Categories' && (
                 <CategoryTab
                     active={active}

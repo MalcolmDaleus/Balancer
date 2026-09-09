@@ -117,10 +117,10 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                                             </p>
                                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                 <span className={`inline-flex ${pillBase} ${tintSectionPill.emerald}`}>
-                                                    Income {signed(snap.total_income, '+')}
+                                                    Income {signed(snap.total_income_cents, '+')}
                                                 </span>
-                                                <span className={`inline-flex ${pillBase} ${tintSectionPill.yellow}`}>
-                                                    Spent {signed(snap.total_spending, '-')}
+                                                <span className={`inline-flex ${pillBase} ${tintSectionPill.red}`}>
+                                                    Spent {signed(snap.total_spending_cents, '-')}
                                                 </span>
                                             </div>
                                         </div>
@@ -129,19 +129,19 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                                                 Roll over
                                             </p>
                                             <p className="text-base font-semibold tabular-nums text-slate-900 dark:text-neutral-100">
-                                                {amount(snap.roll_over)}
+                                                {amount(snap.roll_over_cents)}
                                             </p>
                                         </div>
                                     </button>
 
                                     {isOpen && (
                                         <div className="space-y-2 border-t border-slate-100 px-4 py-3.5 dark:border-neutral-700/60">
-                                            <DetailRow label="Income" value={signed(snap.total_income, '+')} className="text-emerald-600 dark:text-emerald-300" />
-                                            <DetailRow label="Debt paid" value={signed(snap.total_debt_paid, '-')} className="text-red-600 dark:text-red-300" />
-                                            <DetailRow label="Purchases" value={signed(snap.total_spending, '-')} className="text-yellow-700 dark:text-yellow-300" />
-                                            <DetailRow label="Recurring" value={signed(snap.total_recurring, '-')} className="text-orange-700 dark:text-orange-300" />
-                                            <DetailRow label="Savings (net)" value={amount(snap.savings_snapshot)} />
-                                            <DetailRow label="Roll over" value={amount(snap.roll_over)} className="text-slate-900 dark:text-neutral-100" />
+                                            <DetailRow label="Income" value={signed(snap.total_income_cents, '+')} className="text-emerald-600 dark:text-emerald-300" />
+                                            <DetailRow label="Debt paid" value={signed(snap.total_debt_paid_cents, '-')} className="text-red-600 dark:text-red-300" />
+                                            <DetailRow label="Purchases" value={signed(snap.total_spending_cents, '-')} className="text-yellow-700 dark:text-yellow-300" />
+                                            <DetailRow label="Recurring" value={signed(snap.total_recurring_cents, '-')} className="text-orange-700 dark:text-orange-300" />
+                                            <DetailRow label="Savings (net)" value={amount(snap.savings_snapshot_cents)} />
+                                            <DetailRow label="Roll over" value={amount(snap.roll_over_cents)} className="text-slate-900 dark:text-neutral-100" />
                                         </div>
                                     )}
                                 </div>

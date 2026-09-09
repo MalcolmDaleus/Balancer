@@ -21,11 +21,17 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'currency',
         'locale',
+        'liquidity_seed',
+        'savings_seed',
+        'liquidity_seed_on',
+        'onboarded_at',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'liquidity_seed',
+        'savings_seed',
     ];
 
     protected function casts(): array
@@ -34,7 +40,21 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_finance_processed_at' => 'datetime',
+            'liquidity_seed' => 'integer',
+            'savings_seed' => 'integer',
+            'liquidity_seed_on' => 'date',
+            'onboarded_at' => 'datetime',
         ];
+    }
+
+    public function isOnboarded(): bool
+    {
+        return $this->onboarded_at !== null;
+    }
+
+    public function homePath(): string
+    {
+        return route($this->isOnboarded() ? 'dashboard' : 'onboarding', absolute: false);
     }
 
     public function purchases(): HasMany
@@ -105,5 +125,10 @@ class User extends Authenticatable implements MustVerifyEmail
     public function bugReports(): HasMany
     {
         return $this->hasMany(BugReport::class);
+    }
+
+    public function budgetPlans(): HasMany
+    {
+        return $this->hasMany(BudgetPlan::class);
     }
 }

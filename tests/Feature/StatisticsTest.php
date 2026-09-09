@@ -200,8 +200,8 @@ test('spend_net subtracts refunds from the purchase month', function () {
     $payload = app(StatisticsService::class)->series($user->id, 'trend', 'spend_net', 6);
     $byMonth = collect($payload['points'])->keyBy('month');
 
-    expect($byMonth['2026-08']['value'])->toBe(80.0)
-        ->and($byMonth['2026-07']['value'])->toBe(70.0);
+    expect($byMonth['2026-08']['value'])->toBe(8000)
+        ->and($byMonth['2026-07']['value'])->toBe(7000);
 });
 
 test('share and compare totals follow the selected window', function () {
@@ -211,14 +211,14 @@ test('share and compare totals follow the selected window', function () {
     $month = app(StatisticsService::class)->series($user->id, 'share', 'purchase_categories', 1);
     $halfYear = app(StatisticsService::class)->series($user->id, 'share', 'purchase_categories', 6);
 
-    expect(collect($month['points'])->firstWhere('name', 'Groceries')['value'])->toBe(80.0)
-        ->and(collect($halfYear['points'])->firstWhere('name', 'Groceries')['value'])->toBe(150.0);
+    expect(collect($month['points'])->firstWhere('name', 'Groceries')['value'])->toBe(8000)
+        ->and(collect($halfYear['points'])->firstWhere('name', 'Groceries')['value'])->toBe(15000);
 
     $incomeMonth = app(StatisticsService::class)->series($user->id, 'share', 'income_mix', 1);
     $incomeYear = app(StatisticsService::class)->series($user->id, 'share', 'income_mix', 6);
 
-    expect(collect($incomeMonth['points'])->firstWhere('name', 'Regular')['value'])->toBe(2000.0)
-        ->and(collect($incomeYear['points'])->firstWhere('name', 'Regular')['value'])->toBe(4000.0);
+    expect(collect($incomeMonth['points'])->firstWhere('name', 'Regular')['value'])->toBe(200000)
+        ->and(collect($incomeYear['points'])->firstWhere('name', 'Regular')['value'])->toBe(400000);
 });
 
 test('outflow mix keeps domain labels', function () {
@@ -241,9 +241,9 @@ test('income mix splits regular irregular and refund', function () {
     $payload = app(StatisticsService::class)->series($user->id, 'share', 'income_mix', 1);
     $byName = collect($payload['points'])->keyBy('name');
 
-    expect($byName['Regular']['value'])->toBe(2000.0)
-        ->and($byName['Irregular']['value'])->toBe(100.0)
-        ->and($byName['Refund']['value'])->toBe(50.0);
+    expect($byName['Regular']['value'])->toBe(200000)
+        ->and($byName['Irregular']['value'])->toBe(10000)
+        ->and($byName['Refund']['value'])->toBe(5000);
 });
 
 test('recurring load is recurring over income', function () {

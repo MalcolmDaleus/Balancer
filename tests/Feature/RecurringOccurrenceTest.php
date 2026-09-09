@@ -15,29 +15,29 @@ test('monthly recurring entry counts once in its charge month', function () {
     $calculator = app(OccurrenceCalculatorService::class);
 
     $entry = RecurringPaymentEntry::factory()->create([
-        'frequency'    => 'monthly',
-        'amount'       => 49.99,
+        'frequency' => 'monthly',
+        'amount' => 49.99,
         'day_of_month' => 15,
-        'start_date'   => '2026-01-15',
+        'start_date' => '2026-01-15',
     ]);
 
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(49.99);
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-05-01', '2026-05-31'))->toBe(49.99);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(4999);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-05-01', '2026-05-31'))->toBe(4999);
 });
 
 test('yearly recurring entry only counts in its anniversary month', function () {
     $calculator = app(OccurrenceCalculatorService::class);
 
     $entry = RecurringPaymentEntry::factory()->create([
-        'frequency'    => 'yearly',
-        'amount'       => 1200.00,
+        'frequency' => 'yearly',
+        'amount' => 1200.00,
         'day_of_month' => 10,
-        'start_date'   => '2025-03-10',
+        'start_date' => '2025-03-10',
     ]);
 
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-03-01', '2026-03-31'))->toBe(1200.00);
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(0.0);
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-02-01', '2026-02-28'))->toBe(0.0);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-03-01', '2026-03-31'))->toBe(120000);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(0);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-02-01', '2026-02-28'))->toBe(0);
 });
 
 test('weekly recurring entry counts each occurrence in the month', function () {
@@ -45,15 +45,15 @@ test('weekly recurring entry counts each occurrence in the month', function () {
 
     // Every Monday starting 2026-04-06 (April 2026 has 4 Mondays from the 6th)
     $entry = RecurringPaymentEntry::factory()->weekly()->create([
-        'amount'      => 10.00,
+        'amount' => 10.00,
         'day_of_week' => Carbon::MONDAY,
-        'start_date'  => '2026-04-06',
+        'start_date' => '2026-04-06',
     ]);
 
     $dates = $calculator->recurringEntryDatesInPeriod($entry, '2026-04-01', '2026-04-30');
 
     expect($dates)->toHaveCount(4);
-    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(40.00);
+    expect($calculator->recurringEntryAmountInPeriod($entry, '2026-04-01', '2026-04-30'))->toBe(4000);
 });
 
 test('balance sheet charged recurring uses materialized purchases not live projections', function () {
@@ -63,27 +63,27 @@ test('balance sheet charged recurring uses materialized purchases not live proje
 
     $stream = RecurringPaymentStream::factory()->create([
         'user_id' => $user->id,
-        'active'  => true,
+        'active' => true,
     ]);
 
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'frequency'                   => 'yearly',
-        'amount'                      => 999.00,
-        'day_of_month'                => 15,
-        'start_date'                  => '2026-01-15',
+        'frequency' => 'yearly',
+        'amount' => 999.00,
+        'day_of_month' => 15,
+        'start_date' => '2026-01-15',
     ]);
 
     // Before materialization — charged total is 0
-    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring'])->toBe(0.0);
+    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring_cents'])->toBe(0);
 
     app(\App\Services\FinanceProcessingService::class)->processDueForUser($user->id);
 
-    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring'])->toBe(999.0);
+    expect((new BalanceSheetService($user->id, '2026-01'))->getSimplified()['total_recurring_cents'])->toBe(99900);
 
     Carbon::setTestNow('2026-06-15 12:00:00');
-    expect((new BalanceSheetService($user->id, '2026-06'))->getSimplified()['total_recurring'])->toBe(0.0);
+    expect((new BalanceSheetService($user->id, '2026-06'))->getSimplified()['total_recurring_cents'])->toBe(0);
 });
 
 test('paused recurring streams are excluded from projected balance sheet totals', function () {
@@ -93,21 +93,21 @@ test('paused recurring streams are excluded from projected balance sheet totals'
 
     $stream = RecurringPaymentStream::factory()->create([
         'user_id' => $user->id,
-        'active'  => false,
+        'active' => false,
     ]);
 
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'frequency'                   => 'monthly',
-        'amount'                      => 25.00,
-        'day_of_month'                => 1,
-        'start_date'                  => '2026-04-01',
+        'frequency' => 'monthly',
+        'amount' => 25.00,
+        'day_of_month' => 1,
+        'start_date' => '2026-04-01',
     ]);
 
     $april = (new BalanceSheetService($user->id, '2026-04'))->getExpanded();
-    expect($april['recurring_payments']['charged_total'])->toBe(0.0);
-    expect($april['recurring_payments']['projected_total'])->toBe(0.0);
+    expect($april['recurring_payments']['charged_total_cents'])->toBe(0);
+    expect($april['recurring_payments']['projected_total_cents'])->toBe(0);
 });
 
 test('pending_active flushes on a recurring occurrence day', function () {
@@ -116,17 +116,17 @@ test('pending_active flushes on a recurring occurrence day', function () {
     $user = User::factory()->create();
 
     $stream = RecurringPaymentStream::factory()->create([
-        'user_id'        => $user->id,
-        'active'         => true,
+        'user_id' => $user->id,
+        'active' => true,
         'pending_active' => false,
     ]);
 
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'frequency'                   => 'monthly',
-        'day_of_month'                => 15,
-        'start_date'                  => '2026-01-15',
+        'frequency' => 'monthly',
+        'day_of_month' => 15,
+        'start_date' => '2026-01-15',
     ]);
 
     app(\App\Services\RecurringPaymentCycleService::class)->processForUser($user->id);
@@ -142,17 +142,17 @@ test('pending_active is not flushed on a non-occurrence day', function () {
     $user = User::factory()->create();
 
     $stream = RecurringPaymentStream::factory()->create([
-        'user_id'        => $user->id,
-        'active'         => true,
+        'user_id' => $user->id,
+        'active' => true,
         'pending_active' => false,
     ]);
 
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'frequency'                   => 'monthly',
-        'day_of_month'                => 15,
-        'start_date'                  => '2026-01-15',
+        'frequency' => 'monthly',
+        'day_of_month' => 15,
+        'start_date' => '2026-01-15',
     ]);
 
     app(\App\Services\RecurringPaymentCycleService::class)->processForUser($user->id);
@@ -168,17 +168,17 @@ test('pending resume flushes on occurrence day', function () {
     $user = User::factory()->create();
 
     $stream = RecurringPaymentStream::factory()->create([
-        'user_id'        => $user->id,
-        'active'         => false,
+        'user_id' => $user->id,
+        'active' => false,
         'pending_active' => true,
     ]);
 
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'frequency'                   => 'monthly',
-        'day_of_month'                => 15,
-        'start_date'                  => '2026-01-15',
+        'frequency' => 'monthly',
+        'day_of_month' => 15,
+        'start_date' => '2026-01-15',
     ]);
 
     app(\App\Services\RecurringPaymentCycleService::class)->processForUser($user->id);

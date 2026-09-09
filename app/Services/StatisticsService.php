@@ -3,11 +3,13 @@
 namespace App\Services;
 
 use App\Models\BalanceSheetTotal;
+use App\Models\BudgetPlan;
 use App\Models\DebtPayment;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
 use App\Models\RecurringCharge;
 use App\Models\Saving;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -31,6 +33,8 @@ class StatisticsService
         'savings_net' => 'Savings',
         'savings_running' => 'Savings total',
         'recurring_load' => 'Recurring vs income',
+        'budget_adherence' => 'Budget followed',
+        'budget_left' => 'Budget leftover',
     ];
 
     public const COMPARE = [
@@ -38,6 +42,7 @@ class StatisticsService
         'purchase_categories_avg' => 'Average by category',
         'outflow_domains_month' => 'Spending by type',
         'leftover_by_month' => 'Leftover by month',
+        'budget_by_category' => 'Budget vs spent',
     ];
 
     public const SHARE = [
@@ -70,7 +75,10 @@ class StatisticsService
         $asOf = Carbon::parse($asOf ?? now())->startOfMonth();
         [$from, $to] = $this->windowBounds($userId, $window, $asOf);
         $label = $this->labelFor($view, $series);
-        $unit = $series === 'recurring_load' ? 'percent' : 'money';
+        $unit = match ($series) {
+            'recurring_load', 'budget_adherence' => 'percent',
+            default => 'money',
+        };
 
         $points = match ($view) {
             'trend' => $this->trendPoints($userId, $series, $from, $to),
@@ -94,7 +102,6 @@ class StatisticsService
     }
 
     /**
-     * @param  int|string  $window
      * @return array{
      *   window: int|string,
      *   from: string,
@@ -110,10 +117,10 @@ class StatisticsService
         [$from, $to] = $this->windowBounds($userId, $window, $asOf);
 
         $leftovers = collect($this->leftoverByMonth($userId, $from, $to));
-        $thisMonthLeftover = (float) ($leftovers->last()['value'] ?? 0);
+        $thisMonthLeftover = (int) ($leftovers->last()['value'] ?? 0);
         $avgLeftover = $leftovers->isEmpty()
-            ? 0.0
-            : round($leftovers->avg('value'), 2);
+            ? 0
+            : (int) round($leftovers->avg('value'));
 
         $best = $leftovers->sortByDesc('value')->first();
         $worst = $leftovers->sortBy('value')->first();
@@ -122,10 +129,10 @@ class StatisticsService
         $avgCats = $this->purchaseCategoryAverages($userId, $from, $to);
         $top = collect($monthCats)->sortByDesc('value')->first();
         $topName = $top['name'] ?? null;
-        $topValue = (float) ($top['value'] ?? 0);
+        $topValue = (int) ($top['value'] ?? 0);
         $topAvg = $topName !== null
-            ? (float) (collect($avgCats)->firstWhere('name', $topName)['value'] ?? 0)
-            : 0.0;
+            ? (int) (collect($avgCats)->firstWhere('name', $topName)['value'] ?? 0)
+            : 0;
 
         $savingsInPeriod = collect($this->domainSignedByMonth($userId, 'savings', $from, $to))->sum();
 
@@ -135,63 +142,79 @@ class StatisticsService
         $recurring = (float) collect($recurringByMonth)->sum();
         $load = $income > 0 ? round($recurring / $income, 4) : 0.0;
 
+        $budgetLefts = collect($this->budgetLeftByMonth($userId, $from, $to));
+        $thisMonthBudgetLeft = (int) ($budgetLefts->last()['value'] ?? 0);
+        $avgBudgetLeft = $budgetLefts->filter(fn (array $row) => $row['has_plan'])->isEmpty()
+            ? 0
+            : (int) round($budgetLefts->filter(fn (array $row) => $row['has_plan'])->avg('value'));
+
+        $markers = [
+            [
+                'id' => 'leftover_vs_avg',
+                'label' => 'Leftover vs average',
+                'value' => $thisMonthLeftover,
+                'baseline' => $avgLeftover,
+                'delta' => $thisMonthLeftover - $avgLeftover,
+                'unit' => 'money',
+            ],
+            [
+                'id' => 'top_category',
+                'label' => $topName ? "Top category · {$topName}" : 'Top category',
+                'name' => $topName,
+                'value' => $topValue,
+                'baseline' => $topAvg,
+                'delta' => $topValue - $topAvg,
+                'unit' => 'money',
+            ],
+            [
+                'id' => 'savings_this_month',
+                'label' => 'Savings in period',
+                'value' => (int) $savingsInPeriod,
+                'unit' => 'money',
+            ],
+            [
+                'id' => 'recurring_load',
+                'label' => 'Recurring load',
+                'value' => $load,
+                'unit' => 'percent',
+            ],
+            [
+                'id' => 'best_leftover_month',
+                'label' => 'Best leftover month',
+                'month' => $best['month'] ?? null,
+                'value' => (int) ($best['value'] ?? 0),
+                'unit' => 'money',
+            ],
+            [
+                'id' => 'worst_leftover_month',
+                'label' => 'Worst leftover month',
+                'month' => $worst['month'] ?? null,
+                'value' => (int) ($worst['value'] ?? 0),
+                'unit' => 'money',
+            ],
+        ];
+
+        if ($budgetLefts->last()['has_plan'] ?? false) {
+            $markers[] = [
+                'id' => 'budget_this_month',
+                'label' => 'Left vs plan',
+                'value' => $thisMonthBudgetLeft,
+                'baseline' => $avgBudgetLeft,
+                'delta' => $thisMonthBudgetLeft - $avgBudgetLeft,
+                'unit' => 'money',
+            ];
+        }
+
         return [
             'window' => $window,
             'from' => $from->format('Y-m'),
             'to' => $to->format('Y-m'),
             'span_months' => $this->spanMonths($userId, $asOf),
             'available_windows' => $this->availableWindows($userId, $asOf),
-            'markers' => [
-                [
-                    'id' => 'leftover_vs_avg',
-                    'label' => 'Leftover vs average',
-                    'value' => $thisMonthLeftover,
-                    'baseline' => $avgLeftover,
-                    'delta' => round($thisMonthLeftover - $avgLeftover, 2),
-                    'unit' => 'money',
-                ],
-                [
-                    'id' => 'top_category',
-                    'label' => $topName ? "Top category · {$topName}" : 'Top category',
-                    'name' => $topName,
-                    'value' => $topValue,
-                    'baseline' => $topAvg,
-                    'delta' => round($topValue - $topAvg, 2),
-                    'unit' => 'money',
-                ],
-                [
-                    'id' => 'savings_this_month',
-                    'label' => 'Savings in period',
-                    'value' => round((float) $savingsInPeriod, 2),
-                    'unit' => 'money',
-                ],
-                [
-                    'id' => 'recurring_load',
-                    'label' => 'Recurring load',
-                    'value' => $load,
-                    'unit' => 'percent',
-                ],
-                [
-                    'id' => 'best_leftover_month',
-                    'label' => 'Best leftover month',
-                    'month' => $best['month'] ?? null,
-                    'value' => (float) ($best['value'] ?? 0),
-                    'unit' => 'money',
-                ],
-                [
-                    'id' => 'worst_leftover_month',
-                    'label' => 'Worst leftover month',
-                    'month' => $worst['month'] ?? null,
-                    'value' => (float) ($worst['value'] ?? 0),
-                    'unit' => 'money',
-                ],
-            ],
+            'markers' => $markers,
         ];
     }
 
-    /**
-     * @param  mixed  $raw
-     */
     public static function parseWindow(mixed $raw): int|string
     {
         if ($raw === null || $raw === '') {
@@ -245,7 +268,6 @@ class StatisticsService
     }
 
     /**
-     * @param  int|string  $window
      * @return array{0: Carbon, 1: Carbon}
      */
     public function windowBounds(int $userId, int|string $window, Carbon $asOf): array
@@ -313,13 +335,19 @@ class StatisticsService
             'savings_net' => collect($this->domainSignedByMonth($userId, 'savings', $from, $to)),
             'savings_running' => collect($this->savingsRunningByMonth($userId, $keys)),
             'recurring_load' => collect($this->recurringLoadByMonth($userId, $from, $to)),
+            'budget_adherence' => collect($this->budgetAdherenceByMonth($userId, $from, $to)),
+            'budget_left' => collect($this->budgetLeftByMonth($userId, $from, $to))->pluck('value', 'month'),
             default => throw new InvalidArgumentException("Unknown trend series [{$series}]"),
         };
+
+        $ratio = in_array($series, ['recurring_load', 'budget_adherence'], true);
 
         return collect($keys)
             ->map(fn (string $ym) => [
                 'month' => $ym,
-                'value' => round((float) ($values[$ym] ?? 0), $series === 'recurring_load' ? 4 : 2),
+                'value' => $ratio
+                    ? round((float) ($values[$ym] ?? 0), 4)
+                    : (int) ($values[$ym] ?? 0),
             ])
             ->values()
             ->all();
@@ -342,6 +370,7 @@ class StatisticsService
                 ])
                 ->values()
                 ->all(),
+            'budget_by_category' => $this->budgetByCategory($userId, $to),
             default => throw new InvalidArgumentException("Unknown compare series [{$series}]"),
         };
     }
@@ -375,7 +404,7 @@ class StatisticsService
 
                 return [
                     'month' => $ym,
-                    'value' => (float) $sheet['roll_over'],
+                    'value' => (int) $sheet['roll_over_cents'],
                 ];
             })
             ->values()
@@ -415,7 +444,7 @@ class StatisticsService
         $totals = [];
 
         foreach ($this->monthKeys($from, $to) as $ym) {
-            $totals[$ym] = 0.0;
+            $totals[$ym] = 0;
         }
 
         foreach ($facts as $fact) {
@@ -426,8 +455,8 @@ class StatisticsService
             if (! array_key_exists($ym, $totals)) {
                 continue;
             }
-            $signed = $fact['direction'] === 'out' ? -((float) $fact['amount']) : (float) $fact['amount'];
-            $totals[$ym] = round($totals[$ym] + $signed, 2);
+            $signed = $fact['direction'] === 'out' ? -((int) $fact['amount_cents']) : (int) $fact['amount_cents'];
+            $totals[$ym] = ($totals[$ym] ?? 0) + $signed;
         }
 
         return $totals;
@@ -446,7 +475,7 @@ class StatisticsService
         foreach ($this->purchaseNets($userId, $from, $to) as $row) {
             $ym = $row['month'];
             if (array_key_exists($ym, $nets)) {
-                $nets[$ym] = round($nets[$ym] + $row['net'], 2);
+                $nets[$ym] = ($nets[$ym] ?? 0) + $row['net'];
             }
         }
 
@@ -462,7 +491,7 @@ class StatisticsService
         $out = [];
         foreach ($keys as $ym) {
             $asOf = Carbon::createFromFormat('Y-m', $ym)->startOfMonth()->toDateString();
-            $out[$ym] = round(Saving::runningBalance($userId, $asOf), 2);
+            $out[$ym] = Saving::runningBalance($userId, $asOf);
         }
 
         return $out;
@@ -494,7 +523,7 @@ class StatisticsService
             ->groupBy('category')
             ->map(fn (Collection $rows, string $name) => [
                 'name' => $name,
-                'value' => round((float) $rows->sum('net'), 2),
+                'value' => (int) $rows->sum('net'),
             ])
             ->filter(fn (array $row) => $row['value'] != 0.0)
             ->sortByDesc('value')
@@ -512,7 +541,7 @@ class StatisticsService
         return collect($this->purchaseCategoryNets($userId, $from, $to))
             ->map(fn (array $row) => [
                 'name' => $row['name'],
-                'value' => round($row['value'] / $monthCount, 2),
+                'value' => (int) round($row['value'] / $monthCount),
             ])
             ->values()
             ->all();
@@ -523,16 +552,16 @@ class StatisticsService
      */
     private function outflowDomains(int $userId, Carbon $from, Carbon $to): array
     {
-        $purchases = round((float) collect($this->domainOutByMonth($userId, 'spending', $from, $to))->sum(), 2);
-        $recurring = round((float) collect($this->domainOutByMonth($userId, 'recurring', $from, $to))->sum(), 2);
-        $debt = round((float) collect($this->domainOutByMonth($userId, 'debt', $from, $to))->sum(), 2);
+        $purchases = (int) collect($this->domainOutByMonth($userId, 'spending', $from, $to))->sum();
+        $recurring = (int) collect($this->domainOutByMonth($userId, 'recurring', $from, $to))->sum();
+        $debt = (int) collect($this->domainOutByMonth($userId, 'debt', $from, $to))->sum();
 
-        $savingsDeposits = round((float) Saving::query()
+        $savingsDeposits = MoneyCents::fromMajor(Saving::query()
             ->where('user_id', $userId)
             ->where('type', 'deposit')
             ->whereDate('month', '>=', $from->toDateString())
             ->whereDate('month', '<=', $to->toDateString())
-            ->sum('amount'), 2);
+            ->sum('amount'));
 
         return [
             ['name' => 'Purchases', 'value' => $purchases],
@@ -554,9 +583,9 @@ class StatisticsService
         );
 
         $totals = [
-            'regular' => 0.0,
-            'irregular' => 0.0,
-            'refund' => 0.0,
+            'regular' => 0,
+            'irregular' => 0,
+            'refund' => 0,
         ];
 
         foreach ($facts as $fact) {
@@ -565,9 +594,9 @@ class StatisticsService
             }
             $kind = $fact['kind'] ?? 'irregular';
             if (! array_key_exists($kind, $totals)) {
-                $totals[$kind] = 0.0;
+                $totals[$kind] = 0;
             }
-            $totals[$kind] = round($totals[$kind] + (float) $fact['amount'], 2);
+            $totals[$kind] = ($totals[$kind] ?? 0) + (int) $fact['amount_cents'];
         }
 
         return [
@@ -592,12 +621,12 @@ class StatisticsService
             ->get();
 
         return $purchases->map(function (Purchase $p) {
-            $refunded = (float) $p->refundIncomeEntries->sum('amount');
+            $refunded = $p->refunded_cents;
 
             return [
                 'month' => $p->date?->format('Y-m') ?? '',
                 'category' => $p->category?->name ?? 'Uncategorized',
-                'net' => round((float) $p->amount - $refunded, 2),
+                'net' => MoneyCents::fromMajor($p->amount) - $refunded,
             ];
         })->all();
     }
@@ -615,7 +644,7 @@ class StatisticsService
                 continue;
             }
             $ym = Carbon::parse($fact['occurred_on'])->format('Y-m');
-            $totals[$ym] = round(($totals[$ym] ?? 0) + (float) $fact['amount'], 2);
+            $totals[$ym] = ($totals[$ym] ?? 0) + (int) $fact['amount_cents'];
         }
 
         return $totals;
@@ -636,5 +665,83 @@ class StatisticsService
         }
 
         return $keys;
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private function budgetAdherenceByMonth(int $userId, Carbon $from, Carbon $to): array
+    {
+        $out = [];
+        foreach ($this->budgetMonths($userId, $from, $to) as $ym => $row) {
+            $plan = $row['plan_cents'];
+            $out[$ym] = $plan > 0 ? round($row['actual_cents'] / $plan, 4) : 0.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<array{month: string, value: float, has_plan: bool}>
+     */
+    private function budgetLeftByMonth(int $userId, Carbon $from, Carbon $to): array
+    {
+        $rows = [];
+        foreach ($this->budgetMonths($userId, $from, $to) as $ym => $row) {
+            $rows[] = [
+                'month' => $ym,
+                'value' => $row['plan_cents'] - $row['actual_cents'],
+                'has_plan' => $row['has_plan'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{name: string, value: float, plan?: float}>
+     */
+    private function budgetByCategory(int $userId, Carbon $month): array
+    {
+        $shown = app(BudgetService::class)->show($userId, $month);
+        if (! $shown['has_plan']) {
+            return [];
+        }
+
+        $points = [];
+        foreach ($shown['categories'] as $row) {
+            $points[] = [
+                'name' => $row['name'],
+                'value' => (int) $row['actual_cents'],
+                'plan' => (int) $row['plan_cents'],
+            ];
+        }
+
+        return $points;
+    }
+
+    /**
+     * @return array<string, array{has_plan: bool, plan_cents: int, actual_cents: int}>
+     */
+    private function budgetMonths(int $userId, Carbon $from, Carbon $to): array
+    {
+        $budgets = app(BudgetService::class);
+        $out = [];
+
+        foreach ($this->monthKeys($from, $to) as $ym) {
+            $month = Carbon::createFromFormat('Y-m', $ym)->startOfMonth();
+            $plan = BudgetPlan::query()
+                ->where('user_id', $userId)
+                ->whereDate('month', $month->toDateString())
+                ->first();
+            $actual = $budgets->purchaseActuals($userId, $month)['total_cents'];
+            $out[$ym] = [
+                'has_plan' => $plan !== null,
+                'plan_cents' => $plan ? (int) $plan->discretionary_cents : 0,
+                'actual_cents' => $actual,
+            ];
+        }
+
+        return $out;
     }
 }

@@ -53,7 +53,7 @@ test('store bug report rejects unknown zone and type', function () {
 
     $this->actingAs($user)->postJson('/api/v1/bug-reports', [
         'type' => 'crash',
-        'zone' => 'budget',
+        'zone' => 'wallet',
         'view' => 'tablet',
         'description' => 'This should not persist at all.',
     ])

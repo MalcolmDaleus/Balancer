@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\IncomeScheduleFrequency;
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreRegularIncomeScheduleRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -19,14 +23,14 @@ class StoreRegularIncomeScheduleRequest extends FormRequest
         $frequencies = array_column(IncomeScheduleFrequency::cases(), 'value');
 
         return [
-            'name'         => ['required', 'string', 'max:64'],
-            'description'  => ['nullable', 'string', 'max:255'],
-            'amount'       => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'frequency'    => ['required', 'string', Rule::in($frequencies)],
+            'name' => ['required', 'string', 'max:64'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'amount_cents' => MoneyCents::rules(),
+            'frequency' => ['required', 'string', Rule::in($frequencies)],
             'day_of_month' => ['nullable', 'integer', 'min:1', 'max:31'],
-            'day_of_week'  => ['nullable', 'integer', 'min:0', 'max:6'],
-            'anchor_date'  => ['nullable', 'date'],
-            'start_date'   => ['required', 'date'],
+            'day_of_week' => ['nullable', 'integer', 'min:0', 'max:6'],
+            'anchor_date' => ['nullable', 'date'],
+            'start_date' => ['required', 'date'],
         ];
     }
 

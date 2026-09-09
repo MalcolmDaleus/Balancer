@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreDebtPaymentRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -14,9 +18,9 @@ class StoreDebtPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount'  => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'amount_cents' => MoneyCents::rules(),
             'paid_at' => ['required', 'date'],
-            'notes'   => ['nullable', 'string', 'max:1000'],
+            'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 }

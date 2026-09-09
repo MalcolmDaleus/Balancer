@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\RecurringPaymentFrequency;
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateRecurringPaymentEntryRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -17,13 +21,13 @@ class UpdateRecurringPaymentEntryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount'       => ['sometimes', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'frequency'    => ['sometimes', 'string', Rule::in(RecurringPaymentFrequency::values())],
+            'amount_cents' => MoneyCents::rules(required: false),
+            'frequency' => ['sometimes', 'string', Rule::in(RecurringPaymentFrequency::values())],
             'day_of_month' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:31'],
-            'day_of_week'  => ['sometimes', 'nullable', 'integer', 'min:0', 'max:6'],
-            'start_date'   => ['sometimes', 'date'],
-            'end_date'     => ['sometimes', 'nullable', 'date'],
-            'active'       => ['sometimes', 'boolean'],
+            'day_of_week' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:6'],
+            'start_date' => ['sometimes', 'date'],
+            'end_date' => ['sometimes', 'nullable', 'date'],
+            'active' => ['sometimes', 'boolean'],
         ];
     }
 

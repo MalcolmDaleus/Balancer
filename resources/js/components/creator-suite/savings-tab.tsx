@@ -1,9 +1,12 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Saving } from '@/types/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from './fact-filters';
+import type { LedgerFocus } from './ledger-focus';
 import { useLockedMonths } from './locked-months';
 import {
     AddButton,
@@ -28,7 +31,15 @@ import {
     thisMonthStr,
 } from './shared';
 
-export function SavingsTab({ active }: { active: boolean }) {
+export function SavingsTab({
+    active,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
@@ -44,6 +55,7 @@ export function SavingsTab({ active }: { active: boolean }) {
 
     const blank = { amount: '', type: 'deposit' as 'deposit' | 'withdrawal', notes: '', month: thisMonthStr() };
     const [form, setForm] = useState(blank);
+    const [filter, setFilter] = useState<FactFilterValues>(blankFactFilter);
 
     const load = async () => {
         setLoading(true);
@@ -61,13 +73,40 @@ export function SavingsTab({ active }: { active: boolean }) {
         if (active && !fetched) void load();
     }, [active, fetched]);
 
+    const visibleSavings = useMemo(
+        () =>
+            savings.filter((s) =>
+                matchesFactFilter(
+                    {
+                        date: s.month,
+                        amountCents: s.amount_cents,
+                        text: `${s.notes ?? ''} ${s.type}`,
+                    },
+                    filter,
+                ),
+            ),
+        [savings, filter],
+    );
+
     const selectRow = (s: Saving) => {
-        if (!canMutateFact(s.month)) return;
         setSelected(s);
-        setForm({ amount: String(s.amount), type: s.type, notes: s.notes ?? '', month: s.month?.slice(0, 7) ?? thisMonthStr() });
+        setForm({ amount: centsToInput(s.amount_cents), type: s.type, notes: s.notes ?? '', month: s.month?.slice(0, 7) ?? thisMonthStr() });
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        if (isMobile && canMutateFact(s.month)) setSheetOpen(true);
     };
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'savings') return;
+        setFilter((f) => ({ ...f, ...monthRangeContaining(focus.occurredOn) }));
+    }, [focus]);
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'savings' || !fetched) return;
+        const row = savings.find((item) => item.id === focus.sourceId);
+        if (!row) return;
+        selectRow(row);
+        onFocusConsumed?.();
+    }, [focus, fetched, savings]);
     const reset = () => {
         setSelected(null);
         setForm(blank);
@@ -86,7 +125,7 @@ export function SavingsTab({ active }: { active: boolean }) {
         setSaving(true);
         setError(null);
         try {
-            const body = { amount: Number(form.amount), type: form.type, notes: form.notes || null, month: form.month };
+            const body = { amount_cents: majorInputToCents(form.amount), type: form.type, notes: form.notes || null, month: form.month };
             if (selected) {
                 await apiFetch(`/api/v1/savings/${selected.id}`, {
                     method: 'PUT',
@@ -123,7 +162,7 @@ export function SavingsTab({ active }: { active: boolean }) {
         }
     };
 
-    const grandTotal = savings.reduce((acc, s) => acc + (s.type === 'deposit' ? s.amount : -s.amount), 0);
+    const grandTotal = savings.reduce((acc, s) => acc + (s.type === 'deposit' ? s.amount_cents : -s.amount_cents), 0);
 
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -175,7 +214,7 @@ export function SavingsTab({ active }: { active: boolean }) {
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete this ${confirm.type} of ${fmtAmount(confirm.amount)}?`}
+                    message={`Delete this ${confirm.type} of ${fmtAmount(confirm.amount_cents)}?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -198,6 +237,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                         }}
                     />
                 </TabToolbar>
+                <FactFilterBar value={filter} onChange={setFilter} />
                 <SplitPane
                     sheetOpen={sheetOpen}
                     onSheetOpenChange={setSheetOpen}
@@ -206,7 +246,10 @@ export function SavingsTab({ active }: { active: boolean }) {
                         <ListStack>
                             {loading && !savings.length && <LoadingRows />}
                             {!loading && !savings.length && <EmptyRows label="No savings transactions yet." />}
-                            {savings.map((s) => {
+                            {!loading && savings.length > 0 && !visibleSavings.length && (
+                                <EmptyRows label="No transactions match these filters." />
+                            )}
+                            {visibleSavings.map((s) => {
                                 const canWrite = canMutateFact(s.month);
                                 return (
                                     <ListRow key={s.id} selected={selected?.id === s.id} busy={removingId === s.id}>
@@ -230,7 +273,7 @@ export function SavingsTab({ active }: { active: boolean }) {
                                                     className={`${rowAmountCls} text-right ${s.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}
                                                 >
                                                     {s.type === 'deposit' ? '+' : '-'}
-                                                    {fmtAmount(s.amount)}
+                                                    {fmtAmount(s.amount_cents)}
                                                 </span>
                                                 {canWrite && (
                                                     <RowActions onEdit={() => selectRow(s)} onDelete={() => setConfirm(s)} />

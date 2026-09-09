@@ -6,6 +6,7 @@ use App\Models\Traits\DateScopeable;
 use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
 use App\Services\MonthLockService;
+use App\Support\MoneyCents;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -55,13 +56,13 @@ class Debt extends Model
      * N+1 inside BalanceSheetService which loads debts with ->with('payments')).
      * Falls back to a live aggregate query otherwise.
      */
-    public function getRemainingBalanceAttribute(): float
+    public function getRemainingCentsAttribute(): int
     {
         $paid = $this->relationLoaded('payments')
-            ? $this->payments->sum('amount')
-            : $this->payments()->sum('amount');
+            ? MoneyCents::sumMajors($this->payments->pluck('amount'))
+            : MoneyCents::fromMajor($this->payments()->sum('amount'));
 
-        return max(0.0, (float) $this->attributes['amount'] - (float) $paid);
+        return max(0, MoneyCents::fromMajor($this->attributes['amount'] ?? 0) - $paid);
     }
 
     /**
@@ -70,7 +71,7 @@ class Debt extends Model
      */
     public function getIsSettledAttribute(): bool
     {
-        return ! $this->is_forgiven && $this->remaining_balance <= 0;
+        return ! $this->is_forgiven && $this->remaining_cents <= 0;
     }
 
     /**

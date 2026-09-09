@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\IncomeScheduleFrequency;
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateRegularIncomeScheduleAmountRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -19,12 +23,12 @@ class UpdateRegularIncomeScheduleAmountRequest extends FormRequest
         $frequencies = array_column(IncomeScheduleFrequency::cases(), 'value');
 
         return [
-            'amount'       => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'start_date'   => ['required', 'date'],
-            'frequency'    => ['sometimes', 'string', Rule::in($frequencies)],
+            'amount_cents' => MoneyCents::rules(),
+            'start_date' => ['required', 'date'],
+            'frequency' => ['sometimes', 'string', Rule::in($frequencies)],
             'day_of_month' => ['nullable', 'integer', 'min:1', 'max:31'],
-            'day_of_week'  => ['nullable', 'integer', 'min:0', 'max:6'],
-            'anchor_date'  => ['nullable', 'date'],
+            'day_of_week' => ['nullable', 'integer', 'min:0', 'max:6'],
+            'anchor_date' => ['nullable', 'date'],
         ];
     }
 

@@ -33,7 +33,7 @@ test('user can create a debt', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->postJson('/api/v1/debts', [
-        'amount' => 1500.00,
+        'amount_cents' => 150000,
         'description' => 'Car loan',
         'issue_date' => '2026-01-01',
     ]);
@@ -43,7 +43,7 @@ test('user can create a debt', function () {
         ->assertJsonPath('data.is_settled', false)
         ->assertJsonPath('data.is_forgiven', false)
         ->assertJsonPath('data.is_closed', false);
-    $this->assertEquals(1500, $response->json('data.remaining_balance'));
+    $this->assertEquals(150000, $response->json('data.remaining_cents'));
 });
 
 test('store debt fails validation with missing fields', function () {
@@ -52,7 +52,7 @@ test('store debt fails validation with missing fields', function () {
     $this->actingAs($user)->postJson('/api/v1/debts', [])
         ->assertStatus(422)
         ->assertJsonPath('error', 'validation_failed')
-        ->assertJsonStructure(['details' => ['amount', 'description', 'issue_date']]);
+        ->assertJsonStructure(['details' => ['amount_cents', 'description', 'issue_date']]);
 });
 
 test('store debt does not accept settle_date (set only via payments or forgive)', function () {
@@ -60,7 +60,7 @@ test('store debt does not accept settle_date (set only via payments or forgive)'
 
     // settle_date is not a recognized field; it should be ignored and the debt created
     $response = $this->actingAs($user)->postJson('/api/v1/debts', [
-        'amount' => 500.00,
+        'amount_cents' => 50000,
         'description' => 'Test',
         'issue_date' => '2026-04-01',
         'settle_date' => '2026-05-01', // should be ignored
@@ -77,7 +77,7 @@ test('user can view their debt', function () {
     $this->actingAs($user)->getJson("/api/v1/debts/{$debt->id}")
         ->assertOk()
         ->assertJsonPath('data.id', $debt->id)
-        ->assertJsonStructure(['data' => ['remaining_balance', 'is_settled']]);
+        ->assertJsonStructure(['data' => ['remaining_cents', 'is_settled']]);
 });
 
 test('user cannot view another user\'s debt', function () {
@@ -239,13 +239,13 @@ test('user can add a payment to their debt', function () {
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 1000]);
 
     $response = $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount' => 250.00,
+        'amount_cents' => 25000,
         'paid_at' => '2026-04-15',
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('data.debt_id', $debt->id);
-    $this->assertEquals(250, $response->json('data.amount'));
+    $this->assertEquals(25000, $response->json('data.amount_cents'));
 });
 
 test('user cannot add payment to another user\'s debt', function () {
@@ -254,7 +254,7 @@ test('user cannot add payment to another user\'s debt', function () {
     $debt = Debt::factory()->create(['user_id' => $other->id, 'amount' => 1000]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount' => 100.00,
+        'amount_cents' => 10000,
         'paid_at' => '2026-04-15',
     ])->assertStatus(403);
 });
@@ -265,9 +265,9 @@ test('user can update their payment', function () {
     $payment = DebtPayment::factory()->create(['user_id' => $user->id, 'debt_id' => $debt->id, 'amount' => 100]);
 
     $response = $this->actingAs($user)->putJson("/api/v1/debt-payments/{$payment->id}", [
-        'amount' => 150.00,
+        'amount_cents' => 15000,
     ])->assertOk();
-    $this->assertEquals(150, $response->json('data.amount'));
+    $this->assertEquals(15000, $response->json('data.amount_cents'));
 });
 
 test('user cannot update another user\'s payment', function () {
@@ -277,7 +277,7 @@ test('user cannot update another user\'s payment', function () {
     $payment = DebtPayment::factory()->create(['user_id' => $other->id, 'debt_id' => $debt->id]);
 
     $this->actingAs($user)->putJson("/api/v1/debt-payments/{$payment->id}", [
-        'amount' => 999.00,
+        'amount_cents' => 99900,
     ])->assertStatus(403);
 });
 
@@ -367,12 +367,12 @@ test('debt is auto-settled when payments reach the full amount', function () {
     $debt = Debt::factory()->create(['user_id' => $user->id, 'amount' => 200]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount' => 200.00,
+        'amount_cents' => 20000,
         'paid_at' => '2026-04-15',
     ])->assertCreated();
 
     $this->assertNotNull($debt->fresh()->settle_date);
-    $this->assertEquals(0.0, $debt->fresh()->load('payments')->remaining_balance);
+    $this->assertEquals(0, $debt->fresh()->load('payments')->remaining_cents);
 });
 
 test('deleting a settling payment clears settle_date', function () {
@@ -414,7 +414,7 @@ test('payment on locked month returns 423', function () {
     ]);
 
     $this->actingAs($user)->postJson("/api/v1/debts/{$debt->id}/payments", [
-        'amount' => 100.00,
+        'amount_cents' => 10000,
         'paid_at' => '2026-03-10',
     ])->assertStatus(423)
         ->assertJsonPath('error', 'month_locked');

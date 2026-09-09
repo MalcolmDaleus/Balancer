@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MoneyCents;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,12 +14,12 @@ class DebtResource extends JsonResource
             'id' => $this->id,
             'user_id' => $this->user_id,
             'category_id' => $this->category_id,
-            'amount' => (float) $this->amount,
+            'amount_cents' => MoneyCents::fromMajor($this->amount),
             'description' => $this->description,
             'issue_date' => $this->issue_date?->toDateString(),
             'settle_date' => $this->settle_date?->toDateString(),
             'notes' => $this->notes,
-            'remaining_balance' => (float) $this->remaining_balance,
+            'remaining_cents' => $this->remaining_cents,
             'is_settled' => $this->is_settled,
             'is_forgiven' => $this->is_forgiven,
             'is_closed' => $this->is_closed,

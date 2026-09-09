@@ -74,7 +74,7 @@ function DashboardDensityTabs() {
 
 /** Shared settings body — used by desktop drawer and mobile Settings card. */
 export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: string }) {
-    const { auth, flash } = usePage<SharedData>().props;
+    const { auth, flash, isLocal } = usePage<SharedData>().props;
     const user = auth.user;
     const { notifyFinanceMutated } = useFinanceData();
 
@@ -271,6 +271,49 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     Compact keeps a 5∶3 wide-to-thin ratio, shrinks type and padding, and leaves a thin-card slot on each row. The second row can sit partly below the fold. Mobile is unchanged.
                 </p>
             </Section>
+
+            <Section title="Tour">
+                <p className="text-sm text-muted-foreground">
+                    Rewatch the slideshow. Your available cash and savings numbers stay as they are.
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={() => router.visit('/onboarding')}>
+                    Show the tour again
+                </Button>
+            </Section>
+
+            {isLocal && (
+                <Section title="Local only">
+                    <p className="text-sm text-muted-foreground">
+                        Temporary. Reset wipes Facts and sends you through onboarding. Load demo rebuilds 24 months and skips the tour. Do not mix a typed seed with demo history.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                if (window.confirm('Wipe all financial data and return to onboarding?')) {
+                                    router.post('/dev/reset-onboarding');
+                                }
+                            }}
+                        >
+                            Reset to onboarding
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                if (window.confirm('Replace all financial data with the 24-month demo?')) {
+                                    router.post('/dev/load-demo');
+                                }
+                            }}
+                        >
+                            Load demo
+                        </Button>
+                    </div>
+                </Section>
+            )}
 
             <Section title="Finance">
                 <p className="text-sm text-muted-foreground">

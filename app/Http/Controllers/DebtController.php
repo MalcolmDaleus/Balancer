@@ -88,7 +88,7 @@ class DebtController extends Controller
             throw new DomainException('already_forgiven', 'This debt has already been forgiven.');
         }
 
-        if ($debt->remaining_balance <= 0) {
+        if ($debt->remaining_cents <= 0) {
             throw new DomainException('already_settled', 'A fully paid debt cannot be marked as forgiven.');
         }
 

@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\RecurringPaymentFrequency;
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreRecurringPaymentStreamRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -22,13 +26,13 @@ class StoreRecurringPaymentStreamRequest extends FormRequest
                 'integer',
                 Rule::exists('recurring_payment_categories', 'id')->where('user_id', $this->user()->id),
             ],
-            'name'         => ['required', 'string', 'max:64'],
-            'description'  => ['nullable', 'string', 'max:255'],
-            'amount'       => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'frequency'    => ['required', 'string', Rule::in(RecurringPaymentFrequency::values())],
+            'name' => ['required', 'string', 'max:64'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'amount_cents' => MoneyCents::rules(),
+            'frequency' => ['required', 'string', Rule::in(RecurringPaymentFrequency::values())],
             'day_of_month' => ['nullable', 'integer', 'min:1', 'max:31'],
-            'day_of_week'  => ['nullable', 'integer', 'min:0', 'max:6'],
-            'start_date'   => ['required', 'date'],
+            'day_of_week' => ['nullable', 'integer', 'min:0', 'max:6'],
+            'start_date' => ['required', 'date'],
         ];
     }
 

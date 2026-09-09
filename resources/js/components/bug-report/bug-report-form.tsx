@@ -19,9 +19,10 @@ const TYPES: { value: BugReportType; label: string }[] = [
 
 const ZONES: { value: BugReportZone; label: string }[] = [
     { value: 'balance-sheet', label: 'Balance Sheet' },
-    { value: 'creator-suite', label: 'Creator Suite' },
-    { value: 'statistics', label: 'Statistics' },
-    { value: 'past-balance-sheets', label: 'Past Balance Sheets' },
+    { value: 'creator-suite', label: 'Ledger' },
+        { value: 'statistics', label: 'Statistics' },
+        { value: 'budget', label: 'Budget' },
+        { value: 'past-balance-sheets', label: 'Past Balance Sheets' },
     { value: 'settings', label: 'Settings' },
     { value: 'dashboard', label: 'Dashboard' },
     { value: 'login', label: 'Login' },

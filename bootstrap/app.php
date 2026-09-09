@@ -2,6 +2,7 @@
 
 use App\Exceptions\DomainException;
 use App\Exceptions\MonthLockedException;
+use App\Http\Middleware\EnsureOnboarded;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Carbon\Exceptions\InvalidFormatException;
@@ -25,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+
+        $middleware->alias([
+            'onboarded' => EnsureOnboarded::class,
+        ]);
 
         $middleware->web(append: [
             HandleAppearance::class,

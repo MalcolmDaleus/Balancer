@@ -25,7 +25,7 @@ test('cannot close a future month', function () {
     $this->actingAs($user)->postJson('/api/v1/balance-sheet/close', [
         'month' => '2026-07',
     ])->assertStatus(422)
-      ->assertJsonPath('error', 'validation_failed');
+        ->assertJsonPath('error', 'validation_failed');
 });
 
 test('debt amount cannot drop below total payments', function () {
@@ -34,13 +34,13 @@ test('debt amount cannot drop below total payments', function () {
     DebtPayment::factory()->create([
         'user_id' => $user->id,
         'debt_id' => $debt->id,
-        'amount'  => 200,
+        'amount' => 200,
     ]);
 
     $this->actingAs($user)->putJson("/api/v1/debts/{$debt->id}", [
-        'amount' => 100,
+        'amount_cents' => 10000,
     ])->assertStatus(422)
-      ->assertJsonPath('error', 'validation_failed');
+        ->assertJsonPath('error', 'validation_failed');
 });
 
 test('duplicate active purchase category name is rejected', function () {
@@ -50,7 +50,7 @@ test('duplicate active purchase category name is rejected', function () {
     $this->actingAs($user)->postJson('/api/v1/categories/purchases', [
         'name' => 'Food',
     ])->assertStatus(422)
-      ->assertJsonPath('error', 'validation_failed');
+        ->assertJsonPath('error', 'validation_failed');
 });
 
 test('restore of another users stream returns 404 not 403', function () {

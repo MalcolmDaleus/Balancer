@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\IncomeEntryType;
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreIncomeEntryRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -22,10 +26,10 @@ class StoreIncomeEntryRequest extends FormRequest
         ];
 
         return [
-            'type'        => ['required', 'string', Rule::in($types)],
-            'name'        => ['required', 'string', 'max:64'],
+            'type' => ['required', 'string', Rule::in($types)],
+            'name' => ['required', 'string', 'max:64'],
             'description' => ['nullable', 'string', 'max:255'],
-            'amount'      => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'amount_cents' => MoneyCents::rules(),
             'received_at' => ['required', 'date'],
             'regular_schedule_id' => [
                 'nullable',

@@ -2,12 +2,16 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
 use App\Models\Saving;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
 class StoreSavingRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -16,17 +20,17 @@ class StoreSavingRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if ($this->has('month') && preg_match('/^\d{4}-\d{2}$/', (string) $this->month)) {
-            $this->merge(['month' => $this->month . '-01']);
+            $this->merge(['month' => $this->month.'-01']);
         }
     }
 
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'type'   => ['sometimes', 'string', 'in:deposit,withdrawal'],
-            'notes'  => ['nullable', 'string', 'max:500'],
-            'month'  => ['required', 'date'],
+            'amount_cents' => MoneyCents::rules(),
+            'type' => ['sometimes', 'string', 'in:deposit,withdrawal'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'month' => ['required', 'date'],
         ];
     }
 
@@ -38,15 +42,15 @@ class StoreSavingRequest extends FormRequest
                 return;
             }
 
-            $amount = (float) $this->input('amount', 0);
+            $amount = (int) $this->input('amount_cents', 0);
             $available = Saving::runningBalance(
                 $this->user()->id,
                 $this->input('month'),
             );
 
-            if ($amount > round($available, 2)) {
+            if ($amount > $available) {
                 $validator->errors()->add(
-                    'amount',
+                    'amount_cents',
                     'This is more than you have in savings.'
                 );
             }

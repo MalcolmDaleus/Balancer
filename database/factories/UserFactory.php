@@ -32,6 +32,10 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'currency' => fake()->randomElement(['USD', 'EUR']),
             'locale' => null,
+            'liquidity_seed' => 0,
+            'savings_seed' => 0,
+            'liquidity_seed_on' => now()->toDateString(),
+            'onboarded_at' => now(),
         ];
     }
 
@@ -42,6 +46,16 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    public function pendingOnboarding(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'onboarded_at' => null,
+            'liquidity_seed' => 0,
+            'savings_seed' => 0,
+            'liquidity_seed_on' => null,
         ]);
     }
 }

@@ -8,6 +8,7 @@ use App\Models\Purchase;
 use App\Models\RecurringCharge;
 use App\Models\RecurringPaymentEntry;
 use App\Models\Saving;
+use App\Support\MoneyCents;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -93,7 +94,7 @@ final class PeriodFactRepository
             ->whereDate('issue_date', '<=', $this->ctx->periodEnd->toDateString())
             ->where(function ($q) {
                 $q->whereNull('settle_date')
-                  ->orWhereDate('settle_date', '>=', $this->ctx->periodStart->toDateString());
+                    ->orWhereDate('settle_date', '>=', $this->ctx->periodStart->toDateString());
             })
             ->with('payments')
             ->get();
@@ -129,30 +130,30 @@ final class PeriodFactRepository
         return $this->recurringEntries;
     }
 
-    /** Sum income from cached incomeEntries. */
-    public function incomeTotal(): float
+    /** Sum income from cached incomeEntries, in cents. */
+    public function incomeTotal(): int
     {
-        return (float) $this->incomeEntries()->sum('amount');
+        return MoneyCents::sumMajors($this->incomeEntries()->pluck('amount'));
     }
 
-    /** Sum one-off spending from cached purchases. */
-    public function spendingTotal(): float
+    /** Sum one-off spending from cached purchases, in cents. */
+    public function spendingTotal(): int
     {
-        return (float) $this->purchases()->sum('amount');
+        return MoneyCents::sumMajors($this->purchases()->pluck('amount'));
     }
 
-    /** Net savings for the month (deposits − withdrawals). */
-    public function savingsTotal(): float
+    /** Net savings for the month (deposits − withdrawals), in cents. */
+    public function savingsTotal(): int
     {
         $rows = $this->savingsRows();
-        $deposits = $rows->where('type', 'deposit')->sum('amount');
-        $withdrawals = $rows->where('type', 'withdrawal')->sum('amount');
+        $deposits = MoneyCents::sumMajors($rows->where('type', 'deposit')->pluck('amount'));
+        $withdrawals = MoneyCents::sumMajors($rows->where('type', 'withdrawal')->pluck('amount'));
 
-        return (float) $deposits - (float) $withdrawals;
+        return $deposits - $withdrawals;
     }
 
-    /** Running savings balance through this month (inclusive). */
-    public function savingsGrandTotal(): float
+    /** Running savings balance through this month (inclusive), in cents. */
+    public function savingsGrandTotal(): int
     {
         return Saving::runningBalance(
             $this->ctx->userId,
@@ -160,27 +161,27 @@ final class PeriodFactRepository
         );
     }
 
-    /** Charged recurring total (Facts only — never projections). */
-    public function recurringTotal(): float
+    /** Charged recurring total in cents (Facts only — never projections). */
+    public function recurringTotal(): int
     {
-        return (float) $this->recurringCharges()->sum('amount');
+        return MoneyCents::sumMajors($this->recurringCharges()->pluck('amount'));
     }
 
-    public function debtPaidTotalForPeriod(): float
+    public function debtPaidTotalForPeriod(): int
     {
-        return (float) DB::table('debt_payments')
+        return MoneyCents::fromMajor(DB::table('debt_payments')
             ->where('user_id', $this->ctx->userId)
             ->whereBetween('paid_at', [
                 $this->ctx->periodStart->toDateTimeString(),
                 $this->ctx->periodEnd->toDateTimeString(),
             ])
-            ->sum('amount');
+            ->sum('amount'));
     }
 
     /**
      * Per-debt paid totals for the period (single grouped query).
      *
-     * @return array<int, float> debt_id => amount
+     * @return array<int, int> debt_id => cents
      */
     public function debtPaidByDebtForPeriod(): array
     {
@@ -193,7 +194,7 @@ final class PeriodFactRepository
             ])
             ->groupBy('debt_id')
             ->pluck('total', 'debt_id')
-            ->map(fn ($total) => (float) $total)
+            ->map(fn ($total) => MoneyCents::fromMajor($total))
             ->all();
     }
 }

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\DateScopeable;
 use App\Models\Traits\MonthLockable;
 use App\Models\Traits\UserScopable;
+use App\Support\MoneyCents;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -39,29 +40,23 @@ class Purchase extends Model
     ];
 
     protected $appends = [
-        'refunded_total',
-        'remaining_refundable',
+        'refunded_cents',
+        'remaining_refundable_cents',
         'refund_status',
     ];
 
-    /**
-     * Total amount refunded across all linked income entries.
-     */
-    public function getRefundedTotalAttribute(): float
+    public function getRefundedCentsAttribute(): int
     {
-        $paid = $this->relationLoaded('refundIncomeEntries')
-            ? $this->refundIncomeEntries->sum('amount')
-            : $this->refundIncomeEntries()->sum('amount');
+        if ($this->relationLoaded('refundIncomeEntries')) {
+            return MoneyCents::sumMajors($this->refundIncomeEntries->pluck('amount'));
+        }
 
-        return round((float) $paid, 2);
+        return MoneyCents::fromMajor($this->refundIncomeEntries()->sum('amount'));
     }
 
-    /**
-     * Amount of the original purchase still eligible for refund.
-     */
-    public function getRemainingRefundableAttribute(): float
+    public function getRemainingRefundableCentsAttribute(): int
     {
-        return max(0.0, round((float) $this->amount - $this->refunded_total, 2));
+        return max(0, MoneyCents::fromMajor($this->amount) - $this->refunded_cents);
     }
 
     /**
@@ -69,11 +64,11 @@ class Purchase extends Model
      */
     public function getRefundStatusAttribute(): string
     {
-        if ($this->is_refunded || $this->remaining_refundable <= 0) {
+        if ($this->is_refunded || $this->remaining_refundable_cents <= 0) {
             return 'full';
         }
 
-        if ($this->refunded_total > 0) {
+        if ($this->refunded_cents > 0) {
             return 'partial';
         }
 

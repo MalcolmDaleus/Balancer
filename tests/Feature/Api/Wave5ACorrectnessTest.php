@@ -38,38 +38,38 @@ test('updating schedule to biweekly requires anchor_date', function () {
     $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id]);
     RegularIncomeScheduleVersion::factory()->create([
-        'user_id'             => $user->id,
+        'user_id' => $user->id,
         'regular_schedule_id' => $schedule->id,
-        'frequency'           => IncomeScheduleFrequency::Monthly,
-        'day_of_month'        => 1,
-        'end_date'            => null,
+        'frequency' => IncomeScheduleFrequency::Monthly,
+        'day_of_month' => 1,
+        'end_date' => null,
     ]);
 
     $this->actingAs($user)->postJson("/api/v1/income/schedules/{$schedule->id}/update-amount", [
-        'amount'     => 100,
+        'amount_cents' => 10000,
         'start_date' => '2026-04-01',
-        'frequency'  => IncomeScheduleFrequency::Biweekly->value,
-        'day_of_week'=> 1,
+        'frequency' => IncomeScheduleFrequency::Biweekly->value,
+        'day_of_week' => 1,
     ])->assertStatus(422)
-      ->assertJsonPath('error', 'validation_failed')
-      ->assertJsonStructure(['details' => ['anchor_date']]);
+        ->assertJsonPath('error', 'validation_failed')
+        ->assertJsonStructure(['details' => ['anchor_date']]);
 });
 
 test('updating schedule to biweekly succeeds with anchor_date', function () {
     $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id]);
     RegularIncomeScheduleVersion::factory()->create([
-        'user_id'             => $user->id,
+        'user_id' => $user->id,
         'regular_schedule_id' => $schedule->id,
-        'frequency'           => IncomeScheduleFrequency::Monthly,
-        'day_of_month'        => 1,
-        'end_date'            => null,
+        'frequency' => IncomeScheduleFrequency::Monthly,
+        'day_of_month' => 1,
+        'end_date' => null,
     ]);
 
     $this->actingAs($user)->postJson("/api/v1/income/schedules/{$schedule->id}/update-amount", [
-        'amount'      => 100,
-        'start_date'  => '2026-04-01',
-        'frequency'   => IncomeScheduleFrequency::Biweekly->value,
+        'amount_cents' => 10000,
+        'start_date' => '2026-04-01',
+        'frequency' => IncomeScheduleFrequency::Biweekly->value,
         'day_of_week' => 1,
         'anchor_date' => '2026-04-01',
     ])->assertSuccessful();

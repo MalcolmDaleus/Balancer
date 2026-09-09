@@ -1,67 +1,118 @@
-/** Shared API response shapes used by the dashboard, history, and Creator Suite. */
+export type BudgetEnvelope = {
+    category_id: number;
+    name: string;
+    plan_cents: number;
+    actual_cents: number;
+    left_cents: number;
+    has_cap: boolean;
+};
+
+export type BudgetMoneyBlock = {
+    plan_cents: number;
+    actual_cents: number;
+    left_cents: number;
+};
+
+export type BudgetBillsStream = {
+    name: string;
+    charged_cents: number;
+    remaining_cents: number;
+};
+
+export type BudgetRead = {
+    month: string;
+    is_locked: boolean;
+    has_plan: boolean;
+    days_left: number;
+    discretionary: BudgetMoneyBlock;
+    categories: BudgetEnvelope[];
+    unallocated: BudgetMoneyBlock | null;
+    bills: {
+        auto: boolean;
+        plan_cents: number;
+        charged_cents: number;
+        projected_cents: number;
+        streams: BudgetBillsStream[];
+    };
+    debts: {
+        remaining_cents: number;
+        plan_cents: number | null;
+        paid_cents: number;
+        open: Array<{
+            id: number;
+            name: string;
+            remaining_cents: number;
+            original_cents: number;
+            paid_this_month_cents: number;
+        }>;
+    };
+    save: BudgetMoneyBlock | null;
+    purchase_categories: Array<{ id: number; name: string; actual_cents: number }>;
+    savings_this_month_cents: number;
+};
 
 export type BalanceSheetExpanded = {
     month: string;
     income: {
-        total: number;
+        total_cents: number;
         by_type: {
             regular: {
-                total: number;
+                total_cents: number;
                 schedules: Array<{
                     regular_schedule_id: number | null;
                     name: string;
-                    total: number;
+                    total_cents: number;
                     entries: Array<{
                         id: number;
                         name: string;
                         description: string | null;
-                        amount: number;
+                        amount_cents: number;
                         received_at: string;
                     }>;
                 }>;
             };
-            irregular: { total: number };
-            refund: { total: number };
+            irregular: { total_cents: number };
+            refund: { total_cents: number };
         };
     };
     debt: {
-        total: number;
-        balance_total: number;
+        total_cents: number;
+        balance_total_cents: number;
         debts: Array<{
             id: number;
             description: string;
-            total_paid_in_period: number;
-            remaining_balance: number;
+            total_paid_in_period_cents: number;
+            remaining_cents: number;
             is_settled: boolean;
             is_forgiven: boolean;
         }>;
     };
     spending: {
-        total: number;
+        total_cents: number;
         categories: Array<{
             category_name: string;
-            amount: number;
-            items: Array<{ id: number; description: string; amount: number; date: string }>;
+            amount_cents: number;
+            items: Array<{ id: number; description: string; amount_cents: number; date: string }>;
         }>;
     };
     recurring_payments: {
-        total: number;
-        charged_total?: number;
-        projected_total?: number;
+        total_cents: number;
+        charged_total_cents?: number;
+        projected_total_cents?: number;
         streams: Array<{
             stream_id: number;
             stream_name: string;
             category_name: string;
-            total: number;
+            total_cents: number;
             entries: Array<{
                 id: number;
                 purchase_id?: number;
-                amount: number;
+                amount_cents: number;
                 frequency: string;
                 day_of_month: number | null;
                 day_of_week: number | null;
                 occurrence_count: number;
-                period_total: number;
+                period_total_cents: number;
                 charged_date?: string;
             }>;
         }>;
@@ -69,40 +120,44 @@ export type BalanceSheetExpanded = {
             stream_id: number;
             stream_name: string;
             category_name: string;
-            total: number;
+            total_cents: number;
             entries: Array<{
                 id: number;
-                amount: number;
+                amount_cents: number;
                 frequency: string;
                 day_of_month: number | null;
                 day_of_week: number | null;
                 occurrence_count: number;
-                period_total: number;
+                period_total_cents: number;
                 charged_date?: string;
             }>;
         }>;
     };
     savings: {
-        monthly_total: number;
-        monthly_deposits: number;
-        monthly_withdrawals: number;
-        grand_total: number;
-        rows: Array<{ id: number; amount: number; type: 'deposit' | 'withdrawal'; notes: string | null; month: string }>;
+        monthly_total_cents: number;
+        monthly_deposits_cents: number;
+        monthly_withdrawals_cents: number;
+        grand_total_cents: number;
+        rows: Array<{ id: number; amount_cents: number; type: 'deposit' | 'withdrawal'; notes: string | null; month: string }>;
     };
     roll_over: {
-        total: number;
+        total_cents: number;
+    };
+    wallet: {
+        available_cash_cents: number;
+        savings_total_cents: number;
     };
 };
 
 export type BalanceSheetSnapshot = {
     id: number;
     month: string;
-    total_income: number;
-    total_debt_paid: number;
-    total_spending: number;
-    total_recurring: number;
-    savings_snapshot: number;
-    roll_over: number;
+    total_income_cents: number;
+    total_debt_paid_cents: number;
+    total_spending_cents: number;
+    total_recurring_cents: number;
+    savings_snapshot_cents: number;
+    roll_over_cents: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -112,7 +167,7 @@ export type BalanceSheetSnapshot = {
 export interface RegularIncomeScheduleVersion {
     id: number;
     regular_schedule_id: number;
-    amount: number;
+    amount_cents: number;
     frequency: string;
     day_of_month: number | null;
     day_of_week: number | null;
@@ -141,7 +196,7 @@ export interface IncomeEntry {
     type: 'regular' | 'irregular' | 'refund';
     name: string;
     description: string | null;
-    amount: number;
+    amount_cents: number;
     received_at: string;
     purchase_id: number | null;
     purchase_description?: string | null;
@@ -157,15 +212,37 @@ export interface PurchaseCategory {
     deleted_at: string | null;
 }
 
+export type LedgerFactDomain = 'income' | 'spending' | 'recurring' | 'debt' | 'savings';
+
+export interface LedgerFact {
+    domain: LedgerFactDomain;
+    kind: string;
+    occurred_on: string;
+    amount_cents: number;
+    direction: 'in' | 'out';
+    classifier_id: number | null;
+    classifier_name: string | null;
+    instrument_id: number | null;
+    source_id: number;
+    label: string | null;
+    detail: string | null;
+}
+
+export interface LedgerFeed {
+    from: string;
+    to: string;
+    facts: LedgerFact[];
+}
+
 export interface Purchase {
     id: number;
     category_id: number;
-    amount: number;
+    amount_cents: number;
     description: string;
     date: string;
     is_refunded: boolean;
-    refunded_total: number;
-    remaining_refundable: number;
+    refunded_cents: number;
+    remaining_refundable_cents: number;
     refund_status: 'none' | 'partial' | 'full';
     attachment_path?: string | null;
     url?: string | null;
@@ -181,12 +258,12 @@ export interface DebtCategory {
 export interface Debt {
     id: number;
     category_id: number | null;
-    amount: number;
+    amount_cents: number;
     description: string;
     issue_date: string;
     settle_date: string | null;
     notes: string | null;
-    remaining_balance: number;
+    remaining_cents: number;
     is_settled: boolean;
     is_forgiven: boolean;
     is_closed: boolean;
@@ -200,7 +277,7 @@ export interface Debt {
 export interface DebtPayment {
     id: number;
     debt_id: number;
-    amount: number;
+    amount_cents: number;
     paid_at: string;
     notes: string | null;
 }
@@ -214,7 +291,7 @@ export interface RecurringCategory {
 export interface RecurringEntry {
     id: number;
     recurring_payment_stream_id: number;
-    amount: number;
+    amount_cents: number;
     frequency: string;
     day_of_month: number | null;
     day_of_week: number | null;
@@ -241,7 +318,7 @@ export interface RecurringStream {
 
 export interface Saving {
     id: number;
-    amount: number;
+    amount_cents: number;
     type: 'deposit' | 'withdrawal';
     notes: string | null;
     month: string;
@@ -255,6 +332,7 @@ export interface StatisticsPoint {
     month?: string;
     name?: string;
     value: number;
+    plan?: number;
 }
 
 export interface StatisticsSeries {
@@ -295,6 +373,7 @@ export type BugReportZone =
     | 'balance-sheet'
     | 'creator-suite'
     | 'statistics'
+    | 'budget'
     | 'past-balance-sheets'
     | 'settings'
     | 'dashboard'

@@ -6,11 +6,13 @@ use App\Models\RecurringCharge;
 use App\Services\DateTimeService;
 use App\Services\MoneyService;
 use App\Services\OccurrenceCalculatorService;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 /**
  * Charged + projected recurring groupings for the expanded balance sheet.
+ * Money fields are integer cents.
  */
 final class RecurringSection
 {
@@ -33,25 +35,29 @@ final class RecurringSection
                 $first = $group->first();
                 $entry = $first->entry;
 
-                $items = $group->map(fn (RecurringCharge $c) => [
-                    'id'               => $c->recurring_payment_entry_id,
-                    'charge_id'        => $c->id,
-                    'amount'           => (float) $c->amount,
-                    'frequency'        => $entry?->frequency,
-                    'day_of_month'     => $entry?->day_of_month,
-                    'day_of_week'      => $entry?->day_of_week,
-                    'occurrence_count' => 1,
-                    'period_total'     => round((float) $c->amount, 2),
-                    'charged_date'     => DateTimeService::formatForUI($c->occurred_on, 'short'),
-                ])->values();
+                $items = $group->map(function (RecurringCharge $c) use ($entry) {
+                    $cents = MoneyCents::fromMajor($c->amount);
+
+                    return [
+                        'id' => $c->recurring_payment_entry_id,
+                        'charge_id' => $c->id,
+                        'amount_cents' => $cents,
+                        'frequency' => $entry?->frequency,
+                        'day_of_month' => $entry?->day_of_month,
+                        'day_of_week' => $entry?->day_of_week,
+                        'occurrence_count' => 1,
+                        'period_total_cents' => $cents,
+                        'charged_date' => DateTimeService::formatForUI($c->occurred_on, 'short'),
+                    ];
+                })->values();
 
                 return [
-                    'stream_id'     => $streamId ?: null,
-                    'stream_name'   => $first->stream_name,
-                    'category_id'   => $first->recurring_payment_category_id,
+                    'stream_id' => $streamId ?: null,
+                    'stream_name' => $first->stream_name,
+                    'category_id' => $first->recurring_payment_category_id,
                     'category_name' => $first->category_name ?? 'Uncategorized',
-                    'total'         => MoneyService::sum($items->pluck('period_total')->toArray()),
-                    'entries'       => $items,
+                    'total_cents' => MoneyService::sum($items->pluck('period_total_cents')->toArray()),
+                    'entries' => $items,
                 ];
             })
             ->filter(fn ($stream) => $stream['entries']->isNotEmpty())
@@ -98,28 +104,29 @@ final class RecurringSection
                         $dates,
                         fn (Carbon $d) => ! in_array($d->toDateString(), $existing, true)
                     ));
-                    $periodTotal = MoneyService::sum(array_fill(0, count($dates), (float) $e->amount));
+                    $unit = MoneyCents::fromMajor($e->amount);
+                    $periodTotal = $unit * count($dates);
 
                     return [
-                        'id'               => $e->id,
-                        'amount'           => (float) $e->amount,
-                        'frequency'        => $e->frequency,
-                        'day_of_month'     => $e->day_of_month,
-                        'day_of_week'      => $e->day_of_week,
+                        'id' => $e->id,
+                        'amount_cents' => $unit,
+                        'frequency' => $e->frequency,
+                        'day_of_month' => $e->day_of_month,
+                        'day_of_week' => $e->day_of_week,
                         'occurrence_count' => count($dates),
-                        'period_total'     => round($periodTotal, 2),
+                        'period_total_cents' => $periodTotal,
                     ];
                 })
                     ->filter(fn ($item) => $item['occurrence_count'] > 0)
                     ->values();
 
                 return [
-                    'stream_id'     => $streamId,
-                    'stream_name'   => $stream?->name ?? 'Unknown',
-                    'category_id'   => $category?->id,
+                    'stream_id' => $streamId,
+                    'stream_name' => $stream?->name ?? 'Unknown',
+                    'category_id' => $category?->id,
                     'category_name' => $category?->name ?? 'Uncategorized',
-                    'total'         => MoneyService::sum($items->pluck('period_total')->toArray()),
-                    'entries'       => $items,
+                    'total_cents' => MoneyService::sum($items->pluck('period_total_cents')->toArray()),
+                    'entries' => $items,
                 ];
             })
             ->filter(fn ($stream) => $stream['entries']->isNotEmpty())

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\IncomeScheduleFrequency;
 use App\Models\RecurringPaymentEntry;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 
 class OccurrenceCalculatorService
@@ -46,9 +47,9 @@ class OccurrenceCalculatorService
         }
 
         $dates = match ($frequency) {
-            IncomeScheduleFrequency::Weekly   => $this->weeklyDates($effectiveStart, $to, $versionEnd, $dayOfWeek),
+            IncomeScheduleFrequency::Weekly => $this->weeklyDates($effectiveStart, $to, $versionEnd, $dayOfWeek),
             IncomeScheduleFrequency::Biweekly => $this->biweeklyDates($effectiveStart, $to, $versionEnd, $dayOfWeek, $anchorDate ?? $versionStart),
-            default                           => $this->monthlyBasedDates($frequency, $effectiveStart, $to, $versionEnd, $versionStart, $dayOfMonth),
+            default => $this->monthlyBasedDates($frequency, $effectiveStart, $to, $versionEnd, $versionStart, $dayOfMonth),
         };
 
         return array_values(array_filter($dates, function (Carbon $date) use ($versionStart, $versionEnd, $floor) {
@@ -148,10 +149,10 @@ class OccurrenceCalculatorService
         RecurringPaymentEntry $entry,
         Carbon|string $periodStart,
         Carbon|string $periodEnd,
-    ): float {
+    ): int {
         $count = count($this->recurringEntryDatesInPeriod($entry, $periodStart, $periodEnd));
 
-        return round($count * (float) $entry->amount, 2);
+        return $count * MoneyCents::fromMajor($entry->amount);
     }
 
     private function weeklyDates(Carbon $from, Carbon $to, ?Carbon $versionEnd, ?int $dayOfWeek): array
@@ -235,7 +236,7 @@ class OccurrenceCalculatorService
             }
 
             $cursor = match ($unit) {
-                'week'  => $cursor->copy()->addWeek(),
+                'week' => $cursor->copy()->addWeek(),
                 'weeks' => $cursor->copy()->addWeeks($step),
                 default => $cursor->copy()->addWeek(),
             };

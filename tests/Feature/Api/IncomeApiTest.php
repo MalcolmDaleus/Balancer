@@ -38,11 +38,11 @@ test('user can create an income schedule with initial version', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->postJson('/api/v1/income/schedules', [
-        'name'         => 'Salary',
-        'amount'       => 3500.00,
-        'frequency'    => 'monthly',
+        'name' => 'Salary',
+        'amount_cents' => 350000,
+        'frequency' => 'monthly',
         'day_of_month' => 1,
-        'start_date'   => '2026-04-01',
+        'start_date' => '2026-04-01',
     ]);
 
     $response->assertCreated()
@@ -51,7 +51,7 @@ test('user can create an income schedule with initial version', function () {
         ->assertJsonCount(1, 'data.versions');
 
     $this->assertDatabaseHas('regular_income_schedule_versions', [
-        'amount'    => 3500,
+        'amount' => 3500,
         'frequency' => 'monthly',
     ]);
 });
@@ -65,7 +65,7 @@ test('store income schedule fails without name', function () {
 });
 
 test('user can view their income schedule', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->getJson("/api/v1/income/schedules/{$schedule->id}")
@@ -74,8 +74,8 @@ test('user can view their income schedule', function () {
 });
 
 test('user cannot view another user\'s income schedule', function () {
-    $user     = User::factory()->create();
-    $other    = User::factory()->create();
+    $user = User::factory()->create();
+    $other = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->getJson("/api/v1/income/schedules/{$schedule->id}")
@@ -83,7 +83,7 @@ test('user cannot view another user\'s income schedule', function () {
 });
 
 test('user can update their income schedule', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id, 'name' => 'Old']);
 
     $this->actingAs($user)->putJson("/api/v1/income/schedules/{$schedule->id}", [
@@ -92,28 +92,28 @@ test('user can update their income schedule', function () {
 });
 
 test('schedule rename propagates to open-month regular entries', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()
         ->withActiveVersion()
         ->create(['user_id' => $user->id, 'name' => 'Old Name']);
-    $version  = $schedule->versions()->first();
+    $version = $schedule->versions()->first();
 
     $openEntry = IncomeEntry::factory()->create([
-        'user_id'                     => $user->id,
-        'type'                        => IncomeEntryType::Regular,
-        'name'                        => 'Old Name',
-        'regular_schedule_id'         => $schedule->id,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Regular,
+        'name' => 'Old Name',
+        'regular_schedule_id' => $schedule->id,
         'regular_schedule_version_id' => $version->id,
-        'received_at'                 => '2026-06-15',
+        'received_at' => '2026-06-15',
     ]);
 
     $lockedEntry = IncomeEntry::factory()->create([
-        'user_id'                     => $user->id,
-        'type'                        => IncomeEntryType::Regular,
-        'name'                        => 'Old Name',
-        'regular_schedule_id'         => $schedule->id,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Regular,
+        'name' => 'Old Name',
+        'regular_schedule_id' => $schedule->id,
         'regular_schedule_version_id' => $version->id,
-        'received_at'                 => '2026-05-15',
+        'received_at' => '2026-05-15',
     ]);
 
     BalanceSheetTotal::create([
@@ -136,7 +136,7 @@ test('schedule rename propagates to open-month regular entries', function () {
 });
 
 test('user can archive their income schedule', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->deleteJson("/api/v1/income/schedules/{$schedule->id}")
@@ -163,27 +163,27 @@ test('user can create an irregular income entry', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->postJson('/api/v1/income/entries', [
-        'type'        => 'irregular',
-        'name'        => 'Consulting gig',
-        'amount'      => 3500.00,
+        'type' => 'irregular',
+        'name' => 'Consulting gig',
+        'amount_cents' => 350000,
         'received_at' => '2026-04-15',
     ]);
 
     $response->assertCreated()
         ->assertJsonPath('data.type', 'irregular')
         ->assertJsonPath('data.name', 'Consulting gig');
-    $this->assertEquals(3500, $response->json('data.amount'));
+    $this->assertEquals(350000, $response->json('data.amount_cents'));
 });
 
 test('user can create a manual regular income entry', function () {
-    $user     = User::factory()->create();
+    $user = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $user->id]);
 
     $response = $this->actingAs($user)->postJson('/api/v1/income/entries', [
-        'type'                => 'regular',
-        'name'                => 'Bonus paycheck',
-        'amount'              => 1000.00,
-        'received_at'         => '2026-04-20',
+        'type' => 'regular',
+        'name' => 'Bonus paycheck',
+        'amount_cents' => 100000,
+        'received_at' => '2026-04-20',
         'regular_schedule_id' => $schedule->id,
     ]);
 
@@ -193,21 +193,21 @@ test('user can create a manual regular income entry', function () {
 });
 
 test('store income entry rejects schedule belonging to another user', function () {
-    $user     = User::factory()->create();
-    $other    = User::factory()->create();
+    $user = User::factory()->create();
+    $other = User::factory()->create();
     $schedule = RegularIncomeSchedule::factory()->create(['user_id' => $other->id]);
 
     $this->actingAs($user)->postJson('/api/v1/income/entries', [
-        'type'                => 'regular',
-        'name'                => 'Test',
-        'amount'              => 1000.00,
-        'received_at'         => '2026-04-01',
+        'type' => 'regular',
+        'name' => 'Test',
+        'amount_cents' => 100000,
+        'received_at' => '2026-04-01',
         'regular_schedule_id' => $schedule->id,
     ])->assertStatus(422);
 });
 
 test('user can view their income entry', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $entry = IncomeEntry::factory()->create(['user_id' => $user->id]);
 
     $this->actingAs($user)->getJson("/api/v1/income/entries/{$entry->id}")
@@ -216,7 +216,7 @@ test('user can view their income entry', function () {
 });
 
 test('user cannot view another user\'s income entry', function () {
-    $user  = User::factory()->create();
+    $user = User::factory()->create();
     $other = User::factory()->create();
     $entry = IncomeEntry::factory()->create(['user_id' => $other->id]);
 
@@ -228,20 +228,20 @@ test('income entry on locked month returns 423', function () {
     $user = User::factory()->create();
 
     BalanceSheetTotal::create([
-        'user_id'          => $user->id,
-        'month'            => '2026-03-01',
-        'total_income'     => 0,
-        'total_debt_paid'  => 0,
-        'total_spending'   => 0,
+        'user_id' => $user->id,
+        'month' => '2026-03-01',
+        'total_income' => 0,
+        'total_debt_paid' => 0,
+        'total_spending' => 0,
         'savings_snapshot' => 0,
-        'roll_over'        => 0,
+        'roll_over' => 0,
     ]);
 
     $this->actingAs($user)->postJson('/api/v1/income/entries', [
-        'type'        => 'irregular',
-        'name'        => 'Locked',
-        'amount'      => 1000.00,
+        'type' => 'irregular',
+        'name' => 'Locked',
+        'amount_cents' => 100000,
         'received_at' => '2026-03-15',
     ])->assertStatus(423)
-      ->assertJsonPath('error', 'month_locked');
+        ->assertJsonPath('error', 'month_locked');
 });

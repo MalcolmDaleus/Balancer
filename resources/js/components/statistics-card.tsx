@@ -42,6 +42,8 @@ const TREND_SERIES = [
     { id: 'savings_net', label: 'Savings', color: '#0ea5e9' },
     { id: 'savings_running', label: 'Savings total', color: '#38bdf8' },
     { id: 'recurring_load', label: 'Recurring vs income', color: '#f97316' },
+    { id: 'budget_adherence', label: 'Budget followed', color: '#14b8a6' },
+    { id: 'budget_left', label: 'Budget leftover', color: '#0d9488' },
 ];
 
 const COMPARE_SERIES = [
@@ -49,6 +51,7 @@ const COMPARE_SERIES = [
     { id: 'purchase_categories_avg', label: 'Average by category' },
     { id: 'outflow_domains_month', label: 'Spending by type' },
     { id: 'leftover_by_month', label: 'Leftover by month' },
+    { id: 'budget_by_category', label: 'Budget vs spent' },
 ];
 
 const SHARE_SERIES = [
@@ -195,12 +198,12 @@ const TREND_TICK_SLOT_PX = 58;
 
 function compactFormattedMoney(value: number, formatMoney: (value: number) => string): string {
     const formatted = formatMoney(value);
-    const abs = Math.abs(value);
-    if (abs < 1000) {
+    const major = Math.abs(value) / 100;
+    if (major < 1000) {
         return formatted.replace(/[.,]00\b/, '');
     }
 
-    const compact = `${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1).replace(/\.0$/, '')}k`;
+    const compact = `${(major / 1000).toFixed(major >= 10000 ? 0 : 1).replace(/\.0$/, '')}k`;
     const prefix = formatted.match(/^[^\d-]+/)?.[0] ?? '';
     const suffix = formatted.match(/[^\d.,\s]+$/)?.[0] ?? '';
     const sign = value < 0 ? '-' : '';
@@ -597,11 +600,19 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                             />
                                         }
                                     />
-                                    <Bar dataKey="value" radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}>
+                                    <Bar dataKey="value" name="Spent" radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}>
                                         {chartData.map((d, i) => (
                                             <Cell key={d.label + i} fill={d.fill} />
                                         ))}
                                     </Bar>
+                                    {series.series === 'budget_by_category' && (
+                                        <Bar
+                                            dataKey="plan"
+                                            name="Plan"
+                                            fill="#94a3b8"
+                                            radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}
+                                        />
+                                    )}
                                 </BarChart>
                             </ChartContainer>
                         ) : (

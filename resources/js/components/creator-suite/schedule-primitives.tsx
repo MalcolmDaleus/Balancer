@@ -135,7 +135,7 @@ export function ScheduleHistory({
                                 }`}
                             >
                                 <div className="flex items-baseline gap-1.5">
-                                    <span className="font-semibold text-slate-800 dark:text-neutral-100">{fmtAmount(v.amount)}</span>
+                                    <span className="font-semibold text-slate-800 dark:text-neutral-100">{fmtAmount(v.amount_cents)}</span>
                                     <span className="text-xs text-slate-500 dark:text-neutral-400">{formatFreq(v.frequency)}</span>
                                 </div>
                                 <span className="text-xs text-slate-500 dark:text-neutral-400">

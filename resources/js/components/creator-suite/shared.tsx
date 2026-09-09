@@ -50,19 +50,20 @@ export const rowAmountCls = 'shrink-0 text-lg font-semibold tabular-nums';
 export const tintChip = {
     emerald: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300',
     sky: 'bg-sky-500/15 text-sky-700 dark:bg-sky-400/10 dark:text-sky-300',
-    red: 'bg-red-500/15 text-red-700 dark:bg-red-400/10 dark:text-red-300',
+    red: 'bg-red-500/15 text-red-700 dark:bg-red-500/25 dark:text-red-400',
     rose: 'bg-rose-500/15 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300',
     amber: 'bg-amber-500/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
     orange: 'bg-orange-400/15 text-orange-700 dark:bg-orange-400/10 dark:text-orange-300',
     violet: 'bg-violet-500/15 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300',
     teal: 'bg-teal-500/15 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300',
     slate: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300',
+    feed: 'bg-slate-200 text-slate-800 dark:bg-neutral-600 dark:text-neutral-50',
 } as const;
 
 /** Balance sheet section header pills — slightly softer fill in dark mode */
 export const tintSectionPill = {
     emerald: 'bg-emerald-300/25 text-emerald-600/80 dark:bg-emerald-400/10 dark:text-emerald-300',
-    red: 'bg-red-300/25 text-red-600/80 dark:bg-red-400/10 dark:text-red-300',
+    red: 'bg-red-300/25 text-red-600/80 dark:bg-red-500/25 dark:text-red-400',
     rose: 'bg-rose-300/25 text-rose-600/80 dark:bg-rose-400/10 dark:text-rose-300',
     yellow: 'bg-yellow-300/30 text-yellow-600/80 dark:bg-yellow-400/10 dark:text-yellow-300',
     orange: 'bg-orange-300/25 text-orange-600/80 dark:bg-orange-400/10 dark:text-orange-300',

@@ -2,10 +2,14 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\ConvertsAmountCents;
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateDebtPaymentRequest extends FormRequest
 {
+    use ConvertsAmountCents;
+
     public function authorize(): bool
     {
         return true;
@@ -14,9 +18,9 @@ class UpdateDebtPaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount'  => ['sometimes', 'numeric', 'min:0.01', 'max:9999999.99'],
+            'amount_cents' => MoneyCents::rules(required: false),
             'paid_at' => ['sometimes', 'date'],
-            'notes'   => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'notes' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ];
     }
 }

@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\BalanceSheetTotalController;
+use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\BugReportController;
 use App\Http\Controllers\DebtCategoryController;
 use App\Http\Controllers\DebtController;
 use App\Http\Controllers\DebtPaymentController;
 use App\Http\Controllers\FinanceSyncController;
 use App\Http\Controllers\IncomeEntryController;
+use App\Http\Controllers\LedgerFeedController;
 use App\Http\Controllers\PurchaseCategoryController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\RecurringChargeController;
@@ -18,7 +20,7 @@ use App\Http\Controllers\SavingController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
+Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
 
     // ---------------------------------------------------------------
     // Purchases + Refund action
@@ -112,10 +114,22 @@ Route::middleware(['auth:sanctum', 'verified', 'throttle:api'])->prefix('v1')->n
         ->name('bug-reports.store');
 
     // ---------------------------------------------------------------
+    // Ledger Feed (union of Facts; not a new table)
+    // ---------------------------------------------------------------
+    Route::get('ledger/feed', LedgerFeedController::class)->name('ledger.feed');
+
+    // ---------------------------------------------------------------
     // Statistics (aggregates; no new tables)
     // ---------------------------------------------------------------
     Route::get('statistics', [StatisticsController::class, 'series'])->name('statistics.series');
     Route::get('statistics/markers', [StatisticsController::class, 'markers'])->name('statistics.markers');
+
+    // ---------------------------------------------------------------
+    // Budget (plan vs actual; amounts in integer cents)
+    // ---------------------------------------------------------------
+    Route::get('budget', [BudgetController::class, 'show'])->name('budget.show');
+    Route::put('budget', [BudgetController::class, 'upsert'])->name('budget.upsert');
+    Route::delete('budget', [BudgetController::class, 'destroy'])->name('budget.destroy');
 
     // ---------------------------------------------------------------
     // Balance sheet

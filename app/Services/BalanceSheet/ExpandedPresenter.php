@@ -4,10 +4,13 @@ namespace App\Services\BalanceSheet;
 
 use App\Enums\IncomeEntryType;
 use App\Services\DateTimeService;
+use App\Services\LiquidityService;
 use App\Services\MoneyService;
+use App\Support\MoneyCents;
 
 /**
  * Formats the expanded (UI) balance sheet payload for one period.
+ * Money fields are integer cents.
  */
 final class ExpandedPresenter
 {
@@ -25,30 +28,30 @@ final class ExpandedPresenter
         $savings = $this->facts->savingsRows();
 
         $regularEntries = $incomeEntries->where('type', IncomeEntryType::Regular);
-        $irregularTotal = (float) $incomeEntries->where('type', IncomeEntryType::Irregular)->sum('amount');
-        $refundsTotal = (float) $incomeEntries->where('type', IncomeEntryType::Refund)->sum('amount');
+        $irregularTotal = MoneyCents::sumMajors($incomeEntries->where('type', IncomeEntryType::Irregular)->pluck('amount'));
+        $refundsTotal = MoneyCents::sumMajors($incomeEntries->where('type', IncomeEntryType::Refund)->pluck('amount'));
 
         $regularGrouped = $regularEntries
             ->groupBy(fn ($e) => $e->regular_schedule_id ?? 'manual')
             ->map(function ($group, $scheduleId) {
                 $schedule = $group->first()->regularSchedule ?? null;
                 $entries = $group->map(fn ($e) => [
-                    'id'          => $e->id,
-                    'name'        => $e->name,
+                    'id' => $e->id,
+                    'name' => $e->name,
                     'description' => $e->description,
-                    'amount'      => (float) $e->amount,
+                    'amount_cents' => MoneyCents::fromMajor($e->amount),
                     'received_at' => DateTimeService::formatForUI($e->received_at, 'monthDayYear'),
                 ])->values();
 
                 return [
                     'regular_schedule_id' => $scheduleId === 'manual' ? null : (int) $scheduleId,
-                    'name'                => $schedule?->name ?? ($group->first()->name ?? 'Regular income'),
-                    'entries'             => $entries,
-                    'total'               => MoneyService::sum($entries->pluck('amount')->toArray()),
+                    'name' => $schedule?->name ?? ($group->first()->name ?? 'Regular income'),
+                    'entries' => $entries,
+                    'total_cents' => MoneyService::sum($entries->pluck('amount_cents')->toArray()),
                 ];
             })->values();
 
-        $regularTotal = MoneyService::sum($regularGrouped->pluck('total')->toArray());
+        $regularTotal = MoneyService::sum($regularGrouped->pluck('total_cents')->toArray());
         $incomeTotal = MoneyService::sum([$regularTotal, $irregularTotal, $refundsTotal]);
 
         $spendingByCategory = $purchases->groupBy(fn ($p) => $p->category?->id ?? 0)
@@ -57,63 +60,63 @@ final class ExpandedPresenter
                 $items = $group->map(fn ($p) => [
                     'id' => $p->id,
                     'description' => $p->description,
-                    'amount' => (float) $p->amount,
+                    'amount_cents' => MoneyCents::fromMajor($p->amount),
                     'date' => DateTimeService::formatForUI($p->date, 'short'),
                     'attachment_path' => $p->attachment_path,
                     'url' => $p->url,
                 ])->values();
 
-                $amount = MoneyService::sum($items->pluck('amount')->toArray());
+                $amount = MoneyService::sum($items->pluck('amount_cents')->toArray());
 
                 return [
                     'category_id' => $categoryId ?: null,
                     'category_name' => $cat?->name ?? 'Uncategorized',
-                    'amount' => $amount,
+                    'amount_cents' => $amount,
                     'items' => $items,
                 ];
             })->values();
 
-        $spendingTotal = MoneyService::sum($spendingByCategory->pluck('amount')->toArray());
+        $spendingTotal = MoneyService::sum($spendingByCategory->pluck('amount_cents')->toArray());
 
         $paidByDebtId = $this->facts->debtPaidByDebtForPeriod();
         $debtDetails = $debts->map(function ($d) use ($paidByDebtId) {
-            $paidThisMonth = (float) ($paidByDebtId[$d->id] ?? 0.0);
+            $paidThisMonth = (int) ($paidByDebtId[$d->id] ?? 0);
 
             return [
-                'id'                   => $d->id,
-                'category_id'          => $d->category_id,
-                'description'          => $d->description,
-                'amount'               => (float) $d->amount,
-                'remaining_balance'    => (float) $d->remaining_balance,
-                'is_settled'           => $d->is_settled,
-                'is_forgiven'          => $d->is_forgiven,
-                'is_closed'            => $d->is_closed,
-                'settle_date'          => $d->settle_date ? DateTimeService::formatForUI($d->settle_date, 'date') : null,
-                'total_paid_in_period' => round($paidThisMonth, 2),
+                'id' => $d->id,
+                'category_id' => $d->category_id,
+                'description' => $d->description,
+                'amount_cents' => MoneyCents::fromMajor($d->amount),
+                'remaining_cents' => $d->remaining_cents,
+                'is_settled' => $d->is_settled,
+                'is_forgiven' => $d->is_forgiven,
+                'is_closed' => $d->is_closed,
+                'settle_date' => $d->settle_date ? DateTimeService::formatForUI($d->settle_date, 'date') : null,
+                'total_paid_in_period_cents' => $paidThisMonth,
             ];
         })->values();
 
-        $debtTotalPaid = MoneyService::sum($debtDetails->pluck('total_paid_in_period')->toArray());
-        $debtBalanceTotal = MoneyService::sum($debtDetails->pluck('remaining_balance')->toArray());
+        $debtTotalPaid = MoneyService::sum($debtDetails->pluck('total_paid_in_period_cents')->toArray());
+        $debtBalanceTotal = MoneyService::sum($debtDetails->pluck('remaining_cents')->toArray());
 
         $savingsRows = $savings->map(fn ($s) => [
-            'id'     => $s->id,
-            'amount' => (float) $s->amount,
-            'type'   => $s->type ?? 'deposit',
-            'notes'  => $s->notes,
-            'month'  => DateTimeService::formatForUI($s->month, 'monthDayYear'),
+            'id' => $s->id,
+            'amount_cents' => MoneyCents::fromMajor($s->amount),
+            'type' => $s->type ?? 'deposit',
+            'notes' => $s->notes,
+            'month' => DateTimeService::formatForUI($s->month, 'monthDayYear'),
         ])->values();
 
-        $savingsDeposits = $savingsRows->where('type', 'deposit')->sum('amount');
-        $savingsWithdrawals = $savingsRows->where('type', 'withdrawal')->sum('amount');
-        $savingsMonthlyTotal = (float) $savingsDeposits - (float) $savingsWithdrawals;
+        $savingsDeposits = MoneyService::sum($savingsRows->where('type', 'deposit')->pluck('amount_cents')->toArray());
+        $savingsWithdrawals = MoneyService::sum($savingsRows->where('type', 'withdrawal')->pluck('amount_cents')->toArray());
+        $savingsMonthlyTotal = $savingsDeposits - $savingsWithdrawals;
         $savingsGrandTotal = $this->facts->savingsGrandTotal();
 
         $monthLocked = $this->ctx->isLocked();
         $recurringCharged = $this->recurring->chargedGrouped();
         $recurringProjected = $monthLocked ? collect() : $this->recurring->projectedGrouped();
-        $recurringChargedTotal = MoneyService::sum($recurringCharged->pluck('total')->toArray());
-        $recurringProjectedTotal = MoneyService::sum($recurringProjected->pluck('total')->toArray());
+        $recurringChargedTotal = MoneyService::sum($recurringCharged->pluck('total_cents')->toArray());
+        $recurringProjectedTotal = MoneyService::sum($recurringProjected->pluck('total_cents')->toArray());
 
         $outgoings = MoneyService::sum([$debtTotalPaid, $spendingTotal, $recurringChargedTotal, $savingsMonthlyTotal]);
         $rollover = MoneyService::subtract($incomeTotal, $outgoings);
@@ -123,46 +126,47 @@ final class ExpandedPresenter
             'month' => DateTimeService::formatForUI($this->ctx->month, 'monthYear'),
             'is_locked' => $monthLocked,
             'income' => [
-                'total'    => round($incomeTotal, 2),
-                'by_type'  => [
+                'total_cents' => $incomeTotal,
+                'by_type' => [
                     'regular' => [
-                        'total'     => round($regularTotal, 2),
+                        'total_cents' => $regularTotal,
                         'schedules' => $regularGrouped,
                     ],
                     'irregular' => [
-                        'total' => round($irregularTotal, 2),
+                        'total_cents' => $irregularTotal,
                     ],
                     'refund' => [
-                        'total' => round($refundsTotal, 2),
+                        'total_cents' => $refundsTotal,
                     ],
                 ],
             ],
             'debt' => [
-                'total'         => round($debtTotalPaid, 2),
-                'balance_total' => round($debtBalanceTotal, 2),
-                'debts'         => $debtDetails,
+                'total_cents' => $debtTotalPaid,
+                'balance_total_cents' => $debtBalanceTotal,
+                'debts' => $debtDetails,
             ],
             'spending' => [
-                'total'      => round($spendingTotal, 2),
+                'total_cents' => $spendingTotal,
                 'categories' => $spendingByCategory,
             ],
             'recurring_payments' => [
-                'total'           => round($recurringChargedTotal, 2),
-                'charged_total'   => round($recurringChargedTotal, 2),
-                'projected_total' => round($recurringProjectedTotal, 2),
-                'streams'         => $recurringCharged,
-                'projected'       => $recurringProjected,
+                'total_cents' => $recurringChargedTotal,
+                'charged_total_cents' => $recurringChargedTotal,
+                'projected_total_cents' => $recurringProjectedTotal,
+                'streams' => $recurringCharged,
+                'projected' => $recurringProjected,
             ],
             'savings' => [
-                'monthly_total'    => round($savingsMonthlyTotal, 2),
-                'monthly_deposits' => round((float) $savingsDeposits, 2),
-                'monthly_withdrawals' => round((float) $savingsWithdrawals, 2),
-                'grand_total'      => round($savingsGrandTotal, 2),
-                'rows'             => $savingsRows,
+                'monthly_total_cents' => $savingsMonthlyTotal,
+                'monthly_deposits_cents' => $savingsDeposits,
+                'monthly_withdrawals_cents' => $savingsWithdrawals,
+                'grand_total_cents' => $savingsGrandTotal,
+                'rows' => $savingsRows,
             ],
             'roll_over' => [
-                'total' => round($rollover, 2),
+                'total_cents' => $rollover,
             ],
+            'wallet' => app(LiquidityService::class)->forUser($this->ctx->userId),
         ];
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\BalanceSheetTotal;
 use App\Enums\IncomeEntryType;
+use App\Models\BalanceSheetTotal;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
 use App\Models\PurchaseCategory;
@@ -41,13 +41,13 @@ test('user can create a purchase', function () {
 
     $response = $this->actingAs($user)->postJson('/api/v1/purchases', [
         'category_id' => $category->id,
-        'amount' => 49.99,
+        'amount_cents' => 4999,
         'description' => 'Groceries',
         'date' => '2026-04-01',
     ]);
 
     $response->assertCreated()
-        ->assertJsonPath('data.amount', 49.99)
+        ->assertJsonPath('data.amount_cents', 4999)
         ->assertJsonPath('data.description', 'Groceries')
         ->assertJsonPath('data.is_refunded', false)
         ->assertJsonPath('data.user_id', $user->id);
@@ -59,7 +59,7 @@ test('store fails when category_id is missing', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)->postJson('/api/v1/purchases', [
-        'amount' => 10.00,
+        'amount_cents' => 1000,
         'description' => 'Test',
         'date' => '2026-04-01',
     ])->assertStatus(422)
@@ -72,7 +72,7 @@ test('store fails with missing required fields', function () {
     $this->actingAs($user)->postJson('/api/v1/purchases', [])
         ->assertStatus(422)
         ->assertJsonPath('error', 'validation_failed')
-        ->assertJsonStructure(['details' => ['amount', 'description', 'date']]);
+        ->assertJsonStructure(['details' => ['amount_cents', 'description', 'date']]);
 });
 
 test('store rejects category belonging to another user', function () {
@@ -82,7 +82,7 @@ test('store rejects category belonging to another user', function () {
 
     $this->actingAs($user)->postJson('/api/v1/purchases', [
         'category_id' => $category->id,
-        'amount' => 10.00,
+        'amount_cents' => 1000,
         'description' => 'Test',
         'date' => '2026-04-01',
     ])->assertStatus(422);
@@ -94,7 +94,7 @@ test('store rejects amount <= 0', function () {
 
     $this->actingAs($user)->postJson('/api/v1/purchases', [
         'category_id' => $category->id,
-        'amount' => 0,
+        'amount_cents' => 0,
         'description' => 'Test',
         'date' => '2026-04-01',
     ])->assertStatus(422);
@@ -172,14 +172,14 @@ test('user can refund a purchase and an income entry is created', function () {
         ->assertOk()
         ->assertJsonPath('purchase.is_refunded', true)
         ->assertJsonPath('purchase.refund_status', 'full')
-        ->assertJsonPath('purchase.refunded_total', 49.99);
+        ->assertJsonPath('purchase.refunded_cents', 4999);
 
     $this->assertDatabaseHas('income_entries', [
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'purchase_id' => $purchase->id,
-        'type'        => IncomeEntryType::Refund->value,
-        'name'        => 'Refund: Faulty headphones',
-        'amount'      => 49.99,
+        'type' => IncomeEntryType::Refund->value,
+        'name' => 'Refund: Faulty headphones',
+        'amount' => 49.99,
     ]);
     $this->assertDatabaseHas('purchases', ['id' => $purchase->id, 'is_refunded' => true]);
 });
@@ -188,23 +188,23 @@ test('user can partially refund a purchase and refund again until fully refunded
     $user = User::factory()->create();
     $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 60.00]);
 
-    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 20])
+    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount_cents' => 2000])
         ->assertOk()
         ->assertJsonPath('purchase.is_refunded', false)
         ->assertJsonPath('purchase.refund_status', 'partial')
-        ->assertJsonPath('purchase.refunded_total', 20)
-        ->assertJsonPath('purchase.remaining_refundable', 40);
+        ->assertJsonPath('purchase.refunded_cents', 2000)
+        ->assertJsonPath('purchase.remaining_refundable_cents', 4000);
 
-    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 20])
+    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount_cents' => 2000])
         ->assertOk()
         ->assertJsonPath('purchase.refund_status', 'partial')
-        ->assertJsonPath('purchase.refunded_total', 40);
+        ->assertJsonPath('purchase.refunded_cents', 4000);
 
     $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund")
         ->assertOk()
         ->assertJsonPath('purchase.is_refunded', true)
         ->assertJsonPath('purchase.refund_status', 'full')
-        ->assertJsonPath('purchase.refunded_total', 60);
+        ->assertJsonPath('purchase.refunded_cents', 6000);
 
     $this->assertEquals(3, IncomeEntry::where('purchase_id', $purchase->id)->count());
 });
@@ -213,13 +213,13 @@ test('partial refund amount over remaining is capped to remaining balance', func
     $user = User::factory()->create();
     $purchase = Purchase::factory()->create(['user_id' => $user->id, 'amount' => 60.00]);
 
-    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 20])
+    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount_cents' => 2000])
         ->assertOk();
 
-    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount' => 50])
+    $this->actingAs($user)->postJson("/api/v1/purchases/{$purchase->id}/refund", ['amount_cents' => 5000])
         ->assertOk()
         ->assertJsonPath('purchase.is_refunded', true)
-        ->assertJsonPath('purchase.refunded_total', 60);
+        ->assertJsonPath('purchase.refunded_cents', 6000);
 
     $this->assertEquals(2, IncomeEntry::where('purchase_id', $purchase->id)->count());
 });
@@ -262,7 +262,7 @@ test('store on locked month returns 423', function () {
 
     $this->actingAs($user)->postJson('/api/v1/purchases', [
         'category_id' => $category->id,
-        'amount' => 10.00,
+        'amount_cents' => 1000,
         'description' => 'Test',
         'date' => '2026-03-15',
     ])->assertStatus(423)->assertJsonPath('error', 'month_locked');
@@ -297,6 +297,6 @@ test('full refund succeeds on a purchase in a locked month', function () {
     expect($purchase->fresh()->is_refunded)->toBeTrue();
     $this->assertDatabaseHas('income_entries', [
         'purchase_id' => $purchase->id,
-        'type'        => IncomeEntryType::Refund->value,
+        'type' => IncomeEntryType::Refund->value,
     ]);
 });

@@ -15,7 +15,7 @@ export function IncomeArchivePanel({ active }: { active: boolean }) {
             emptyLabel="No archived schedules."
             renderDetail={(s) => {
                 const v = currentVersion(s);
-                return v ? `${fmtIncomeFreq(v.frequency)} · ${fmtAmount(v.amount)}` : 'No version';
+                return v ? `${fmtIncomeFreq(v.frequency)} · ${fmtAmount(v.amount_cents)}` : 'No version';
             }}
         />
     );

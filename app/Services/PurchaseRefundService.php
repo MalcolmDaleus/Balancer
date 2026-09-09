@@ -6,6 +6,7 @@ use App\Enums\IncomeEntryType;
 use App\Exceptions\DomainException;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,8 @@ class PurchaseRefundService
 {
     /**
      * Apply a full or partial refund and create the linked income entry.
+     *
+     * $requestedAmount is cents when int, otherwise a major-unit value (seeders).
      *
      * @throws DomainException already_refunded|nothing_to_refund|invalid_amount
      */
@@ -31,7 +34,7 @@ class PurchaseRefundService
             throw new DomainException('already_refunded', 'This purchase has already been fully refunded.');
         }
 
-        $remaining = $purchase->remaining_refundable;
+        $remaining = $purchase->remaining_refundable_cents;
 
         if ($remaining <= 0) {
             throw new DomainException('nothing_to_refund', 'There is no remaining balance to refund.');
@@ -41,26 +44,29 @@ class PurchaseRefundService
             ? Carbon::parse($refundDate)
             : now();
 
-        $refundAmount = $requestedAmount === null
+        $refundCents = $requestedAmount === null
             ? $remaining
-            : min((float) $requestedAmount, $remaining);
+            : min(
+                is_int($requestedAmount) ? $requestedAmount : MoneyCents::fromMajor($requestedAmount),
+                $remaining,
+            );
 
-        if ($refundAmount <= 0) {
+        if ($refundCents <= 0) {
             throw new DomainException('invalid_amount', 'Refund amount must be greater than zero.');
         }
 
-        DB::transaction(function () use ($purchase, $refundDate, $refundAmount, $userId) {
+        DB::transaction(function () use ($purchase, $refundDate, $refundCents, $userId) {
             IncomeEntry::create([
-                'user_id'     => $userId,
-                'type'        => IncomeEntryType::Refund,
-                'name'        => 'Refund: ' . $purchase->description,
-                'amount'      => $refundAmount,
+                'user_id' => $userId,
+                'type' => IncomeEntryType::Refund,
+                'name' => 'Refund: '.$purchase->description,
+                'amount' => MoneyCents::toMajorString($refundCents),
                 'received_at' => $refundDate->toDateString(),
                 'purchase_id' => $purchase->id,
             ]);
 
             $purchase->load('refundIncomeEntries');
-            $fullyRefunded = $purchase->remaining_refundable <= 0;
+            $fullyRefunded = $purchase->remaining_refundable_cents <= 0;
 
             if ($fullyRefunded) {
                 $purchase->update(['is_refunded' => true]);

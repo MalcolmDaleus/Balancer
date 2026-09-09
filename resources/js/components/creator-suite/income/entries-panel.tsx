@@ -1,9 +1,12 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { IncomeEntry } from '@/types/api';
-import { MutableRefObject, useEffect, useState } from 'react';
+import { MutableRefObject, useEffect, useMemo, useState } from 'react';
+import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from '../fact-filters';
+import type { LedgerFocus } from '../ledger-focus';
 import { useLockedMonths } from '../locked-months';
 import { fmtDate } from '../schedule-primitives';
 import {
@@ -33,7 +36,17 @@ function entryTypeChip(type: IncomeEntry['type']) {
     return <StatusChip label="Irregular" color="slate" />;
 }
 
-export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+export function IncomeEntriesPanel({
+    active,
+    addRef,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    addRef?: MutableRefObject<(() => void) | null>;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
@@ -55,6 +68,7 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
         received_at: todayStr(),
     };
     const [form, setForm] = useState(blank);
+    const [filter, setFilter] = useState<FactFilterValues>(blankFactFilter);
 
     const formWritable = canMutateFact(form.received_at);
 
@@ -74,20 +88,50 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
         if (active && !fetched) void load();
     }, [active, fetched]);
 
+    const visibleEntries = useMemo(
+        () =>
+            entries.filter((entry) =>
+                matchesFactFilter(
+                    {
+                        date: entry.received_at,
+                        amountCents: entry.amount_cents,
+                        text: `${entry.name} ${entry.description ?? ''}`,
+                    },
+                    filter,
+                ),
+            ),
+        [entries, filter],
+    );
+
     const selectRow = (entry: IncomeEntry) => {
-        if (entry.type === 'refund') return;
-        if (!canMutateFact(entry.received_at)) return;
         setSelected(entry);
-        setForm({
-            type: entry.type === 'regular' ? 'regular' : 'irregular',
-            name: entry.name,
-            description: entry.description ?? '',
-            amount: String(entry.amount),
-            received_at: entry.received_at?.slice(0, 10) ?? todayStr(),
-        });
+        if (entry.type !== 'refund') {
+            setForm({
+                type: entry.type === 'regular' ? 'regular' : 'irregular',
+                name: entry.name,
+                description: entry.description ?? '',
+                amount: centsToInput(entry.amount_cents),
+                received_at: entry.received_at?.slice(0, 10) ?? todayStr(),
+            });
+        }
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        if (isMobile && entry.type !== 'refund' && canMutateFact(entry.received_at)) {
+            setSheetOpen(true);
+        }
     };
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'income') return;
+        setFilter((f) => ({ ...f, ...monthRangeContaining(focus.occurredOn) }));
+    }, [focus]);
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'income' || !fetched) return;
+        const entry = entries.find((row) => row.id === focus.sourceId);
+        if (!entry) return;
+        selectRow(entry);
+        onFocusConsumed?.();
+    }, [focus, fetched, entries]);
 
     const reset = () => {
         setSelected(null);
@@ -125,7 +169,7 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                 type: form.type,
                 name: form.name,
                 description: form.description || null,
-                amount: Number(form.amount),
+                amount_cents: majorInputToCents(form.amount),
                 received_at: form.received_at,
             };
             if (selected) {
@@ -216,7 +260,7 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                     onChange={(e) => setForm((f) => ({ ...f, received_at: e.target.value }))}
                 />
             </Field>
-            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!formWritable} />
+            <FormActions isEdit={!!selected} saving={saving} onCancel={reset} disabled={!formWritable || selected?.type === 'refund'} />
         </form>
     );
 
@@ -224,11 +268,12 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete "${confirm.name}" (${fmtAmount(confirm.amount)})?`}
+                    message={`Delete "${confirm.name}" (${fmtAmount(confirm.amount_cents)})?`}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
             )}
+            <FactFilterBar value={filter} onChange={setFilter} />
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
@@ -237,7 +282,10 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                     <ListStack>
                         {loading && !entries.length && <LoadingRows />}
                         {!loading && !entries.length && <EmptyRows label="No income entries yet." />}
-                        {entries.map((entry) => {
+                        {!loading && entries.length > 0 && !visibleEntries.length && (
+                            <EmptyRows label="No entries match these filters." />
+                        )}
+                        {visibleEntries.map((entry) => {
                             const canEdit = entry.type !== 'refund' && canMutateFact(entry.received_at);
                             return (
                                 <ListRow key={entry.id} selected={selected?.id === entry.id} busy={removingId === entry.id}>
@@ -252,7 +300,7 @@ export function IncomeEntriesPanel({ active, addRef }: { active: boolean; addRef
                                             )}
                                         </div>
                                         <span className={`${rowAmountCls} text-emerald-600 dark:text-emerald-400`}>
-                                            {fmtAmount(entry.amount)}
+                                            {fmtAmount(entry.amount_cents)}
                                         </span>
                                     </div>
                                     <div className="mt-2 flex items-center justify-between gap-3">

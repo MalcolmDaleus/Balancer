@@ -2,8 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BudgetEnvelopeDomain;
 use App\Enums\IncomeEntryType;
 use App\Models\BalanceSheetTotal;
+use App\Models\BudgetEnvelope;
+use App\Models\BudgetPlan;
 use App\Models\Debt;
 use App\Models\DebtCategory;
 use App\Models\DebtPayment;
@@ -22,6 +25,7 @@ use App\Models\User;
 use App\Services\DebtSettlementService;
 use App\Services\FinanceProcessingService;
 use App\Services\PurchaseRefundService;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +35,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Instruments + discretionary Facts are seeded; regular income and recurring
  * charges are materialized via FinanceProcessingService (one processDue per month).
+ * A standing budget plan (all purchase categories) is copied across the horizon.
  * Does not change the user identity fields.
  */
 class DevDataSeeder extends Seeder
@@ -53,7 +58,12 @@ class DevDataSeeder extends Seeder
             return;
         }
 
-        $this->command->info("Rebuilding demo data for: {$user->email}");
+        $this->rebuildFor($user);
+    }
+
+    public function rebuildFor(User $user): void
+    {
+        $this->command?->info("Rebuilding demo data for: {$user->email}");
 
         $gaps = [];
         if ($user->email_verified_at === null) {
@@ -66,7 +76,7 @@ class DevDataSeeder extends Seeder
             $user->forceFill($gaps)->save();
         }
 
-        $this->clearFinancialData($user);
+        $this->wipeFinancialData($user);
         $this->callCategorySeeders();
 
         $now = Carbon::now()->startOfDay();
@@ -82,7 +92,7 @@ class DevDataSeeder extends Seeder
         $this->seedSavings($user, $months);
         $this->seedRecurring($user, $origin);
 
-        $this->command->line('  → Materializing income & recurring (process-due per month)');
+        $this->command?->line('  → Materializing income & recurring (process-due per month)');
         $finance = app(FinanceProcessingService::class);
         $historical = array_slice($months, 0, -1);
         foreach ($historical as $month) {
@@ -94,15 +104,23 @@ class DevDataSeeder extends Seeder
 
         $this->jitterFreelance($user, $thisMonth);
         $this->seedIrregularIncome($user, $thisMonth, $lastMonth, $months);
+        $this->seedBudget($user, $months);
 
-        $this->command->line('  → Closing backlog');
+        $this->command?->line('  → Closing backlog');
         $closed = $finance->closeMonthsForUser($user->id) ?? [];
         foreach ($closed as $ym) {
-            $this->command->line("     Closed {$ym}");
+            $this->command?->line("     Closed {$ym}");
         }
 
-        $this->command->info('✓ Dev data rebuilt ('.count($months).' months).');
-        $this->command->line('  Open dashboard or GET /api/v1/balance-sheet?month='.$thisMonth->format('Y-m'));
+        $user->forceFill([
+            'liquidity_seed' => 0,
+            'savings_seed' => 0,
+            'liquidity_seed_on' => $origin->toDateString(),
+            'onboarded_at' => $origin,
+        ])->save();
+
+        $this->command?->info('✓ Dev data rebuilt ('.count($months).' months).');
+        $this->command?->line('  Open dashboard or GET /api/v1/balance-sheet?month='.$thisMonth->format('Y-m'));
     }
 
     /**
@@ -118,15 +136,16 @@ class DevDataSeeder extends Seeder
         return $months;
     }
 
-    private function clearFinancialData(User $user): void
+    public function wipeFinancialData(User $user): void
     {
-        $this->command->line('  → Clearing previous financial rows for this user');
+        $this->command?->line('  → Clearing previous financial rows for this user');
 
         DB::transaction(function () use ($user) {
             RecurringCharge::where('user_id', $user->id)->delete();
             RecurringOccurrenceSkip::where('user_id', $user->id)->delete();
             IncomeEntry::where('user_id', $user->id)->delete();
             Purchase::where('user_id', $user->id)->delete();
+            BudgetPlan::where('user_id', $user->id)->delete();
             DebtPayment::where('user_id', $user->id)->delete();
             Debt::withTrashed()->where('user_id', $user->id)->forceDelete();
             Saving::where('user_id', $user->id)->delete();
@@ -548,6 +567,74 @@ class DevDataSeeder extends Seeder
                 'amount' => 220.00,
                 'received_at' => $bonusMonth->copy()->addDays(8)->toDateString(),
             ]);
+        }
+    }
+
+    /**
+     * Same standing plan on every demo month (copy-forward story).
+     *
+     * Caps sit a little above a typical month of seeded purchases (~€350–€400)
+     * so most months look on track. Spikes already in the ledger — date night,
+     * Zara, ITV, Christmas — blow individual envelopes. Bills stay auto.
+     *
+     * @param  list<Carbon>  $months
+     */
+    private function seedBudget(User $user, array $months): void
+    {
+        $this->command->line('  → Budget plans ('.count($months).' months)');
+
+        $capsByName = [
+            'Groceries' => MoneyCents::fromMajor(230),
+            'Dining' => MoneyCents::fromMajor(50),
+            'Adulting' => MoneyCents::fromMajor(70),
+            'Entertainment' => MoneyCents::fromMajor(40),
+            'Miscellaneous' => MoneyCents::fromMajor(20),
+            'Clothes & Accessories' => MoneyCents::fromMajor(50),
+            'Household Items' => MoneyCents::fromMajor(30),
+            'Surprises' => MoneyCents::fromMajor(15),
+            'Gifts' => MoneyCents::fromMajor(40),
+            'Caprichos' => MoneyCents::fromMajor(25),
+        ];
+
+        $categories = PurchaseCategory::query()
+            ->where('user_id', $user->id)
+            ->orderBy('name')
+            ->get();
+
+        $missing = $categories->pluck('name')->diff(array_keys($capsByName));
+        if ($missing->isNotEmpty()) {
+            throw new \RuntimeException('DevDataSeeder budget caps missing: '.$missing->implode(', '));
+        }
+
+        $capSum = array_sum($capsByName);
+        $discretionary = MoneyCents::fromMajor(600);
+        if ($capSum > $discretionary) {
+            throw new \RuntimeException('DevDataSeeder category caps exceed the purchase plan.');
+        }
+
+        $previous = null;
+        foreach ($months as $month) {
+            $plan = BudgetPlan::create([
+                'user_id' => $user->id,
+                'month' => $month->toDateString(),
+                'discretionary_cents' => $discretionary,
+                'bills_cents' => null,
+                'debt_payment_cents' => MoneyCents::fromMajor(200),
+                'save_cents' => MoneyCents::fromMajor(200),
+                'copied_from_month' => $previous?->toDateString(),
+            ]);
+
+            foreach ($categories as $category) {
+                BudgetEnvelope::create([
+                    'user_id' => $user->id,
+                    'budget_plan_id' => $plan->id,
+                    'domain' => BudgetEnvelopeDomain::Purchase,
+                    'category_id' => $category->id,
+                    'amount_cents' => $capsByName[$category->name],
+                ]);
+            }
+
+            $previous = $month;
         }
     }
 }

@@ -21,19 +21,19 @@ function seedMonthlyIncomeSchedule(User $user, string $startDate = '2026-01-01',
 {
     $schedule = RegularIncomeSchedule::factory()->create([
         'user_id' => $user->id,
-        'name'    => 'Salary',
-        'active'  => true,
+        'name' => 'Salary',
+        'active' => true,
     ]);
 
     RegularIncomeScheduleVersion::factory()->create([
-        'user_id'             => $user->id,
+        'user_id' => $user->id,
         'regular_schedule_id' => $schedule->id,
-        'amount'              => $amount,
-        'frequency'           => IncomeScheduleFrequency::Monthly,
-        'day_of_month'        => 1,
-        'start_date'          => $startDate,
-        'end_date'            => null,
-        'active'              => true,
+        'amount' => $amount,
+        'frequency' => IncomeScheduleFrequency::Monthly,
+        'day_of_month' => 1,
+        'start_date' => $startDate,
+        'end_date' => null,
+        'active' => true,
     ]);
 
     return $schedule;
@@ -69,10 +69,10 @@ test('finance:sync runs process-due and close-months for one user', function () 
 
     // Activity in June so backlog can close June when as-of is July.
     IncomeEntry::factory()->create([
-        'user_id'     => $user->id,
-        'type'        => IncomeEntryType::Irregular,
-        'name'        => 'Bonus',
-        'amount'      => 50,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Irregular,
+        'name' => 'Bonus',
+        'amount' => 50,
         'received_at' => '2026-06-10',
     ]);
 
@@ -146,12 +146,12 @@ test('income generation ignores unique constraint races', function () {
     $version = $schedule->versions()->first();
 
     IncomeEntry::create([
-        'user_id'                     => $user->id,
-        'type'                        => IncomeEntryType::Regular,
-        'name'                        => 'Salary',
-        'amount'                      => 1000,
-        'received_at'                 => '2026-06-01',
-        'regular_schedule_id'         => $schedule->id,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Regular,
+        'name' => 'Salary',
+        'amount' => 1000,
+        'received_at' => '2026-06-01',
+        'regular_schedule_id' => $schedule->id,
         'regular_schedule_version_id' => $version->id,
     ]);
 

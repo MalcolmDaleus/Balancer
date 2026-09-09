@@ -23,7 +23,7 @@ class DebtSettlementService
                 return;
             }
 
-            if ($debt->remaining_balance <= 0) {
+            if ($debt->remaining_cents <= 0) {
                 if ($debt->settle_date !== null) {
                     return;
                 }

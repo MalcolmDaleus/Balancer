@@ -13,7 +13,8 @@ class MoneyService
     public static function formatWithName(float $amount, User $user): string
     {
         $name = ($amount == 1) ? CurrencyService::singular($user) : CurrencyService::plural($user);
-        return number_format($amount, 2, '.', ',') . ' ' . $name;
+
+        return number_format($amount, 2, '.', ',').' '.$name;
     }
 
     /**
@@ -22,7 +23,7 @@ class MoneyService
      */
     public static function formatWithAbbr(float $amount, User $user): string
     {
-        return number_format($amount, 2, '.', ',') . ' ' . CurrencyService::abbr($user);
+        return number_format($amount, 2, '.', ',').' '.CurrencyService::abbr($user);
     }
 
     /**
@@ -32,10 +33,10 @@ class MoneyService
     public static function formatWithSymbol(float $amount, User $user, bool $prefix = true): string
     {
         if ($prefix) {
-            return CurrencyService::symbol($user) . number_format($amount, 2, '.', ',');
+            return CurrencyService::symbol($user).number_format($amount, 2, '.', ',');
         }
 
-        return number_format($amount, 2, '.', ',') . CurrencyService::symbol($user);
+        return number_format($amount, 2, '.', ',').CurrencyService::symbol($user);
     }
 
     /**
@@ -45,18 +46,21 @@ class MoneyService
     public static function formatWithSign(float $amount, User $user, string $unit = 'symbol', bool $prefix = true): string
     {
         $sign = $amount >= 0 ? '+' : '-';
-        $abs  = self::absolute($amount);
+        $abs = self::absolute($amount);
 
         return match ($unit) {
-            'abbr'  => $sign . self::formatWithAbbr($abs, $user),
-            'name'  => $sign . self::formatWithName($abs, $user),
-            default => $sign . self::formatWithSymbol($abs, $user, $prefix),
+            'abbr' => $sign.self::formatWithAbbr($abs, $user),
+            'name' => $sign.self::formatWithName($abs, $user),
+            default => $sign.self::formatWithSymbol($abs, $user, $prefix),
         };
     }
 
     public static function percentOf(float $amount, float $total): float
     {
-        if ($total == 0) return 0.0;
+        if ($total == 0) {
+            return 0.0;
+        }
+
         return round(($amount / $total) * 100, 2);
     }
 
@@ -75,14 +79,14 @@ class MoneyService
         return abs($amount);
     }
 
-    public static function add(float $a, float $b): float
+    public static function add(int $a, int $b): int
     {
-        return round($a + $b, 2);
+        return $a + $b;
     }
 
-    public static function subtract(float $a, float $b): float
+    public static function subtract(int $a, int $b): int
     {
-        return round($a - $b, 2);
+        return $a - $b;
     }
 
     public static function multiply(float $a, float $b): float
@@ -93,7 +97,7 @@ class MoneyService
     public static function divide(float $a, float $b): float
     {
         if ($b == 0) {
-            return 0.0; 
+            return 0.0;
         }
 
         return round($a / $b, 2);
@@ -114,9 +118,14 @@ class MoneyService
         return abs($amount) < PHP_FLOAT_EPSILON;
     }
 
-    public static function sum(array $amounts): float
+    public static function sum(array $amounts): int
     {
-        return round(array_sum($amounts), 2);
+        $total = 0;
+        foreach ($amounts as $amount) {
+            $total += (int) $amount;
+        }
+
+        return $total;
     }
 
     public static function average(array $amounts): float
@@ -136,7 +145,10 @@ class MoneyService
 
     public static function contributionPercent(float $amount, float $total): float
     {
-        if ($total == 0) return 0.0;
+        if ($total == 0) {
+            return 0.0;
+        }
+
         return round(($amount / $total) * 100, 2);
     }
 
@@ -145,6 +157,7 @@ class MoneyService
         if (abs($previous) < PHP_FLOAT_EPSILON) {
             return abs($current) < PHP_FLOAT_EPSILON ? 0.0 : 100.0;
         }
+
         return round((($current - $previous) / $previous) * 100, 2);
     }
 }

@@ -26,60 +26,60 @@ test('forUser returns multi-domain facts with expected shape and filters by rang
     $category = PurchaseCategory::factory()->create(['user_id' => $user->id, 'name' => 'Food']);
 
     IncomeEntry::factory()->create([
-        'user_id'     => $user->id,
-        'type'        => IncomeEntryType::Irregular,
-        'name'        => 'Bonus',
-        'amount'      => 100,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Irregular,
+        'name' => 'Bonus',
+        'amount' => 100,
         'received_at' => '2026-03-10',
     ]);
     Purchase::factory()->create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $category->id,
         'description' => 'Groceries',
-        'amount'      => 40,
-        'date'        => '2026-03-15',
+        'amount' => 40,
+        'date' => '2026-03-15',
     ]);
     $stream = RecurringPaymentStream::factory()
         ->withActiveEntry(['start_date' => '2026-03-01'])
         ->create(['user_id' => $user->id, 'name' => 'Netflix']);
     RecurringCharge::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'recurring_payment_entry_id'  => $stream->entries()->first()->id,
-        'occurred_on'                 => '2026-03-12',
-        'amount'                      => 15.99,
-        'stream_name'                 => 'Netflix',
+        'recurring_payment_entry_id' => $stream->entries()->first()->id,
+        'occurred_on' => '2026-03-12',
+        'amount' => 15.99,
+        'stream_name' => 'Netflix',
     ]);
     $debt = Debt::factory()->create([
-        'user_id'     => $user->id,
-        'amount'      => 200,
-        'issue_date'  => '2026-01-01',
+        'user_id' => $user->id,
+        'amount' => 200,
+        'issue_date' => '2026-01-01',
     ]);
     DebtPayment::factory()->create([
-        'user_id'  => $user->id,
-        'debt_id'  => $debt->id,
-        'amount'   => 50,
-        'paid_at'  => '2026-03-20',
+        'user_id' => $user->id,
+        'debt_id' => $debt->id,
+        'amount' => 50,
+        'paid_at' => '2026-03-20',
     ]);
     Saving::factory()->create([
         'user_id' => $user->id,
-        'type'    => 'deposit',
-        'amount'  => 80,
-        'month'   => '2026-03-01',
+        'type' => 'deposit',
+        'amount' => 80,
+        'month' => '2026-03-01',
     ]);
 
     // Out of range + other user — must not appear in filtered result
     Purchase::factory()->create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $category->id,
-        'date'        => '2026-01-05',
-        'amount'      => 9,
+        'date' => '2026-01-05',
+        'amount' => 9,
     ]);
     IncomeEntry::factory()->create([
-        'user_id'     => $other->id,
-        'type'        => IncomeEntryType::Irregular,
+        'user_id' => $other->id,
+        'type' => IncomeEntryType::Irregular,
         'received_at' => '2026-03-10',
-        'amount'      => 999,
+        'amount' => 999,
     ]);
 
     $facts = app(FinancialFlowReadModel::class)->forUser(
@@ -94,7 +94,7 @@ test('forUser returns multi-domain facts with expected shape and filters by rang
     expect($domains)->toBe(['debt', 'income', 'recurring', 'savings', 'spending']);
 
     $keys = [
-        'domain', 'kind', 'occurred_on', 'amount', 'direction',
+        'domain', 'kind', 'occurred_on', 'amount_cents', 'direction',
         'classifier_id', 'classifier_name', 'instrument_id', 'source_id', 'label',
     ];
     foreach ($facts as $fact) {
@@ -111,7 +111,7 @@ test('forUser returns multi-domain facts with expected shape and filters by rang
     // Full history includes the January purchase too
     $all = app(FinancialFlowReadModel::class)->forUser($user->id);
     expect($all->count())->toBeGreaterThanOrEqual(6);
-    expect($all->contains(fn ($f) => $f['domain'] === 'spending' && (float) $f['amount'] === 9.0))->toBeTrue();
+    expect($all->contains(fn ($f) => $f['domain'] === 'spending' && $f['amount_cents'] === 900))->toBeTrue();
 });
 
 test('forUser orders facts by occurred_on ascending', function () {
@@ -119,22 +119,22 @@ test('forUser orders facts by occurred_on ascending', function () {
     $category = PurchaseCategory::factory()->create(['user_id' => $user->id]);
 
     Purchase::factory()->create([
-        'user_id'     => $user->id,
+        'user_id' => $user->id,
         'category_id' => $category->id,
-        'date'        => '2026-05-20',
-        'amount'      => 10,
+        'date' => '2026-05-20',
+        'amount' => 10,
     ]);
     IncomeEntry::factory()->create([
-        'user_id'     => $user->id,
-        'type'        => IncomeEntryType::Irregular,
+        'user_id' => $user->id,
+        'type' => IncomeEntryType::Irregular,
         'received_at' => '2026-05-05',
-        'amount'      => 20,
+        'amount' => 20,
     ]);
     Saving::factory()->create([
         'user_id' => $user->id,
-        'type'    => 'deposit',
-        'amount'  => 5,
-        'month'   => '2026-05-01',
+        'type' => 'deposit',
+        'amount' => 5,
+        'month' => '2026-05-01',
     ]);
 
     $facts = app(FinancialFlowReadModel::class)->forUser($user->id);

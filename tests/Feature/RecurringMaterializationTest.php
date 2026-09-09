@@ -22,25 +22,25 @@ function seedActiveMonthlyStream(User $user, array $entryOverrides = []): array
 {
     $category = RecurringPaymentCategory::factory()->create([
         'user_id' => $user->id,
-        'name'    => 'Subscriptions',
+        'name' => 'Subscriptions',
     ]);
 
     $stream = RecurringPaymentStream::factory()->create([
-        'user_id'                       => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_category_id' => $category->id,
-        'name'                          => 'Netflix',
-        'active'                        => true,
-        'pending_active'                => null,
+        'name' => 'Netflix',
+        'active' => true,
+        'pending_active' => null,
     ]);
 
     $entry = RecurringPaymentEntry::factory()->create(array_merge([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream->id,
-        'amount'                      => 15.99,
-        'frequency'                   => 'monthly',
-        'day_of_month'                => 15,
-        'start_date'                  => '2026-01-15',
-        'active'                      => true,
+        'amount' => 15.99,
+        'frequency' => 'monthly',
+        'day_of_month' => 15,
+        'start_date' => '2026-01-15',
+        'active' => true,
     ], $entryOverrides));
 
     return compact('category', 'stream', 'entry');
@@ -121,48 +121,48 @@ test('balance sheet: charged Facts vs projected; spending is one-off only', func
     $user = User::factory()->create();
     seedActiveMonthlyStream($user, [
         'day_of_month' => 15,
-        'amount'       => 20.00,
+        'amount' => 20.00,
     ]);
 
     // Second monthly stream — also month-ahead materialized after process-due.
     $cat = RecurringPaymentCategory::factory()->create(['user_id' => $user->id, 'name' => 'Utilities']);
     $stream2 = RecurringPaymentStream::factory()->create([
-        'user_id'                       => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_category_id' => $cat->id,
-        'name'                          => 'Power',
-        'active'                        => true,
+        'name' => 'Power',
+        'active' => true,
     ]);
     RecurringPaymentEntry::factory()->create([
-        'user_id'                     => $user->id,
+        'user_id' => $user->id,
         'recurring_payment_stream_id' => $stream2->id,
-        'amount'                      => 50.00,
-        'frequency'                   => 'monthly',
-        'day_of_month'                => 28,
-        'start_date'                  => '2026-01-28',
-        'active'                      => true,
+        'amount' => 50.00,
+        'frequency' => 'monthly',
+        'day_of_month' => 28,
+        'start_date' => '2026-01-28',
+        'active' => true,
     ]);
 
     Purchase::factory()->create([
         'user_id' => $user->id,
-        'amount'  => 12.00,
-        'date'    => '2026-06-10',
+        'amount' => 12.00,
+        'date' => '2026-06-10',
     ]);
 
     // Before sync: today's (15th) charge is not projected; day-28 still is.
     $before = (new BalanceSheetService($user->id, '2026-06'))->getExpanded();
-    expect($before['recurring_payments']['charged_total'])->toBe(0.0);
-    expect($before['recurring_payments']['projected_total'])->toBe(50.0);
+    expect($before['recurring_payments']['charged_total_cents'])->toBe(0);
+    expect($before['recurring_payments']['projected_total_cents'])->toBe(5000);
 
     app(FinanceProcessingService::class)->processDueForUser($user->id);
 
     $expanded = (new BalanceSheetService($user->id, '2026-06'))->getExpanded();
     $simple = (new BalanceSheetService($user->id, '2026-06'))->getSimplified();
 
-    expect($simple['total_recurring'])->toBe(70.0);
-    expect($simple['total_spending'])->toBe(12.0);
-    expect($expanded['recurring_payments']['charged_total'])->toBe(70.0);
-    expect($expanded['recurring_payments']['projected_total'])->toBe(0.0);
-    expect($expanded['spending']['total'])->toBe(12.0);
+    expect($simple['total_recurring_cents'])->toBe(7000);
+    expect($simple['total_spending_cents'])->toBe(1200);
+    expect($expanded['recurring_payments']['charged_total_cents'])->toBe(7000);
+    expect($expanded['recurring_payments']['projected_total_cents'])->toBe(0);
+    expect($expanded['spending']['total_cents'])->toBe(1200);
 });
 
 test('deactivation removes future open-month Facts', function () {
@@ -171,8 +171,8 @@ test('deactivation removes future open-month Facts', function () {
     $user = User::factory()->create();
     ['stream' => $stream] = seedActiveMonthlyStream($user, [
         'day_of_month' => 28,
-        'amount'       => 40.00,
-        'start_date'   => '2026-01-28',
+        'amount' => 40.00,
+        'start_date' => '2026-01-28',
     ]);
 
     app(FinanceProcessingService::class)->processDueForUser($user->id);
@@ -190,10 +190,10 @@ test('yearly charge only materializes in anniversary month', function () {
 
     $user = User::factory()->create();
     seedActiveMonthlyStream($user, [
-        'frequency'    => 'yearly',
-        'amount'       => 120.00,
+        'frequency' => 'yearly',
+        'amount' => 120.00,
         'day_of_month' => 10,
-        'start_date'   => '2025-03-10',
+        'start_date' => '2025-03-10',
     ]);
 
     app(FinanceProcessingService::class)->processDueForUser($user->id);

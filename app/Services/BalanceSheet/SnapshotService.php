@@ -6,6 +6,7 @@ use App\Models\BalanceSheetTotal;
 use App\Services\BalanceSheetService;
 use App\Services\DateTimeService;
 use App\Services\MoneyService;
+use App\Support\MoneyCents;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,14 +33,14 @@ final class SnapshotService
         $rollover = MoneyService::subtract($incomeTotal, $outgoings);
 
         return [
-            'user_id'          => $this->ctx->userId,
-            'month'            => $this->ctx->month->toDateString(),
-            'total_income'     => round($incomeTotal, 2),
-            'total_debt_paid'  => round($debtPaidTotal, 2),
-            'total_spending'   => round($spendingTotal, 2),
-            'total_recurring'  => round($recurringTotal, 2),
-            'savings_snapshot' => round($savingsSnapshot, 2),
-            'roll_over'        => round($rollover, 2),
+            'user_id' => $this->ctx->userId,
+            'month' => $this->ctx->month->toDateString(),
+            'total_income_cents' => $incomeTotal,
+            'total_debt_paid_cents' => $debtPaidTotal,
+            'total_spending_cents' => $spendingTotal,
+            'total_recurring_cents' => $recurringTotal,
+            'savings_snapshot_cents' => $savingsSnapshot,
+            'roll_over_cents' => $rollover,
         ];
     }
 
@@ -48,12 +49,12 @@ final class SnapshotService
         $data = $simplified ?? $this->simplified();
 
         $payload = [
-            'total_income'     => $data['total_income'],
-            'total_debt_paid'  => $data['total_debt_paid'],
-            'total_spending'   => $data['total_spending'],
-            'total_recurring'  => $data['total_recurring'],
-            'savings_snapshot' => $data['savings_snapshot'],
-            'roll_over'        => $data['roll_over'],
+            'total_income' => MoneyCents::toMajorString((int) $data['total_income_cents']),
+            'total_debt_paid' => MoneyCents::toMajorString((int) $data['total_debt_paid_cents']),
+            'total_spending' => MoneyCents::toMajorString((int) $data['total_spending_cents']),
+            'total_recurring' => MoneyCents::toMajorString((int) $data['total_recurring_cents']),
+            'savings_snapshot' => MoneyCents::toMajorString((int) $data['savings_snapshot_cents']),
+            'roll_over' => MoneyCents::toMajorString((int) $data['roll_over_cents']),
         ];
 
         return DB::transaction(function () use ($data, $payload) {
@@ -64,14 +65,20 @@ final class SnapshotService
 
             if ($existing) {
                 $existing->update($payload);
-
-                return $existing->fresh();
+                $snapshot = $existing->fresh();
+            } else {
+                $snapshot = BalanceSheetTotal::create(array_merge(
+                    ['user_id' => $data['user_id'], 'month' => $data['month']],
+                    $payload
+                ));
             }
 
-            return BalanceSheetTotal::create(array_merge(
-                ['user_id' => $data['user_id'], 'month' => $data['month']],
-                $payload
-            ));
+            app(\App\Services\BudgetService::class)->copyForwardAfterClose(
+                (int) $data['user_id'],
+                $this->ctx->month,
+            );
+
+            return $snapshot;
         });
     }
 
@@ -95,22 +102,22 @@ final class SnapshotService
         $b = $svcB->getSimplified();
 
         $map = [
-            'total_income'     => 'income',
-            'total_debt_paid'  => 'debt',
-            'total_spending'   => 'spending',
-            'total_recurring'  => 'recurring',
-            'savings_snapshot' => 'savings',
-            'roll_over'        => 'rollover',
+            'total_income_cents' => 'income',
+            'total_debt_paid_cents' => 'debt',
+            'total_spending_cents' => 'spending',
+            'total_recurring_cents' => 'recurring',
+            'savings_snapshot_cents' => 'savings',
+            'roll_over_cents' => 'rollover',
         ];
 
         $out = [];
         foreach ($map as $k => $label) {
-            $aval = (float) ($a[$k] ?? 0.0);
-            $bval = (float) ($b[$k] ?? 0.0);
-            $pct = MoneyService::deltaPercent($bval, $aval);
+            $aval = (int) ($a[$k] ?? 0);
+            $bval = (int) ($b[$k] ?? 0);
+            $pct = MoneyService::deltaPercent((float) $bval, (float) $aval);
             $out[$label] = [
-                'a' => round($aval, 2),
-                'b' => round($bval, 2),
+                'a_cents' => $aval,
+                'b_cents' => $bval,
                 'percent_change' => $pct,
             ];
         }

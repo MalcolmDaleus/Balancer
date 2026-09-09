@@ -75,12 +75,12 @@ class PurchaseController extends Controller
         $purchase = $refunds->refund(
             $purchase,
             (int) auth()->id(),
-            $request->input('amount'),
+            $request->validated('amount_cents'),
             $request->input('refund_date'),
         );
 
         return response()->json([
-            'message'  => $purchase->is_refunded
+            'message' => $purchase->is_refunded
                 ? 'Purchase fully refunded.'
                 : 'Partial refund recorded.',
             'purchase' => new PurchaseResource($purchase),

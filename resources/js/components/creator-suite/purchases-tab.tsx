@@ -1,11 +1,14 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Purchase, PurchaseCategory } from '@/types/api';
-import { MutableRefObject, useEffect, useRef, useState } from 'react';
+import { MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryTab } from './category-tab';
+import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from './fact-filters';
+import type { LedgerFocus } from './ledger-focus';
 import { useLockedMonths } from './locked-months';
 import {
     AddButton,
@@ -51,8 +54,8 @@ function RefundModal({
 }) {
     const fmt = useFormatMoney();
     const hasPartial = purchase.refund_status === 'partial';
-    const remaining = purchase.remaining_refundable;
-    const refunded = purchase.refunded_total;
+    const remaining = purchase.remaining_refundable_cents;
+    const refunded = purchase.refunded_cents;
 
     const [step, setStep] = useState<RefundStep>('choose');
     const [partialAmount, setPartialAmount] = useState('');
@@ -72,7 +75,7 @@ function RefundModal({
                         <p className="mb-4 text-sm text-slate-600 dark:text-neutral-200">{title}</p>
                         {hasPartial && (
                             <p className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-neutral-800/60 dark:text-neutral-200">
-                                Refunded {fmt(refunded)} of {fmt(purchase.amount)}
+                                Refunded {fmt(refunded)} of {fmt(purchase.amount_cents)}
                                 <span className="mt-0.5 block text-slate-500 dark:text-neutral-300">{fmt(remaining)} remaining</span>
                             </p>
                         )}
@@ -88,7 +91,7 @@ function RefundModal({
                                 </Button>
                             ) : (
                                 <Button type="button" className="w-full rounded-full" onClick={() => setStep('confirm-full')}>
-                                    Full refund ({fmt(purchase.amount)})
+                                    Full refund ({fmt(purchase.amount_cents)})
                                 </Button>
                             )}
                             <Button
@@ -126,7 +129,7 @@ function RefundModal({
                                 type="number"
                                 step="0.01"
                                 min="0.01"
-                                max={remaining}
+                                max={remaining / 100}
                                 required
                                 autoFocus
                                 className={inputCls}
@@ -150,7 +153,7 @@ function RefundModal({
                                 size="sm"
                                 className={`rounded-full ${secondaryBtnCls}`}
                                 disabled={saving || !partialAmount || Number(partialAmount) <= 0}
-                                onClick={() => onConfirm(Number(partialAmount))}
+                                onClick={() => onConfirm(majorInputToCents(partialAmount))}
                             >
                                 {saving ? 'Saving…' : 'Confirm'}
                             </Button>
@@ -162,7 +165,7 @@ function RefundModal({
                     <>
                         <p className="mb-5 text-base text-slate-700 dark:text-neutral-200">
                             {step === 'confirm-full'
-                                ? `Mark "${title}" as fully refunded? This will add a matching income entry of ${fmt(purchase.amount)}.`
+                                ? `Mark "${title}" as fully refunded? This will add a matching income entry of ${fmt(purchase.amount_cents)}.`
                                 : `Refund the remaining ${fmt(remaining)} for "${title}"? This will fully refund the purchase.`}
                         </p>
                         {error && (
@@ -202,7 +205,17 @@ function RefundModal({
 // Sub-tab: Items
 // ---------------------------------------------------------------------------
 
-function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+function ItemsTab({
+    active,
+    addRef,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    addRef?: MutableRefObject<(() => void) | null>;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
@@ -222,6 +235,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
 
     const blank = { category_id: '', description: '', amount: '', date: todayStr(), url: '' };
     const [form, setForm] = useState(blank);
+    const [filter, setFilter] = useState<FactFilterValues>(blankFactFilter);
 
     const load = async () => {
         setLoading(true);
@@ -244,19 +258,49 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
         if (active && !fetched) load();
     }, [active, fetched]);
 
+    const catName = (id: number) => cats.find((c) => c.id === id)?.name ?? '—';
+    const visiblePurchases = useMemo(
+        () =>
+            purchases.filter((p) =>
+                matchesFactFilter(
+                    {
+                        date: p.date,
+                        amountCents: p.amount_cents,
+                        text: `${p.description} ${cats.find((c) => c.id === p.category_id)?.name ?? ''}`,
+                        categoryId: p.category_id,
+                    },
+                    filter,
+                ),
+            ),
+        [purchases, filter, cats],
+    );
+
     const selectRow = (p: Purchase) => {
-        if (!canMutateFact(p.date)) return;
         setSelected(p);
         setForm({
             category_id: String(p.category_id),
             description: p.description,
-            amount: String(p.amount),
+            amount: centsToInput(p.amount_cents),
             date: p.date,
             url: p.url ?? '',
         });
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        if (isMobile && canMutateFact(p.date)) setSheetOpen(true);
     };
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'spending') return;
+        setFilter((f) => ({ ...f, ...monthRangeContaining(focus.occurredOn) }));
+    }, [focus]);
+
+    useEffect(() => {
+        if (!focus || focus.domain !== 'spending' || !fetched) return;
+        const p = purchases.find((row) => row.id === focus.sourceId);
+        if (!p) return;
+        selectRow(p);
+        onFocusConsumed?.();
+    }, [focus, fetched, purchases]);
+
     const reset = () => {
         setSelected(null);
         setForm(blank);
@@ -292,7 +336,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             const body = {
                 category_id: Number(form.category_id),
                 description: form.description,
-                amount: Number(form.amount),
+                amount_cents: majorInputToCents(form.amount),
                 date: form.date,
                 url: form.url.trim() || null,
             };
@@ -336,7 +380,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
         setRefundSaving(true);
         setRefundError(null);
         try {
-            const body = amount !== null ? { amount } : {};
+            const body = amount !== null ? { amount_cents: amount } : {};
             await apiFetch(`/api/v1/purchases/${p.id}/refund`, {
                 method: 'POST',
                 body: JSON.stringify(body),
@@ -350,8 +394,6 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
             setRefundSaving(false);
         }
     };
-
-    const catName = (id: number) => cats.find((c) => c.id === id)?.name ?? '—';
 
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -437,6 +479,11 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                     onConfirm={(amount) => handleRefund(refundTarget, amount)}
                 />
             )}
+            <FactFilterBar
+                value={filter}
+                onChange={setFilter}
+                categories={cats.map((c) => ({ id: c.id, name: c.name }))}
+            />
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
@@ -445,7 +492,10 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                     <ListStack>
                         {loading && !purchases.length && <LoadingRows />}
                         {!loading && !purchases.length && <EmptyRows label="No purchases yet." />}
-                        {purchases.map((p) => {
+                        {!loading && purchases.length > 0 && !visiblePurchases.length && (
+                            <EmptyRows label="No purchases match these filters." />
+                        )}
+                        {visiblePurchases.map((p) => {
                             const fullyRefunded = p.refund_status === 'full' || p.is_refunded;
                             const partiallyRefunded = p.refund_status === 'partial';
                             const canWrite = canMutateFact(p.date);
@@ -456,7 +506,7 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{p.description}</p>
-                                            <p className={`mt-1 ${rowAmountCls} text-rose-500 dark:text-rose-400`}>{fmtAmount(p.amount)}</p>
+                                            <p className={`mt-1 ${rowAmountCls} text-rose-500 dark:text-rose-400`}>{fmtAmount(p.amount_cents)}</p>
                                             <p className={`mt-0.5 truncate ${rowDetailCls}`}>
                                                 {p.date} · {catName(p.category_id)}
                                             </p>
@@ -500,16 +550,33 @@ function ItemsTab({ active, addRef }: { active: boolean; addRef?: MutableRefObje
 const SUBTABS = ['Items', 'Categories'] as const;
 type SubTab = (typeof SUBTABS)[number];
 
-export function PurchasesTab({ active }: { active: boolean }) {
+export function PurchasesTab({
+    active,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const [sub, setSub] = useState<SubTab>('Items');
     const addRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        if (focus?.domain === 'spending') {
+            setSub('Items');
+        }
+    }, [focus]);
+
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
                 <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
-            {sub === 'Items' && <ItemsTab addRef={addRef} active={active} />}
+            {sub === 'Items' && (
+                <ItemsTab addRef={addRef} active={active} focus={focus} onFocusConsumed={onFocusConsumed} />
+            )}
             {sub === 'Categories' && (
                 <CategoryTab
                     active={active}

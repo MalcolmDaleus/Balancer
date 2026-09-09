@@ -1,5 +1,6 @@
 import { apiFetch, errorMessage } from '@/api/client';
 import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
+import BudgetCard from '@/components/budget-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
 import StatisticsCard from '@/components/statistics-card';
@@ -52,7 +53,7 @@ function IncomeBalanceContent({
                         <div className="flex items-center justify-between">
                             <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{schedule.name}</span>
                             <span className="text-base font-medium text-slate-700 dark:text-neutral-200">
-                                {signed(schedule.total, '+')}
+                                {signed(schedule.total_cents, '+')}
                             </span>
                         </div>
                         {schedule.entries.length > 0 && (
@@ -64,7 +65,7 @@ function IncomeBalanceContent({
                                     >
                                         <span>{entry.received_at}</span>
                                         <span className="font-medium text-slate-700 dark:text-neutral-200">
-                                            {signed(entry.amount, '+')}
+                                            {signed(entry.amount_cents, '+')}
                                         </span>
                                     </div>
                                 ))}
@@ -93,19 +94,19 @@ function IncomeBalanceContent({
                     </div>
                 );
             })}
-            {income.by_type.irregular.total > 0 && (
+            {income.by_type.irregular.total_cents > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
                     <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Irregular</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
-                        {signed(income.by_type.irregular.total, '+')}
+                        {signed(income.by_type.irregular.total_cents, '+')}
                     </span>
                 </div>
             )}
-            {income.by_type.refund.total > 0 && (
+            {income.by_type.refund.total_cents > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
                     <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Refunds</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
-                        {signed(income.by_type.refund.total, '+')}
+                        {signed(income.by_type.refund.total_cents, '+')}
                     </span>
                 </div>
             )}
@@ -158,7 +159,7 @@ function RecurringStreamList({
                             )}
                         </div>
                         <span className="shrink-0 text-base font-medium text-slate-700 dark:text-neutral-200">
-                            {signed(stream.total, '-')}
+                            {signed(stream.total_cents, '-')}
                         </span>
                     </div>
                     <div className="mt-1.5 space-y-1">
@@ -175,11 +176,11 @@ function RecurringStreamList({
                                 <div className="shrink-0 text-right">
                                     {entry.occurrence_count > 1 && (
                                         <span className="mr-2 text-xs text-slate-400 dark:text-neutral-500">
-                                            {signed(entry.amount, '-')} each
+                                            {signed(entry.amount_cents, '-')} each
                                         </span>
                                     )}
                                     <span className="font-medium text-slate-700 dark:text-neutral-200">
-                                        {signed(entry.period_total, '-')}
+                                        {signed(entry.period_total_cents, '-')}
                                     </span>
                                 </div>
                             </div>
@@ -198,8 +199,8 @@ function RecurringBalanceContent({
     recurring: BalanceSheetExpanded['recurring_payments'];
     signed: (value: number, sign: '+' | '-') => string;
 }) {
-    const chargedTotal = recurring.charged_total ?? recurring.total;
-    const projectedTotal = recurring.projected_total ?? 0;
+    const chargedTotal = recurring.charged_total_cents ?? recurring.total_cents;
+    const projectedTotal = recurring.projected_total_cents ?? 0;
     const projected = recurring.projected ?? [];
 
     return (
@@ -262,7 +263,8 @@ function ModuleCard({
 // ─── Mobile module list ───────────────────────────────────────────────────────
 const MODULES = [
     { id: 'balance-sheet', title: 'Balance Sheet', subtitle: 'Monthly financial overview' },
-    { id: 'creator-suite', title: 'Creator Suite', subtitle: 'Add and manage entries' },
+    { id: 'budget', title: 'Budget', subtitle: 'Left to spend this month' },
+    { id: 'creator-suite', title: 'Ledger', subtitle: 'Facts you typed this month' },
     { id: 'statistics', title: 'Statistics', subtitle: 'Trends and insights' },
     { id: 'sheet-history', title: 'Past Balance Sheets', subtitle: 'Closed monthly snapshots' },
     { id: 'settings', title: 'Settings', subtitle: 'Account preferences' },
@@ -332,10 +334,10 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
     const regularScheduleCount = data ? data.income.by_type.regular.schedules.length : 0;
     const hasIncome =
         data &&
-        (data.income.total > 0 ||
+        (data.income.total_cents > 0 ||
             regularScheduleCount > 0 ||
-            data.income.by_type.irregular.total > 0 ||
-            data.income.by_type.refund.total > 0);
+            data.income.by_type.irregular.total_cents > 0 ||
+            data.income.by_type.refund.total_cents > 0);
 
     const sections = data
         ? [
@@ -344,7 +346,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   label: 'Income',
                   pillClass: tintSectionPill.emerald,
                   amountNode: sectionAmount(
-                      signed(data.income.total, '+'),
+                      signed(data.income.total_cents, '+'),
                       hasIncome
                           ? `${regularScheduleCount} schedule${regularScheduleCount === 1 ? '' : 's'}`
                           : 'No entries',
@@ -360,9 +362,9 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   label: 'Debt',
                   pillClass: tintSectionPill.red,
                   amountNode: sectionAmount(
-                      <>Paid {signed(data.debt.total, '-')}</>,
-                      <>Balance {amount(data.debt.balance_total)}</>,
-                      'text-base font-semibold text-red-600 dark:text-red-300',
+                      <>Paid {signed(data.debt.total_cents, '-')}</>,
+                      <>Balance {amount(data.debt.balance_total_cents)}</>,
+                      'text-base font-semibold text-rose-500 dark:text-rose-400',
                   ),
                   content: data.debt.debts.length ? (
                       <div className="space-y-2">
@@ -377,8 +379,8 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                       )}
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                      <span className="font-medium text-red-600 dark:text-red-300">Paid {signed(debt.total_paid_in_period, '-')}</span>
-                                      <span className="text-slate-600 dark:text-neutral-200">Remaining {amount(debt.remaining_balance)}</span>
+                                      <span className="font-medium text-rose-500 dark:text-rose-400">Paid {signed(debt.total_paid_in_period_cents, '-')}</span>
+                                      <span className="text-slate-600 dark:text-neutral-200">Remaining {amount(debt.remaining_cents)}</span>
                                   </div>
                               </div>
                           ))}
@@ -392,7 +394,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   label: 'Purchases',
                   pillClass: tintSectionPill.yellow,
                   amountNode: sectionAmount(
-                      signed(data.spending.total, '-'),
+                      signed(data.spending.total_cents, '-'),
                       purchaseItemCount
                           ? `${purchaseItemCount} item${purchaseItemCount === 1 ? '' : 's'}`
                           : 'No entries',
@@ -403,7 +405,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                               <div key={category.category_name} className="rounded-lg bg-slate-100/80 p-3 dark:bg-neutral-950/50">
                                   <div className="flex items-center justify-between">
                                       <span className="text-base font-medium text-slate-800 dark:text-neutral-100">{category.category_name}</span>
-                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(category.amount, '-')}</span>
+                                      <span className="text-base font-medium text-slate-700 dark:text-neutral-200">{signed(category.amount_cents, '-')}</span>
                                   </div>
                               </div>
                           ))}
@@ -417,11 +419,11 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   label: 'Recurring',
                   pillClass: tintSectionPill.orange,
                   amountNode: sectionAmount(
-                      signed(data.recurring_payments.total, '-'),
+                      signed(data.recurring_payments.total_cents, '-'),
                       (data.recurring_payments.streams.length || (data.recurring_payments.projected?.length ?? 0))
                           ? `${data.recurring_payments.streams.length} charged` +
-                            ((data.recurring_payments.projected_total ?? 0) > 0
-                                ? ` · ${signed(data.recurring_payments.projected_total ?? 0, '-')} projected`
+                            ((data.recurring_payments.projected_total_cents ?? 0) > 0
+                                ? ` · ${signed(data.recurring_payments.projected_total_cents ?? 0, '-')} projected`
                                 : '')
                           : 'No entries',
                   ),
@@ -439,21 +441,21 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   label: 'Savings',
                   pillClass: tintSectionPill.sky,
                   amountNode: sectionAmount(
-                      amount(data.savings.grand_total),
-                      <>This month {amount(data.savings.monthly_total)}</>,
+                      amount(data.savings.grand_total_cents),
+                      <>This month {amount(data.savings.monthly_total_cents)}</>,
                   ),
                   content: (
                       <div className="space-y-2">
                           <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 text-sm dark:bg-neutral-950/50">
                               <span className="text-slate-700 dark:text-neutral-200">This month</span>
                               <div className="flex items-center gap-2">
-                                  {data.savings.monthly_deposits > 0 && (
-                                      <span className="text-emerald-600 dark:text-emerald-400">+{amount(data.savings.monthly_deposits)}</span>
+                                  {data.savings.monthly_deposits_cents > 0 && (
+                                      <span className="text-emerald-600 dark:text-emerald-400">+{amount(data.savings.monthly_deposits_cents)}</span>
                                   )}
-                                  {data.savings.monthly_withdrawals > 0 && (
-                                      <span className="text-rose-500 dark:text-rose-400">-{amount(data.savings.monthly_withdrawals)}</span>
+                                  {data.savings.monthly_withdrawals_cents > 0 && (
+                                      <span className="text-rose-500 dark:text-rose-400">-{amount(data.savings.monthly_withdrawals_cents)}</span>
                                   )}
-                                  <span className="font-medium text-slate-800 dark:text-neutral-100">{amount(data.savings.monthly_total)}</span>
+                                  <span className="font-medium text-slate-800 dark:text-neutral-100">{amount(data.savings.monthly_total_cents)}</span>
                               </div>
                           </div>
                           {data.savings.rows.length ? (
@@ -466,7 +468,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                           {row.notes && <span className="truncate">{row.notes}</span>}
                                       </div>
                                       <span className={`shrink-0 font-medium ${row.type === 'deposit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
-                                          {row.type === 'deposit' ? '+' : '-'}{amount(row.amount)}
+                                          {row.type === 'deposit' ? '+' : '-'}{amount(row.amount_cents)}
                                       </span>
                                   </div>
                               ))
@@ -485,6 +487,13 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                 <div>
                     <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Balance Sheet</h2>
                     <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{data?.month ?? 'Loading month...'}</p>
+                    {data?.wallet && (
+                        <p className="mt-2 text-sm tabular-nums text-slate-600 dark:text-neutral-300">
+                            Available cash {amount(data.wallet.available_cash_cents)}
+                            <span className="mx-1.5 text-slate-300 dark:text-neutral-600">·</span>
+                            Savings {amount(data.wallet.savings_total_cents)}
+                        </p>
+                    )}
                 </div>
                 <button
                     type="button"
@@ -536,7 +545,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
             <div className="mt-4 border-t border-slate-200 pt-4 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-neutral-200">Roll over</span>
-                    <span className="text-sm font-semibold text-slate-900 dark:text-neutral-100">{amount(data?.roll_over.total ?? 0)}</span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-neutral-100">{amount(data?.roll_over.total_cents ?? 0)}</span>
                 </div>
             </div>
         </div>
@@ -592,17 +601,6 @@ function BugReportModuleCard({
     );
 }
 
-function ReservedModuleSlot({ className = '' }: { className?: string }) {
-    return (
-        <div
-            className={`col-span-3 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300/80 bg-white/40 px-4 text-center dark:border-neutral-600/70 dark:bg-neutral-900/30 ${className}`}
-        >
-            <p className="text-sm font-medium text-slate-500 dark:text-neutral-400">Open slot</p>
-            <p className="mt-1 text-xs text-slate-400 dark:text-neutral-500">Balance Sheet width — budgets, goals, accounts…</p>
-        </div>
-    );
-}
-
 export default function Dashboard() {
     return (
         <FinanceDataProvider>
@@ -618,6 +616,7 @@ export default function Dashboard() {
 function DashboardShell() {
     const renderModule = (id: string, title: string, subtitle: string, className = '') => {
         if (id === 'balance-sheet') return <BalanceSheetCard className={className} />;
+        if (id === 'budget') return <BudgetCard className={className} />;
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
         if (id === 'statistics') return <StatisticsCard className={className} />;
         if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
@@ -713,7 +712,7 @@ function DashboardShell() {
                     </div>
                 </div>
 
-                {/* ── Desktop: 12-column bento, or compact 11-column 5∶3 with a reserved slot ─ */}
+                {/* ── Desktop: 12-column bento, or compact 11-column 5∶3∶3 ─ */}
                 <div className={`hidden md:block ${compact ? 'p-4 lg:p-5' : 'p-7 lg:p-10'}`}>
                     {compact ? (
                         <div
@@ -722,15 +721,16 @@ function DashboardShell() {
                         >
                             <StatisticsCard className="col-span-5 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
                             <BalanceSheetCard className="col-span-3 h-[calc((100dvh-7.5rem)*0.7)]" />
-                            <ReservedModuleSlot className="h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <BudgetCard className="col-span-3 h-[calc((100dvh-7.5rem)*0.7)]" />
 
                             <BalanceSheetHistoryCard className="col-span-3 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
                             <CreatorSuiteCard className="col-span-8 h-[calc((100dvh-7.5rem)*0.7)]" />
                         </div>
                     ) : (
                         <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
-                            <StatisticsCard className="col-span-8 min-h-[32rem]" />
-                            <BalanceSheetCard className="col-span-4 h-[32rem]" />
+                            <StatisticsCard className="col-span-6 min-h-[32rem]" />
+                            <BudgetCard className="col-span-3 h-[32rem]" />
+                            <BalanceSheetCard className="col-span-3 h-[32rem]" />
 
                             <BalanceSheetHistoryCard className="col-span-4 h-[42rem] min-h-0" />
                             <CreatorSuiteCard className="col-span-8 h-[42rem]" />

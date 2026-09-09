@@ -1,8 +1,10 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
+import { centsToInput, majorInputToCents } from '@/lib/money';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RecurringCategory, RecurringEntry, RecurringStream } from '@/types/api';
 import { MutableRefObject, useEffect, useState } from 'react';
+import type { LedgerFocus } from '../ledger-focus';
 import {
     defaultDayOfMonth,
     fmtRecurringFreq,
@@ -69,7 +71,17 @@ function blankPrice(): RecurringPriceForm {
     };
 }
 
-export function RecurringStreamsPanel({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
+export function RecurringStreamsPanel({
+    active,
+    addRef,
+    focus,
+    onFocusConsumed,
+}: {
+    active: boolean;
+    addRef?: MutableRefObject<(() => void) | null>;
+    focus?: LedgerFocus | null;
+    onFocusConsumed?: () => void;
+}) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const [streams, setStreams] = useState<RecurringStream[]>([]);
@@ -124,6 +136,14 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
         if (isMobile) setSheetOpen(true);
     };
 
+    useEffect(() => {
+        if (!focus || focus.domain !== 'recurring' || !fetched) return;
+        const stream = streams.find((row) => row.id === focus.instrumentId);
+        if (!stream) return;
+        selectRow(stream);
+        onFocusConsumed?.();
+    }, [focus, fetched, streams]);
+
     const reset = () => {
         setSelected(null);
         setForm(blankStream);
@@ -174,7 +194,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                         ? Number(form.recurring_payment_category_id)
                         : null,
                     description: form.description || null,
-                    amount: Number(priceForm.amount),
+                    amount_cents: majorInputToCents(priceForm.amount),
                     frequency: priceForm.frequency,
                     start_date: priceForm.start_date,
                 };
@@ -205,7 +225,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
         setError(null);
         try {
             const body: Record<string, unknown> = {
-                amount: Number(priceForm.amount),
+                amount_cents: majorInputToCents(priceForm.amount),
                 start_date: priceForm.start_date,
                 frequency: priceForm.frequency,
             };
@@ -290,7 +310,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <p className="text-xl font-bold tracking-tight text-slate-800 dark:text-neutral-100">
-                                    {fmtAmount(entry.amount)}
+                                    {fmtAmount(entry.amount_cents)}
                                     <span className="ml-1 text-sm font-normal text-slate-500 dark:text-neutral-400">
                                         / {fmtRecurringFreq(entry.frequency)}
                                     </span>
@@ -477,7 +497,7 @@ export function RecurringStreamsPanel({ active, addRef }: { active: boolean; add
                                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                                             {e && (
                                                 <span className={`${rowAmountCls} text-slate-800 dark:text-neutral-100`}>
-                                                    {fmtAmount(e.amount)}
+                                                    {fmtAmount(e.amount_cents)}
                                                 </span>
                                             )}
                                             <div className="flex items-center gap-1.5">

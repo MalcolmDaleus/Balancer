@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Support\MoneyCents;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RefundPurchaseRequest extends FormRequest
@@ -14,8 +15,8 @@ class RefundPurchaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount'       => ['nullable', 'numeric', 'min:0.01', 'max:9999999.99'],
-            'refund_date'  => ['nullable', 'date'],
+            'amount_cents' => ['nullable', 'integer', 'min:1', 'max:'.MoneyCents::MAX],
+            'refund_date' => ['nullable', 'date'],
         ];
     }
 }

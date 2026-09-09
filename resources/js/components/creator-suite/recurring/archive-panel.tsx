@@ -17,7 +17,7 @@ export function RecurringArchivePanel({ active }: { active: boolean }) {
             renderDetail={(s) => {
                 const e = currentEntry(s);
                 const cat = s.category?.name ?? 'Uncategorized';
-                return e ? `${cat} · ${fmtRecurringFreq(e.frequency)} · ${fmtAmount(e.amount)}` : cat;
+                return e ? `${cat} · ${fmtRecurringFreq(e.frequency)} · ${fmtAmount(e.amount_cents)}` : cat;
             }}
         />
     );
