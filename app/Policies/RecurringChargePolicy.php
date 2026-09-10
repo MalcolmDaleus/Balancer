@@ -17,6 +17,11 @@ class RecurringChargePolicy
         return $user->id === $recurringCharge->user_id;
     }
 
+    public function update(User $user, RecurringCharge $recurringCharge): bool
+    {
+        return $user->id === $recurringCharge->user_id;
+    }
+
     public function delete(User $user, RecurringCharge $recurringCharge): bool
     {
         return $user->id === $recurringCharge->user_id;

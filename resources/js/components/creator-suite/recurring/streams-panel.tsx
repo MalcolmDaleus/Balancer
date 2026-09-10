@@ -4,7 +4,6 @@ import { useFormatMoney } from '@/hooks/use-format-money';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RecurringCategory, RecurringEntry, RecurringStream } from '@/types/api';
 import { MutableRefObject, useEffect, useState } from 'react';
-import type { LedgerFocus } from '../ledger-focus';
 import {
     defaultDayOfMonth,
     fmtRecurringFreq,
@@ -74,13 +73,9 @@ function blankPrice(): RecurringPriceForm {
 export function RecurringStreamsPanel({
     active,
     addRef,
-    focus,
-    onFocusConsumed,
 }: {
     active: boolean;
     addRef?: MutableRefObject<(() => void) | null>;
-    focus?: LedgerFocus | null;
-    onFocusConsumed?: () => void;
 }) {
     const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
@@ -135,14 +130,6 @@ export function RecurringStreamsPanel({
         setError(null);
         if (isMobile) setSheetOpen(true);
     };
-
-    useEffect(() => {
-        if (!focus || focus.domain !== 'recurring' || !fetched) return;
-        const stream = streams.find((row) => row.id === focus.instrumentId);
-        if (!stream) return;
-        selectRow(stream);
-        onFocusConsumed?.();
-    }, [focus, fetched, streams]);
 
     const reset = () => {
         setSelected(null);

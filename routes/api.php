@@ -96,7 +96,7 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     Route::apiResource('recurring-payments/entries', RecurringPaymentEntryController::class)
         ->parameters(['entries' => 'recurringPaymentEntry']);
     Route::apiResource('recurring-payments/charges', RecurringChargeController::class)
-        ->only(['index', 'show', 'destroy'])
+        ->only(['index', 'show', 'update', 'destroy'])
         ->parameters(['charges' => 'recurringCharge']);
 
     // ---------------------------------------------------------------

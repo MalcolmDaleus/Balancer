@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { AddButton, SubTabBar, TabToolbar } from './shared';
 import { RecurringArchivePanel } from './recurring/archive-panel';
 import { RecurringCategoriesPanel } from './recurring/categories-panel';
+import { RecurringChargesPanel } from './recurring/charges-panel';
 import { RecurringStreamsPanel } from './recurring/streams-panel';
 import type { LedgerFocus } from './ledger-focus';
 
-const SUBTABS = ['Streams', 'Categories', 'Archive'] as const;
+const SUBTABS = ['Streams', 'Charges', 'Categories', 'Archive'] as const;
 type SubTab = (typeof SUBTABS)[number];
 
 export function RecurringTab({
@@ -19,11 +20,11 @@ export function RecurringTab({
 }) {
     const [sub, setSub] = useState<SubTab>('Streams');
     const addRef = useRef<(() => void) | null>(null);
-    const showAdd = sub !== 'Archive';
+    const showAdd = sub !== 'Archive' && sub !== 'Charges';
 
     useEffect(() => {
         if (focus?.domain === 'recurring') {
-            setSub('Streams');
+            setSub('Charges');
         }
     }, [focus]);
 
@@ -33,8 +34,9 @@ export function RecurringTab({
                 <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
                 {showAdd && <AddButton onClick={() => addRef.current?.()} />}
             </TabToolbar>
-            {sub === 'Streams' && (
-                <RecurringStreamsPanel addRef={addRef} active={active} focus={focus} onFocusConsumed={onFocusConsumed} />
+            {sub === 'Streams' && <RecurringStreamsPanel addRef={addRef} active={active} />}
+            {sub === 'Charges' && (
+                <RecurringChargesPanel active={active} focus={focus} onFocusConsumed={onFocusConsumed} />
             )}
             {sub === 'Categories' && <RecurringCategoriesPanel addRef={addRef} active={active} />}
             {sub === 'Archive' && <RecurringArchivePanel active={active} />}

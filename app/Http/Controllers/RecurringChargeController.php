@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Api\UpdateRecurringChargeRequest;
 use App\Http\Resources\RecurringChargeResource;
 use App\Models\RecurringCharge;
 use App\Models\RecurringOccurrenceSkip;
@@ -27,6 +28,15 @@ class RecurringChargeController extends Controller
         $this->authorize('view', $recurringCharge);
 
         return new RecurringChargeResource($recurringCharge);
+    }
+
+    public function update(UpdateRecurringChargeRequest $request, RecurringCharge $recurringCharge): RecurringChargeResource
+    {
+        $this->authorize('update', $recurringCharge);
+
+        $recurringCharge->update($request->validated());
+
+        return new RecurringChargeResource($recurringCharge->fresh());
     }
 
     public function destroy(RecurringCharge $recurringCharge): JsonResponse

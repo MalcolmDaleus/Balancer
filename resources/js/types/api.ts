@@ -300,6 +300,17 @@ export interface RecurringEntry {
     active: boolean;
 }
 
+export interface RecurringCharge {
+    id: number;
+    recurring_payment_entry_id: number;
+    recurring_payment_stream_id: number;
+    recurring_payment_category_id: number | null;
+    stream_name: string;
+    category_name: string | null;
+    amount_cents: number;
+    occurred_on: string;
+}
+
 export interface RecurringStream {
     id: number;
     recurring_payment_category_id: number | null;
