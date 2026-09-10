@@ -26,3 +26,5 @@ yarn-error.log
 /.vscode
 /.zed
 /database/squash-build.sqlite
+/project_notes
+/archived   
