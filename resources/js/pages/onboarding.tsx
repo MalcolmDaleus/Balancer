@@ -3,6 +3,7 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { marketingCopy } from '@/config/marketing-copy';
 import { currencySymbol, majorInputToCents } from '@/lib/money';
 import { type SharedData } from '@/types';
 import { dashboard, logout } from '@/routes';
@@ -10,41 +11,8 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-const STILL = '/img/landing/elementor-placeholder-image.png';
-
-type Slide = {
-    title: string;
-    body: string;
-    image: string;
-};
-
-const SLIDES: Slide[] = [
-    {
-        title: 'Your month, in one place',
-        body: 'Balancer is not a bank connection. You write down what came in and what went out. We keep the month tidy so you can see what’s left.',
-        image: STILL,
-    },
-    {
-        title: 'Five cards, one dashboard',
-        body: 'Balance Sheet is what moved this month. Ledger is where you type. Statistics is what’s typical. Budget is what you meant to spend. Past months stay locked once you close them.',
-        image: STILL,
-    },
-    {
-        title: 'You type Facts. Schedules do the rest.',
-        body: 'Purchases, income, recurring, debts, and savings are Facts you enter. Recurring streams and pay schedules generate the repeats so you are not retyping rent every month.',
-        image: STILL,
-    },
-    {
-        title: 'Available cash and savings',
-        body: 'Two starting numbers: spendable cash on hand, and money already in savings. We remember them. Each month’s leftover updates your available cash. A savings deposit moves cash into savings — we do not create a fake income for these.',
-        image: STILL,
-    },
-    {
-        title: 'A simple purchase budget',
-        body: 'Optional: set one monthly amount for day-to-day purchases. You can always overspend; the card just shows what’s left. Category limits come later, once you have categories.',
-        image: STILL,
-    },
-];
+const copy = marketingCopy.onboarding;
+const SLIDES = copy.slides;
 
 export default function Onboarding({
     replay,
@@ -92,17 +60,17 @@ export default function Onboarding({
         const nextErrors: Record<string, string> = {};
 
         if (cash.trim() === '' || liquidity === null || Number.isNaN(liquidity)) {
-            nextErrors.liquidity_cents = 'Enter an amount. Zero is fine.';
+            nextErrors.liquidity_cents = copy.forms.requiredAmount;
         }
         if (savings.trim() === '' || savingsCents === null || Number.isNaN(savingsCents)) {
-            nextErrors.savings_cents = 'Enter an amount. Zero is fine.';
+            nextErrors.savings_cents = copy.forms.requiredAmount;
         }
 
         let discretionary: number | null = null;
         if (budget.trim() !== '') {
             discretionary = majorInputToCents(budget, locale);
             if (discretionary === null || Number.isNaN(discretionary)) {
-                nextErrors.discretionary_cents = 'Enter a valid amount, or leave this blank.';
+                nextErrors.discretionary_cents = copy.forms.invalidAmount;
             }
         }
 
@@ -135,7 +103,7 @@ export default function Onboarding({
 
     return (
         <>
-            <Head title={replay ? 'Tour' : 'Get started'} />
+            <Head title={replay ? copy.headTitle.replay : copy.headTitle.firstRun} />
             <main className="bg-[url('/branding/background_bubbles.svg')] dark:bg-[url('/branding/background_bubbles_dark.svg')] flex min-h-svh flex-col items-center justify-center bg-slate-200 bg-cover bg-center bg-no-repeat px-4 py-10 md:px-8 md:py-12 dark:bg-neutral-950">
                 <AppearanceToggleDropdown className="fixed top-4 left-4 z-20" />
                 <button
@@ -143,7 +111,7 @@ export default function Onboarding({
                     onClick={() => router.post(logout().url)}
                     className="fixed top-4 right-4 z-20 text-sm text-slate-500 underline-offset-4 hover:text-slate-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-100"
                 >
-                    Log out
+                    {copy.logOut}
                 </button>
 
                 <div className={`w-full ${showForms ? 'max-w-lg' : 'max-w-lg md:max-w-6xl'}`}>
@@ -153,7 +121,7 @@ export default function Onboarding({
                                 <div className="flex flex-col justify-between gap-6 px-8 py-8 sm:px-10 md:px-12 md:py-12 lg:px-16">
                                     <div className="space-y-3 md:space-y-4">
                                         <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase dark:text-neutral-500">
-                                            {replay ? 'Tour' : `Step ${step + 1} of ${SLIDES.length}`}
+                                            {replay ? copy.replayKicker : copy.stepOf(step + 1, SLIDES.length)}
                                         </p>
                                         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-4xl dark:text-neutral-50">
                                             {slide.title}
@@ -187,14 +155,14 @@ export default function Onboarding({
                                                 disabled={step === 0}
                                                 className="text-sm text-slate-500 disabled:opacity-30 dark:text-neutral-400"
                                             >
-                                                Back
+                                                {copy.nav.back}
                                             </button>
                                             <div className="flex items-center gap-2">
                                                 <Button type="button" variant="ghost" size="sm" onClick={skipSlides}>
-                                                    {replay ? 'Close' : 'Skip'}
+                                                    {replay ? copy.nav.close : copy.nav.skip}
                                                 </Button>
                                                 <Button type="button" size="sm" onClick={nextSlide}>
-                                                    {lastSlide ? (replay ? 'Done' : 'Continue') : 'Next'}
+                                                    {lastSlide ? (replay ? copy.nav.done : copy.nav.continue) : copy.nav.next}
                                                 </Button>
                                             </div>
                                         </div>
@@ -203,7 +171,7 @@ export default function Onboarding({
                                 <div className="order-first p-4 pb-0 md:order-none md:h-full md:p-6 md:pl-3">
                                     <div className="h-40 overflow-hidden rounded-2xl bg-slate-100 md:h-full dark:bg-neutral-800">
                                         <img
-                                            src={slide.image}
+                                            src={marketingCopy.still}
                                             alt=""
                                             className="h-full w-full object-cover"
                                         />
@@ -214,19 +182,19 @@ export default function Onboarding({
                             <div className="flex flex-col gap-6 px-8 py-8 sm:px-10">
                                 <div className="space-y-2">
                                     <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase dark:text-neutral-500">
-                                        Starting numbers
+                                        {copy.forms.kicker}
                                     </p>
                                     <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-neutral-50">
-                                        What do you have right now?
+                                        {copy.forms.title}
                                     </h1>
                                     <p className="text-sm leading-relaxed text-slate-600 dark:text-neutral-300">
-                                        Zero is fine. Blank is not. These are not income — they are the wallet we start from.
+                                        {copy.forms.body}
                                     </p>
                                 </div>
 
                                 <div className="grid gap-4">
                                     <div className="grid gap-1.5">
-                                        <Label htmlFor="liquidity">Available cash</Label>
+                                        <Label htmlFor="liquidity">{copy.forms.cashLabel}</Label>
                                         <div className="relative">
                                             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">
                                                 {symbol}
@@ -235,7 +203,7 @@ export default function Onboarding({
                                                 id="liquidity"
                                                 inputMode="decimal"
                                                 className="pl-8"
-                                                placeholder="0.00"
+                                                placeholder={copy.forms.amountPlaceholder}
                                                 value={cash}
                                                 onChange={(e) => setCash(e.target.value)}
                                                 autoFocus
@@ -244,7 +212,7 @@ export default function Onboarding({
                                         <InputError message={errors.liquidity_cents} />
                                     </div>
                                     <div className="grid gap-1.5">
-                                        <Label htmlFor="savings">Savings</Label>
+                                        <Label htmlFor="savings">{copy.forms.savingsLabel}</Label>
                                         <div className="relative">
                                             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">
                                                 {symbol}
@@ -253,7 +221,7 @@ export default function Onboarding({
                                                 id="savings"
                                                 inputMode="decimal"
                                                 className="pl-8"
-                                                placeholder="0.00"
+                                                placeholder={copy.forms.amountPlaceholder}
                                                 value={savings}
                                                 onChange={(e) => setSavings(e.target.value)}
                                             />
@@ -261,7 +229,7 @@ export default function Onboarding({
                                         <InputError message={errors.savings_cents} />
                                     </div>
                                     <div className="grid gap-1.5">
-                                        <Label htmlFor="budget">Monthly purchase budget (optional)</Label>
+                                        <Label htmlFor="budget">{copy.forms.budgetLabel}</Label>
                                         <div className="relative">
                                             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">
                                                 {symbol}
@@ -270,7 +238,7 @@ export default function Onboarding({
                                                 id="budget"
                                                 inputMode="decimal"
                                                 className="pl-8"
-                                                placeholder="Skip for now"
+                                                placeholder={copy.forms.budgetPlaceholder}
                                                 value={budget}
                                                 onChange={(e) => setBudget(e.target.value)}
                                             />
@@ -285,11 +253,11 @@ export default function Onboarding({
                                         onClick={() => setShowForms(false)}
                                         className="text-sm text-slate-500 dark:text-neutral-400"
                                     >
-                                        Back to slides
+                                        {copy.nav.backToSlides}
                                     </button>
                                     <Button type="button" onClick={submit} disabled={busy}>
                                         {busy && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                                        Go to dashboard
+                                        {copy.nav.goToDashboard}
                                     </Button>
                                 </div>
                             </div>
@@ -301,12 +269,12 @@ export default function Onboarding({
                                 type="button"
                                 className="text-xs text-slate-500 underline-offset-4 hover:underline dark:text-neutral-400"
                                 onClick={() => {
-                                    if (window.confirm('Wipe all financial data and return to onboarding?')) {
+                                    if (window.confirm(copy.forms.resetConfirm)) {
                                         router.post('/dev/reset-onboarding');
                                     }
                                 }}
                             >
-                                Local: reset to onboarding
+                                {copy.forms.resetLocal}
                             </button>
                         </div>
                     )}

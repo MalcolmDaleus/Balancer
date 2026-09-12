@@ -1,9 +1,9 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { Purchase, PurchaseCategory } from '@/types/api';
 import { MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryTab } from './category-tab';
@@ -71,12 +71,12 @@ function RefundModal({
             <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-900">
                 {step === 'choose' && (
                     <>
-                        <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-neutral-50">Refund</h3>
+                        <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-neutral-50">{ledgerCopy.purchases.refund}</h3>
                         <p className="mb-4 text-sm text-slate-600 dark:text-neutral-200">{title}</p>
                         {hasPartial && (
                             <p className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700 dark:bg-neutral-800/60 dark:text-neutral-200">
-                                Refunded {fmt(refunded)} of {fmt(purchase.amount_cents)}
-                                <span className="mt-0.5 block text-slate-500 dark:text-neutral-300">{fmt(remaining)} remaining</span>
+                                {ledgerCopy.purchases.refundedOf(fmt(refunded), fmt(purchase.amount_cents))}
+                                <span className="mt-0.5 block text-slate-500 dark:text-neutral-300">{ledgerCopy.purchases.remaining(fmt(remaining))}</span>
                             </p>
                         )}
                         {error && (
@@ -87,11 +87,11 @@ function RefundModal({
                         <div className="flex flex-col gap-2">
                             {hasPartial ? (
                                 <Button type="button" className="w-full rounded-full" onClick={() => setStep('confirm-payoff')}>
-                                    Pay off ({fmt(remaining)})
+                                    {ledgerCopy.purchases.payOff(fmt(remaining))}
                                 </Button>
                             ) : (
                                 <Button type="button" className="w-full rounded-full" onClick={() => setStep('confirm-full')}>
-                                    Full refund ({fmt(purchase.amount_cents)})
+                                    {ledgerCopy.purchases.fullRefund(fmt(purchase.amount_cents))}
                                 </Button>
                             )}
                             <Button
@@ -103,12 +103,12 @@ function RefundModal({
                                     setStep('partial');
                                 }}
                             >
-                                Partial refund
+                                {ledgerCopy.purchases.partialRefund}
                             </Button>
                         </div>
                         <div className="mt-4 flex justify-end">
                             <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={close}>
-                                Cancel
+                                {ledgerCopy.common.cancel}
                             </Button>
                         </div>
                     </>
@@ -116,15 +116,15 @@ function RefundModal({
 
                 {step === 'partial' && (
                     <>
-                        <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-neutral-50">Partial refund</h3>
+                        <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-neutral-50">{ledgerCopy.purchases.partialRefund}</h3>
                         <p className="mb-4 text-sm text-slate-600 dark:text-neutral-200">{title}</p>
-                        {hasPartial && <p className="mb-3 text-sm text-slate-500 dark:text-neutral-300">Up to {fmt(remaining)} remaining</p>}
+                        {hasPartial && <p className="mb-3 text-sm text-slate-500 dark:text-neutral-300">{ledgerCopy.purchases.upToRemaining(fmt(remaining))}</p>}
                         {error && (
                             <div className="mb-3">
                                 <ApiError message={error} />
                             </div>
                         )}
-                        <Field label="Amount">
+                        <Field label={ledgerCopy.common.amount}>
                             <input
                                 type="number"
                                 step="0.01"
@@ -146,7 +146,7 @@ function RefundModal({
                                 onClick={() => setStep('choose')}
                                 disabled={saving}
                             >
-                                Back
+                                {ledgerCopy.purchases.back}
                             </Button>
                             <Button
                                 type="button"
@@ -155,7 +155,7 @@ function RefundModal({
                                 disabled={saving || !partialAmount || Number(partialAmount) <= 0}
                                 onClick={() => onConfirm(majorInputToCents(partialAmount))}
                             >
-                                {saving ? 'Saving…' : 'Confirm'}
+                                {saving ? ledgerCopy.common.saving : ledgerCopy.purchases.confirm}
                             </Button>
                         </div>
                     </>
@@ -165,8 +165,8 @@ function RefundModal({
                     <>
                         <p className="mb-5 text-base text-slate-700 dark:text-neutral-200">
                             {step === 'confirm-full'
-                                ? `Mark "${title}" as fully refunded? This will add a matching income entry of ${fmt(purchase.amount_cents)}.`
-                                : `Refund the remaining ${fmt(remaining)} for "${title}"? This will fully refund the purchase.`}
+                                ? ledgerCopy.purchases.confirmFull(title, fmt(purchase.amount_cents))
+                                : ledgerCopy.purchases.confirmPayoff(fmt(remaining), title)}
                         </p>
                         {error && (
                             <div className="mb-3">
@@ -182,7 +182,7 @@ function RefundModal({
                                 onClick={() => setStep('choose')}
                                 disabled={saving}
                             >
-                                Back
+                                {ledgerCopy.purchases.back}
                             </Button>
                             <Button
                                 type="button"
@@ -191,7 +191,7 @@ function RefundModal({
                                 disabled={saving}
                                 onClick={() => onConfirm(null)}
                             >
-                                {saving ? 'Saving…' : 'Confirm'}
+                                {saving ? ledgerCopy.common.saving : ledgerCopy.purchases.confirm}
                             </Button>
                         </div>
                     </>
@@ -216,7 +216,6 @@ function ItemsTab({
     focus?: LedgerFocus | null;
     onFocusConsumed?: () => void;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -285,7 +284,7 @@ function ItemsTab({
             url: p.url ?? '',
         });
         setError(null);
-        if (isMobile && canMutateFact(p.date)) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     useEffect(() => {
@@ -325,7 +324,7 @@ function ItemsTab({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.date)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -344,13 +343,13 @@ function ItemsTab({
                 await apiFetch(`/api/v1/purchases/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 await apiFetch('/api/v1/purchases', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Purchase added',
+                    toast: ledgerCopy.purchases.purchaseAdded,
                 });
             }
             reset();
@@ -366,7 +365,7 @@ function ItemsTab({
         setConfirm(null);
         setRemovingId(p.id);
         try {
-            await apiFetch(`/api/v1/purchases/${p.id}`, { method: 'DELETE', toast: 'Deleted' });
+            await apiFetch(`/api/v1/purchases/${p.id}`, { method: 'DELETE', toast: ledgerCopy.common.deleted });
             setPurchases(dropById(p.id));
             if (selected?.id === p.id) reset();
         } catch (err: unknown) {
@@ -384,7 +383,7 @@ function ItemsTab({
             await apiFetch(`/api/v1/purchases/${p.id}/refund`, {
                 method: 'POST',
                 body: JSON.stringify(body),
-                toast: 'Refund recorded',
+                toast: ledgerCopy.purchases.refundRecorded,
             });
             setRefundTarget(null);
             setFetched(false);
@@ -398,7 +397,7 @@ function ItemsTab({
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Description">
+            <Field label={ledgerCopy.purchases.description}>
                 <input
                     type="text"
                     required
@@ -408,14 +407,14 @@ function ItemsTab({
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
             </Field>
-            <Field label="Category">
+            <Field label={ledgerCopy.common.category}>
                 <select
                     required
                     className={selectCls}
                     value={form.category_id}
                     onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}
                 >
-                    <option value="">— select —</option>
+                    <option value="">{ledgerCopy.common.selectPlaceholder}</option>
                     {cats.map((c) => (
                         <option key={c.id} value={c.id}>
                             {c.name}
@@ -423,7 +422,7 @@ function ItemsTab({
                     ))}
                 </select>
             </Field>
-            <Field label="Amount">
+            <Field label={ledgerCopy.common.amount}>
                 <input
                     type="number"
                     step="0.01"
@@ -434,7 +433,7 @@ function ItemsTab({
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Date">
+            <Field label={ledgerCopy.common.date}>
                 <input
                     type="date"
                     required
@@ -443,11 +442,11 @@ function ItemsTab({
                     onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
                 />
             </Field>
-            <Field label="Link (optional)">
+            <Field label={ledgerCopy.purchases.linkOptional}>
                 <input
                     type="url"
                     maxLength={500}
-                    placeholder="https://…"
+                    placeholder={ledgerCopy.purchases.linkPlaceholder}
                     className={inputCls}
                     value={form.url}
                     onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
@@ -461,7 +460,7 @@ function ItemsTab({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete purchase "${confirm.description}"? This cannot be undone if the month has passed.`}
+                    message={ledgerCopy.purchases.deletePurchase(confirm.description)}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -487,13 +486,14 @@ function ItemsTab({
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Purchase' : 'New Purchase'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.purchases.editPurchase : ledgerCopy.purchases.newPurchase}
                 list={
                     <ListStack>
                         {loading && !purchases.length && <LoadingRows />}
-                        {!loading && !purchases.length && <EmptyRows label="No purchases yet." />}
+                        {!loading && !purchases.length && <EmptyRows label={ledgerCopy.purchases.noPurchases} />}
                         {!loading && purchases.length > 0 && !visiblePurchases.length && (
-                            <EmptyRows label="No purchases match these filters." />
+                            <EmptyRows label={ledgerCopy.purchases.noPurchasesMatch} />
                         )}
                         {visiblePurchases.map((p) => {
                             const fullyRefunded = p.refund_status === 'full' || p.is_refunded;
@@ -502,7 +502,7 @@ function ItemsTab({
                             const canEdit = !partiallyRefunded && canWrite;
                             const refundOnly = !canEdit && !partiallyRefunded;
                             return (
-                                <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded} busy={removingId === p.id}>
+                                <ListRow key={p.id} selected={selected?.id === p.id} disabled={fullyRefunded} busy={removingId === p.id} onClick={() => selectRow(p)}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{p.description}</p>
@@ -512,12 +512,12 @@ function ItemsTab({
                                             </p>
                                         </div>
                                         {fullyRefunded ? (
-                                            <StatusChip label="Refunded" color="blue" />
+                                            <StatusChip label={ledgerCopy.purchases.refunded} color="blue" />
                                         ) : (
                                             <div
                                                 className={`flex shrink-0 flex-col items-stretch gap-2.5 ${refundOnly ? 'self-center' : ''}`}
                                             >
-                                                {partiallyRefunded && <StatusChip label="Partially Refunded" color="teal" />}
+                                                {partiallyRefunded && <StatusChip label={ledgerCopy.purchases.partiallyRefunded} color="teal" />}
                                                 {canEdit && <RowActions onEdit={() => selectRow(p)} onDelete={() => setConfirm(p)} />}
                                                 <button
                                                     type="button"
@@ -527,7 +527,7 @@ function ItemsTab({
                                                     }}
                                                     className={secondaryBtnFullCls}
                                                 >
-                                                    Refund
+                                                    {ledgerCopy.purchases.refund}
                                                 </button>
                                             </div>
                                         )}
@@ -571,7 +571,7 @@ export function PurchasesTab({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
-                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} labels={ledgerCopy.purchases.sub} />
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
             {sub === 'Items' && (
@@ -585,10 +585,8 @@ export function PurchasesTab({
                     storeUrl="/api/v1/categories/purchases"
                     updateUrl={(id) => `/api/v1/categories/purchases/${id}`}
                     deleteUrl={(id) => `/api/v1/categories/purchases/${id}`}
-                    emptyLabel="No purchase categories."
-                    deleteConfirmMessage={(name) =>
-                        `Remove category "${name}"? It will be unlisted if purchases reference it.`
-                    }
+                    emptyLabel={ledgerCopy.purchases.noCategories}
+                    deleteConfirmMessage={ledgerCopy.purchases.deleteCategory}
                 />
             )}
         </div>

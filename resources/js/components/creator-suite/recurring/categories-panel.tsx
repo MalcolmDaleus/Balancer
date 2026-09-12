@@ -1,3 +1,4 @@
+import { ledgerCopy } from '@/config/ledger-copy';
 import { MutableRefObject } from 'react';
 import { CategoryTab } from '../category-tab';
 
@@ -16,7 +17,7 @@ export function RecurringCategoriesPanel({
             storeUrl="/api/v1/recurring-payments/categories"
             updateUrl={(id) => `/api/v1/recurring-payments/categories/${id}`}
             deleteUrl={(id) => `/api/v1/recurring-payments/categories/${id}`}
-            emptyLabel="No recurring categories."
+            emptyLabel={ledgerCopy.recurring.noCategories}
         />
     );
 }

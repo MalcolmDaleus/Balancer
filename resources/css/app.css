@@ -140,83 +140,105 @@
     }
 }
 
-/* Compact desktop bento — smaller type/padding so more modules can fit. */
-[data-density='compact'] {
+/* Flatten Chromium/Windows date chrome so fields match other inputs. */
+.cs-date-input {
+    color-scheme: light;
+    appearance: none;
+}
+
+.dark .cs-date-input {
+    color-scheme: dark;
+}
+
+.cs-date-input::-webkit-datetime-edit,
+.cs-date-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+    background: transparent;
+}
+
+.cs-date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    margin: 0;
+}
+
+/* Shared desktop interior scale. Density only changes card size and grid ratios. */
+[data-dashboard] {
     font-size: 0.8125rem;
     line-height: 1.25;
 }
 
-[data-density='compact'] h2 {
+[data-dashboard] h2 {
     font-size: 0.8125rem !important;
     line-height: 1.2 !important;
 }
 
-[data-density='compact'] .text-base {
+[data-dashboard] .text-base {
     font-size: 0.8125rem;
     line-height: 1.25rem;
 }
 
-[data-density='compact'] .text-lg {
+[data-dashboard] .text-lg {
     font-size: 0.9375rem;
     line-height: 1.3rem;
 }
 
-[data-density='compact'] .text-sm {
+[data-dashboard] .text-sm {
     font-size: 0.75rem;
     line-height: 1.1rem;
 }
 
-[data-density='compact'] .text-xs {
+[data-dashboard] .text-xs {
     font-size: 0.6875rem;
     line-height: 1rem;
 }
 
-[data-density='compact'] .p-7,
-[data-density='compact'] .p-6,
-[data-density='compact'] .p-5 {
+[data-dashboard] .p-7,
+[data-dashboard] .p-6,
+[data-dashboard] .p-5 {
     padding: 0.75rem;
 }
 
-[data-density='compact'] .px-5 {
+[data-dashboard] .px-5 {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
 }
 
-[data-density='compact'] .pt-5 {
+[data-dashboard] .pt-5 {
     padding-top: 0.75rem;
 }
 
-[data-density='compact'] .pb-4,
-[data-density='compact'] .pt-4,
-[data-density='compact'] .py-3\.5 {
+[data-dashboard] .pb-4,
+[data-dashboard] .pt-4,
+[data-dashboard] .py-3\.5 {
     padding-top: 0.55rem;
     padding-bottom: 0.55rem;
 }
 
-[data-density='compact'] .px-4 {
+[data-dashboard] .px-4 {
     padding-left: 0.65rem;
     padding-right: 0.65rem;
 }
 
-[data-density='compact'] .mb-4,
-[data-density='compact'] .mb-6 {
+[data-dashboard] .mb-4,
+[data-dashboard] .mb-6 {
     margin-bottom: 0.55rem;
 }
 
-[data-density='compact'] .stats-toolbar {
+[data-dashboard] .stats-toolbar {
     margin-bottom: 1.05rem;
 }
 
-[data-density='compact'] .space-y-2\.5 > :not([hidden]) ~ :not([hidden]),
-[data-density='compact'] .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+[data-dashboard] .space-y-2\.5 > :not([hidden]) ~ :not([hidden]),
+[data-dashboard] .space-y-2 > :not([hidden]) ~ :not([hidden]) {
     margin-top: 0.4rem;
 }
 
-[data-density='compact'] .gap-2 {
+[data-dashboard] .gap-2 {
     gap: 0.35rem;
 }
 
-[data-density='compact'] [data-cs-header] {
+[data-dashboard] [data-cs-header] {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -226,47 +248,47 @@
     padding-bottom: 0.55rem;
 }
 
-[data-density='compact'] [data-cs-header] h2 {
+[data-dashboard] [data-cs-header] h2 {
     margin-bottom: 0 !important;
 }
 
-[data-density='compact'] [data-cs-body] {
+[data-dashboard] [data-cs-body] {
     padding-top: 0.4rem;
     padding-bottom: 0.5rem;
 }
 
-[data-density='compact'] [data-cs-split] {
+[data-dashboard] [data-cs-split] {
     gap: 0.65rem;
 }
 
-[data-density='compact'] [data-cs-form-pane] {
+[data-dashboard] [data-cs-form-pane] {
     padding-left: 0.75rem;
 }
 
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 {
+[data-dashboard] [data-cs-form-pane] form.space-y-3 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem 0.75rem;
     align-items: start;
 }
 
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > :not([hidden]) ~ :not([hidden]) {
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > :not([hidden]) ~ :not([hidden]) {
     margin-top: 0;
 }
 
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > [role='alert'],
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .flex,
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .rounded-xl,
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > [data-cs-form-span] {
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > [role='alert'],
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > .flex,
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > .rounded-xl,
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > [data-cs-form-span] {
     grid-column: 1 / -1;
 }
 
-[data-density='compact'] [data-cs-form-pane] form.space-y-3 > .grid.gap-1:nth-last-child(2):nth-child(odd) {
+[data-dashboard] [data-cs-form-pane] form.space-y-3 > .grid.gap-1:nth-last-child(2):nth-child(odd) {
     grid-column: 1 / -1;
 }
 
-[data-density='compact'] [data-cs-form-pane] input,
-[data-density='compact'] [data-cs-form-pane] select {
+[data-dashboard] [data-cs-form-pane] input,
+[data-dashboard] [data-cs-form-pane] select {
     width: 100%;
     height: 1.85rem;
 }

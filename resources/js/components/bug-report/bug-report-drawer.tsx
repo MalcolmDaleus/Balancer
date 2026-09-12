@@ -1,4 +1,5 @@
 import BugReportForm from '@/components/bug-report/bug-report-form';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import {
     Sheet,
     SheetContent,
@@ -23,8 +24,8 @@ export default function BugReportDrawer() {
                 className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md"
             >
                 <SheetHeader className="border-b border-border/60 px-4 py-4 text-left">
-                    <SheetTitle>Report a problem</SheetTitle>
-                    <SheetDescription>Tell us what went wrong. This stays in the app for friend testing.</SheetDescription>
+                    <SheetTitle>{dashboardCopy.bugReport.drawerTitle}</SheetTitle>
+                    <SheetDescription>{dashboardCopy.bugReport.drawerDescription}</SheetDescription>
                 </SheetHeader>
 
                 <div className="px-4 py-4">

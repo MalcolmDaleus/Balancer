@@ -39,10 +39,27 @@ function ChartContainer({
 }) {
     const uniqueId = React.useId();
     const chartId = `chart-${id ?? uniqueId.replace(/:/g, '')}`;
+    const boxRef = React.useRef<HTMLDivElement>(null);
+    const [ready, setReady] = React.useState(false);
+
+    React.useLayoutEffect(() => {
+        const el = boxRef.current;
+        if (!el) {
+            return;
+        }
+        const sync = () => {
+            setReady(el.clientWidth > 0 && el.clientHeight > 0);
+        };
+        sync();
+        const ro = new ResizeObserver(sync);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
     return (
         <ChartContext.Provider value={{ config }}>
             <div
+                ref={boxRef}
                 data-slot="chart"
                 data-chart={chartId}
                 className={cn(
@@ -52,9 +69,11 @@ function ChartContainer({
                 {...props}
             >
                 <ChartStyle id={chartId} config={config} />
-                <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
-                    {children}
-                </RechartsPrimitive.ResponsiveContainer>
+                {ready && (
+                    <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+                        {children}
+                    </RechartsPrimitive.ResponsiveContainer>
+                )}
             </div>
         </ChartContext.Provider>
     );

@@ -2,6 +2,7 @@
  * Generic archive list for soft-deleted income schedules / recurring streams.
  */
 import { apiFetch, apiFetchList, errorMessage, isNotFound } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { ReactNode, useEffect, useState } from 'react';
 import { ApiError, ConfirmModal, EmptyRows, ListRow, ListStack, LoadingRows, dropById, rowDetailCls, rowTitleCls } from './shared';
 
@@ -55,7 +56,7 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
     const handleRestore = async (item: T) => {
         setRestoring(item.id);
         try {
-            await apiFetch(restoreUrl(item.id), { method: 'PATCH', toast: 'Restored' });
+            await apiFetch(restoreUrl(item.id), { method: 'PATCH', toast: ledgerCopy.archive.restored });
             setItems(dropById(item.id));
         } catch (err: unknown) {
             setError(errorMessage(err));
@@ -68,7 +69,7 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
         setHardDeleting(item.id);
         setHardDeleteTarget(null);
         try {
-            await apiFetch(forceUrl(item.id), { method: 'DELETE', toast: 'Permanently deleted' });
+            await apiFetch(forceUrl(item.id), { method: 'DELETE', toast: ledgerCopy.archive.permanentlyDeleted });
             setItems(dropById(item.id));
         } catch (err: unknown) {
             if (isNotFound(err)) {
@@ -90,8 +91,8 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
             )}
             {hardDeleteTarget && (
                 <ConfirmModal
-                    message={`Permanently delete "${hardDeleteTarget.name}"? This cannot be undone.`}
-                    confirmLabel="Delete permanently"
+                    message={ledgerCopy.archive.deletePermanent(hardDeleteTarget.name)}
+                    confirmLabel={ledgerCopy.archive.deletePermanently}
                     confirmVariant="danger"
                     onConfirm={() => handleHardDelete(hardDeleteTarget)}
                     onCancel={() => setHardDeleteTarget(null)}
@@ -119,7 +120,7 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
                                             onClick={() => handleRestore(item)}
                                             className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-50 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
                                         >
-                                            {isRestoring ? 'Restoring…' : 'Restore'}
+                                            {isRestoring ? ledgerCopy.common.restoring : ledgerCopy.common.restore}
                                         </button>
                                         {canHardDelete && (
                                             <button
@@ -128,7 +129,7 @@ export function ArchiveTabPanel<T extends ArchiveItem>({
                                                 onClick={() => setHardDeleteTarget(item)}
                                                 className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-200 disabled:opacity-50 dark:bg-rose-900/30 dark:text-rose-300 dark:hover:bg-rose-900/50"
                                             >
-                                                Delete
+                                                {ledgerCopy.common.delete}
                                             </button>
                                         )}
                                     </div>

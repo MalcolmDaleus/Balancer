@@ -1,9 +1,11 @@
 /**
  * Shared UI primitives and re-exports for the Creator Suite.
  */
+import { ledgerCopy } from '@/config/ledger-copy';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Loader2 } from 'lucide-react';
 import {
     Children,
@@ -144,7 +146,7 @@ export function ListRow({
                 <div
                     className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-[2px] dark:bg-neutral-950/60"
                     role="status"
-                    aria-label="Removing"
+                    aria-label={ledgerCopy.common.removing}
                 >
                     <Loader2 className="h-6 w-6 animate-spin text-violet-400/80 dark:text-violet-300/70" strokeWidth={2.25} />
                 </div>
@@ -185,15 +187,14 @@ export function RowActionBar({ children }: { children: ReactNode }) {
 }
 
 /**
- * Inline "+ Add" button for mobile — sits next to the SubTabBar.
- * Hidden on desktop (form is always visible in the split pane).
+ * "+ Add" button — sits next to the SubTabBar and opens the editor drawer.
  */
-export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; label?: string }) {
+export function AddButton({ onClick, label = ledgerCopy.common.add }: { onClick: () => void; label?: string }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-emerald-700 active:scale-95 md:hidden dark:bg-emerald-700 dark:hover:bg-emerald-600"
+            className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-sm font-semibold whitespace-nowrap text-white shadow-sm hover:bg-emerald-700 active:scale-95 dark:bg-emerald-700 dark:hover:bg-emerald-600"
         >
             + {label}
         </button>
@@ -201,7 +202,17 @@ export function AddButton({ onClick, label = 'Add' }: { onClick: () => void; lab
 }
 
 /** Secondary tab bar (pill style) used inside each main tab */
-export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
+export function SubTabBar({
+    tabs,
+    active,
+    onChange,
+    labels,
+}: {
+    tabs: string[];
+    active: string;
+    onChange: (t: string) => void;
+    labels?: Record<string, string>;
+}) {
     return (
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5" role="tablist">
             {tabs.map((tab) => (
@@ -215,7 +226,7 @@ export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: 
                         active === tab ? 'bg-slate-800 text-white dark:bg-white/10 dark:text-neutral-100' : tabInactiveCls
                     }`}
                 >
-                    {tab}
+                    {labels?.[tab] ?? tab}
                 </button>
             ))}
         </div>
@@ -225,45 +236,43 @@ export function SubTabBar({ tabs, active, onChange }: { tabs: string[]; active: 
 export interface SplitPaneProps {
     list: ReactNode;
     form: ReactNode;
-    /** Mobile sheet: is the form sheet open? */
     sheetOpen?: boolean;
-    /** Mobile sheet: callback to change open state */
     onSheetOpenChange?: (open: boolean) => void;
-    /** Mobile sheet: title shown in the sheet header */
+    onDismiss?: () => void;
     sheetTitle?: string;
 }
 
-/** Split pane: 60 % list + 40 % form on desktop; list-only + bottom sheet on mobile. */
-export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, sheetTitle }: SplitPaneProps) {
+/** Full-width list; add/edit opens a drawer (right on desktop, bottom on mobile). */
+export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, onDismiss, sheetTitle }: SplitPaneProps) {
+    const isMobile = useIsMobile();
+
     return (
         <>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row" data-cs-split>
-                {/* List panel — full width on mobile, 60 % on desktop */}
-                <div className="flex min-h-0 flex-col md:w-[58%]">
-                    <div className="min-h-0 flex-1 overflow-y-auto">{list}</div>
-                </div>
-
-                {/* Desktop form panel — hidden on mobile */}
-                <div
-                    data-cs-form-pane
-                    className="hidden min-h-0 flex-col overflow-hidden border-l border-slate-100 pl-5 md:flex md:w-[42%] dark:border-neutral-800 dark:bg-neutral-950/40"
-                >
-                    {sheetTitle && (
-                        <p className="mb-2 shrink-0 text-sm font-semibold text-slate-600 dark:text-neutral-300">
-                            {sheetTitle}
-                        </p>
-                    )}
-                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">{form}</div>
-                </div>
+            <div className="flex min-h-0 flex-1 flex-col" data-cs-split>
+                <div className="min-h-0 flex-1 overflow-y-auto">{list}</div>
             </div>
 
-            {/* Mobile bottom sheet */}
-            <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
-                <SheetContent side="bottom" className="rounded-t-2xl bg-white md:hidden dark:bg-neutral-900">
-                    <div className="overflow-y-auto px-5 pt-6 pb-8">
-                        {sheetTitle && <p className="mb-4 text-base font-semibold text-slate-800 dark:text-neutral-100">{sheetTitle}</p>}
-                        {form}
-                    </div>
+            <Sheet
+                open={sheetOpen}
+                onOpenChange={(open) => {
+                    onSheetOpenChange?.(open);
+                    if (!open) {
+                        onDismiss?.();
+                    }
+                }}
+            >
+                <SheetContent
+                    side={isMobile ? 'bottom' : 'right'}
+                    className={
+                        isMobile
+                            ? 'max-h-[92dvh] gap-0 overflow-y-auto rounded-t-2xl bg-white p-0 dark:bg-neutral-900'
+                            : 'h-full w-full gap-0 overflow-y-auto bg-white p-0 sm:max-w-lg dark:bg-neutral-900'
+                    }
+                >
+                    <SheetHeader className="border-b border-border/60 px-5 py-4 text-left">
+                        <SheetTitle>{sheetTitle}</SheetTitle>
+                    </SheetHeader>
+                    <div className="overflow-y-auto px-5 py-5" data-cs-form-pane>{form}</div>
                 </SheetContent>
             </Sheet>
         </>
@@ -289,7 +298,7 @@ export function ConfirmModal({
     message,
     onConfirm,
     onCancel,
-    confirmLabel = 'Delete',
+    confirmLabel = ledgerCopy.common.delete,
     confirmVariant = 'danger',
 }: {
     message: string;
@@ -361,7 +370,7 @@ export function ConfirmModal({
                 </p>
                 <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={onCancel} disabled={busy}>
-                        Cancel
+                        {ledgerCopy.common.cancel}
                     </Button>
                     <Button type="button" size="sm" className={`rounded-full text-white ${variantCls}`} onClick={confirm} disabled={busy}>
                         {confirmLabel}
@@ -378,7 +387,7 @@ export function ApiError({ message, onDismiss }: { message: string; onDismiss?: 
         <div className="flex items-start justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" role="alert">
             <span>{message}</span>
             {onDismiss && (
-                <button type="button" onClick={onDismiss} aria-label="Dismiss error" className="ml-2 shrink-0 opacity-60 hover:opacity-100">
+                <button type="button" onClick={onDismiss} aria-label={ledgerCopy.common.dismissError} className="ml-2 shrink-0 opacity-60 hover:opacity-100">
                     ✕
                 </button>
             )}
@@ -413,21 +422,21 @@ export function Field({ label, children, error }: { label: string; children: Rea
 export const inputCls =
     'flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100';
 
-/** Same as inputCls but width fits the content — use for date / month inputs */
+/** Same as inputCls, with native date-picker chrome flattened */
 export const dateCls =
-    'flex h-8 w-auto justify-self-start rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100';
+    'cs-date-input flex h-8 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100';
 
 /** Shared select class */
 export const selectCls = inputCls;
 
 /** Loading row */
 export function LoadingRows() {
-    return <Spinner className="min-h-20 py-4" label="Loading" />;
+    return <Spinner className="min-h-20 py-4" label={ledgerCopy.common.loading} />;
 }
 
 /** Empty row */
 export function EmptyRows({ label }: { label?: string }) {
-    return <p className="py-4 text-center text-sm text-slate-400">{label ?? 'No records found.'}</p>;
+    return <p className="py-4 text-center text-sm text-slate-400">{label ?? ledgerCopy.common.noRecords}</p>;
 }
 
 /** Row button set */
@@ -437,7 +446,7 @@ export function RowActions({
     editDisabled,
     deleteDisabled,
     extra,
-    dangerLabel = 'Delete',
+    dangerLabel = ledgerCopy.common.delete,
     dangerKind = 'delete',
 }: {
     onEdit?: () => void;
@@ -463,7 +472,7 @@ export function RowActions({
                     }}
                     className={editBtnCls}
                 >
-                    Edit
+                    {ledgerCopy.common.edit}
                 </button>
             )}
             {onDelete && (
@@ -489,8 +498,8 @@ export function instrumentDanger(canHardDelete: boolean | undefined): {
     dangerKind: 'delete' | 'archive';
 } {
     return canHardDelete
-        ? { dangerLabel: 'Delete', dangerKind: 'delete' }
-        : { dangerLabel: 'Archive', dangerKind: 'archive' };
+        ? { dangerLabel: ledgerCopy.common.delete, dangerKind: 'delete' }
+        : { dangerLabel: ledgerCopy.common.archive, dangerKind: 'archive' };
 }
 
 export function instrumentRemoveConfirm(
@@ -504,13 +513,13 @@ export function instrumentRemoveConfirm(
 } {
     return canHardDelete
         ? {
-              message: `Permanently delete "${name}"? This cannot be undone.`,
-              confirmLabel: 'Delete',
+              message: ledgerCopy.common.deletePermanent(name),
+              confirmLabel: ledgerCopy.common.delete,
               confirmVariant: 'danger',
           }
         : {
               message: archiveMessage,
-              confirmLabel: 'Archive',
+              confirmLabel: ledgerCopy.common.archive,
               confirmVariant: 'warning',
           };
 }
@@ -550,7 +559,7 @@ export function FormActions({
                     isEdit ? greyBtnFillCls : 'bg-emerald-600 hover:bg-emerald-700'
                 }`}
             >
-                {saving ? 'Saving…' : (saveLabel ?? (isEdit ? 'Save Changes' : 'Add'))}
+                {saving ? ledgerCopy.common.saving : (saveLabel ?? (isEdit ? ledgerCopy.common.saveChanges : ledgerCopy.common.add))}
             </button>
             {isEdit && (
                 <button
@@ -558,7 +567,7 @@ export function FormActions({
                     onClick={onCancel}
                     className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-500 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
                 >
-                    Cancel
+                    {ledgerCopy.common.cancel}
                 </button>
             )}
         </div>

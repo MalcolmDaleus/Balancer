@@ -8,6 +8,8 @@ import { LockedMonthsProvider } from './locked-months';
 import { PurchasesTab } from './purchases-tab';
 import { RecurringTab } from './recurring-tab';
 import { SavingsTab } from './savings-tab';
+import { dashboardCopy } from '@/config/dashboard-copy';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { tabInactiveCls, tintChip, tintSectionPill } from './shared';
 
 const MAIN_TABS = ['Feed', 'Income', 'Purchases', 'Debts', 'Recurring', 'Savings'] as const;
@@ -59,7 +61,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
                 data-cs-header
                 className="shrink-0 border-b border-slate-100 px-5 pt-5 pb-4 dark:border-neutral-800"
             >
-                <h2 className="mb-3 text-base font-semibold text-slate-900 dark:text-neutral-50">Ledger</h2>
+                <h2 className="mb-3 text-base font-semibold text-slate-900 dark:text-neutral-50">{dashboardCopy.ledger.title}</h2>
 
                 <div className="flex flex-wrap gap-1.5">
                     {MAIN_TABS.map((tab) => (
@@ -75,7 +77,7 @@ export default function CreatorSuiteCard({ className = '' }: Props) {
                             <span
                                 className={`h-1.5 w-1.5 rounded-full ${activeTab === tab ? TAB_COLORS[tab] : 'bg-slate-300 dark:bg-neutral-500'}`}
                             />
-                            {tab}
+                            {ledgerCopy.tabs[tab]}
                         </button>
                     ))}
                 </div>

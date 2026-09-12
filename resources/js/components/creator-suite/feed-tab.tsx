@@ -1,4 +1,5 @@
 import { apiFetch, errorMessage } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { majorInputToCents } from '@/lib/money';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import type { LedgerFact, LedgerFeed } from '@/types/api';
@@ -7,13 +8,7 @@ import { blankFactFilter, FactFilterBar, type FactFilterValues } from './fact-fi
 import { focusFromFact, type LedgerFocus } from './ledger-focus';
 import { EmptyRows, ListRow, ListStack, LoadingRows, rowAmountCls, rowDetailCls, rowTitleCls, tintChip, tintSectionPill } from './shared';
 
-const DOMAIN_LABEL: Record<LedgerFact['domain'], string> = {
-    income: 'Income',
-    spending: 'Purchase',
-    recurring: 'Recurring',
-    debt: 'Debt',
-    savings: 'Savings',
-};
+const DOMAIN_LABEL: Record<LedgerFact['domain'], string> = { ...ledgerCopy.feed.domain };
 
 const DOMAIN_CHIP: Record<LedgerFact['domain'], string> = {
     income: tintChip.emerald,
@@ -24,11 +19,11 @@ const DOMAIN_CHIP: Record<LedgerFact['domain'], string> = {
 };
 
 const DOMAIN_OPTIONS = [
-    { value: 'spending', label: 'Purchases' },
-    { value: 'income', label: 'Income' },
-    { value: 'recurring', label: 'Recurring' },
-    { value: 'debt', label: 'Debts' },
-    { value: 'savings', label: 'Savings' },
+    { value: 'spending', label: ledgerCopy.feed.filter.spending },
+    { value: 'income', label: ledgerCopy.feed.filter.income },
+    { value: 'recurring', label: ledgerCopy.feed.filter.recurring },
+    { value: 'debt', label: ledgerCopy.feed.filter.debt },
+    { value: 'savings', label: ledgerCopy.feed.filter.savings },
 ];
 
 export function FeedTab({
@@ -101,7 +96,7 @@ export function FeedTab({
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <ListStack>
                     {loading && !facts.length && <LoadingRows />}
-                    {!loading && !visibleFacts.length && <EmptyRows label="No facts in this range." />}
+                    {!loading && !visibleFacts.length && <EmptyRows label={ledgerCopy.feed.empty} />}
                     {visibleFacts.map((fact) => {
                         const signed = fact.direction === 'out' ? -fact.amount_cents : fact.amount_cents;
                         const title = fact.label?.trim() || DOMAIN_LABEL[fact.domain];

@@ -1,3 +1,4 @@
+import { ledgerCopy } from '@/config/ledger-copy';
 import { useEffect, useRef, useState } from 'react';
 import { AddButton, SubTabBar, TabToolbar } from './shared';
 import { RecurringArchivePanel } from './recurring/archive-panel';
@@ -31,7 +32,7 @@ export function RecurringTab({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
-                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} labels={ledgerCopy.recurring.sub} />
                 {showAdd && <AddButton onClick={() => addRef.current?.()} />}
             </TabToolbar>
             {sub === 'Streams' && <RecurringStreamsPanel addRef={addRef} active={active} />}

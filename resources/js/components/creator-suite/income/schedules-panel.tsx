@@ -1,7 +1,7 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { RegularIncomeSchedule, RegularIncomeScheduleVersion } from '@/types/api';
 import { MutableRefObject, useEffect, useState } from 'react';
 import {
@@ -53,8 +53,8 @@ function toggleMeta(s: RegularIncomeSchedule): {
         return {
             switchOn: s.pending_active,
             badge: s.pending_active
-                ? { label: 'Resume pending', color: 'teal' }
-                : { label: 'Pause pending', color: 'amber' },
+                ? { label: ledgerCopy.income.resumePending, color: 'teal' }
+                : { label: ledgerCopy.income.pausePending, color: 'amber' },
         };
     }
     return { switchOn: s.active, badge: null };
@@ -63,7 +63,6 @@ function toggleMeta(s: RegularIncomeSchedule): {
 type ToggleAction = { schedule: RegularIncomeSchedule; isCancel: boolean };
 
 export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const [schedules, setSchedules] = useState<RegularIncomeSchedule[]>([]);
     const [loading, setLoading] = useState(false);
@@ -104,7 +103,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         setForm({ name: s.name, description: s.description ?? '' });
         setShowVersionUpdate(false);
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     const reset = () => {
@@ -160,7 +159,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                 await apiFetch(`/api/v1/income/schedules/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 const body = {
@@ -171,7 +170,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                 await apiFetch('/api/v1/income/schedules', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Schedule added',
+                    toast: ledgerCopy.income.scheduleAdded,
                 });
             }
             reset();
@@ -192,7 +191,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
             await apiFetch(`/api/v1/income/schedules/${selected.id}/update-amount`, {
                 method: 'POST',
                 body: JSON.stringify(buildVersionPayload(versionForm)),
-                toast: 'Amount updated',
+                toast: ledgerCopy.income.amountUpdated,
             });
             setShowVersionUpdate(false);
             setVersionForm(blankIncomeVersionForm(todayStr()));
@@ -211,7 +210,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         try {
             await apiFetch(hard ? `/api/v1/income/schedules/${s.id}/force` : `/api/v1/income/schedules/${s.id}`, {
                 method: 'DELETE',
-                toast: hard ? 'Deleted' : 'Archived',
+                toast: hard ? ledgerCopy.common.deleted : ledgerCopy.common.archived,
             });
             setSchedules(dropById(s.id));
             if (selected?.id === s.id) reset();
@@ -233,7 +232,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
         try {
             const res = await apiFetch<RegularIncomeSchedule | { data: RegularIncomeSchedule }>(
                 `/api/v1/income/schedules/${s.id}/toggle`,
-                { method: 'PATCH', toast: 'Updated' },
+                { method: 'PATCH', toast: ledgerCopy.common.updated },
             );
             const updated = unwrapData(res);
             setSchedules((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
@@ -271,25 +270,25 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                             </p>
                             {version.day_of_month != null && usesDayOfMonth(version.frequency) && (
                                 <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
-                                    Day {version.day_of_month} of each period
+                                    {ledgerCopy.income.dayOfPeriod(version.day_of_month)}
                                 </p>
                             )}
                             {version.day_of_week != null && usesDayOfWeek(version.frequency) && (
                                 <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
-                                    Every {DAY_NAMES[version.day_of_week]}
+                                    {ledgerCopy.income.everyDay(DAY_NAMES[version.day_of_week])}
                                 </p>
                             )}
                         </div>
                         <div className="flex items-center gap-2.5">
                             <div className="text-right">
                                 <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">
-                                    {meta?.badge ? meta.badge.label : selected.active ? 'Active' : 'Paused'}
+                                    {meta?.badge ? meta.badge.label : selected.active ? ledgerCopy.common.active : ledgerCopy.common.paused}
                                 </p>
                             </div>
                             <ToggleSwitch
                                 on={meta?.switchOn ?? false}
                                 disabled={toggling}
-                                label={selected.active ? 'Pause schedule' : 'Resume schedule'}
+                                label={selected.active ? ledgerCopy.income.pauseSchedule : ledgerCopy.income.resumeSchedule}
                                 onClick={(e) => selected && requestToggle(selected, e)}
                             />
                         </div>
@@ -299,7 +298,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
 
             <form onSubmit={handleSubmit} className="space-y-3">
                 {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-                <Field label="Name">
+                <Field label={ledgerCopy.common.name}>
                     <input
                         type="text"
                         required
@@ -309,7 +308,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     />
                 </Field>
-                <Field label="Description (optional)">
+                <Field label={ledgerCopy.common.descriptionOptional}>
                     <input
                         type="text"
                         maxLength={255}
@@ -320,8 +319,8 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                 </Field>
                 {!selected && (
                     <div data-cs-form-span className="rounded-xl border border-slate-200 p-3 dark:border-neutral-700">
-                        <p className="mb-3 text-sm font-semibold text-slate-700 dark:text-neutral-200">Initial schedule</p>
-                        <IncomeVersionScheduleFields versionForm={versionForm} setVersionForm={setVersionForm} startDateLabel="Starts on" />
+                        <p className="mb-3 text-sm font-semibold text-slate-700 dark:text-neutral-200">{ledgerCopy.income.initialSchedule}</p>
+                        <IncomeVersionScheduleFields versionForm={versionForm} setVersionForm={setVersionForm} startDateLabel={ledgerCopy.income.startsOn} />
                     </div>
                 )}
                 <FormActions isEdit={!!selected} saving={saving} onCancel={reset} />
@@ -330,7 +329,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
             {selected && (
                 <>
                     {selected.versions && (
-                        <ScheduleHistory title="Version History" rows={selected.versions} formatFreq={fmtIncomeFreq} />
+                        <ScheduleHistory title={ledgerCopy.income.versionHistory} rows={selected.versions} formatFreq={fmtIncomeFreq} />
                     )}
                     <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
                         {!showVersionUpdate ? (
@@ -350,15 +349,15 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                     setShowVersionUpdate(true);
                                 }}
                             >
-                                Update amount / schedule
+                                {ledgerCopy.income.updateAmountSchedule}
                             </button>
                         ) : (
                             <form onSubmit={handleVersionUpdate} className="space-y-3">
-                                <p className="text-sm font-semibold text-slate-700 dark:text-neutral-200">New version</p>
+                                <p className="text-sm font-semibold text-slate-700 dark:text-neutral-200">{ledgerCopy.income.newVersion}</p>
                                 <IncomeVersionScheduleFields versionForm={versionForm} setVersionForm={setVersionForm} />
                                 <div className="flex gap-2">
                                     <button type="submit" disabled={savingVersion} className={secondaryBtnCls}>
-                                        {savingVersion ? 'Saving…' : 'Save version'}
+                                        {savingVersion ? ledgerCopy.common.saving : ledgerCopy.income.saveVersion}
                                     </button>
                                     <button
                                         type="button"
@@ -368,7 +367,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                             setVersionForm(blankIncomeVersionForm(todayStr()));
                                         }}
                                     >
-                                        Cancel
+                                        {ledgerCopy.common.cancel}
                                     </button>
                                 </div>
                             </form>
@@ -385,8 +384,8 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                 <ConfirmModal
                     message={
                         toggleAction.schedule.active
-                            ? `Pause "${toggleAction.schedule.name}" after its next occurrence? Existing entries stay.`
-                            : `Resume "${toggleAction.schedule.name}" after its next occurrence?`
+                            ? ledgerCopy.income.pauseAfterOccurrence(toggleAction.schedule.name)
+                            : ledgerCopy.income.resumeAfterOccurrence(toggleAction.schedule.name)
                     }
                     onConfirm={() => execToggle(toggleAction.schedule)}
                     onCancel={() => setToggleAction(null)}
@@ -397,7 +396,7 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                     {...instrumentRemoveConfirm(
                         removeTarget.name,
                         removeTarget.can_hard_delete,
-                        `Archive "${removeTarget.name}"? Generated entries remain; no new occurrences will be created.`,
+                        ledgerCopy.income.archiveSchedule(removeTarget.name),
                     )}
                     onConfirm={() => handleRemove(removeTarget)}
                     onCancel={() => setRemoveTarget(null)}
@@ -406,17 +405,18 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Schedule' : 'New Schedule'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.income.editSchedule : ledgerCopy.income.newSchedule}
                 list={
                     <ListStack>
                         {loading && !schedules.length && <LoadingRows />}
-                        {!loading && !schedules.length && <EmptyRows label="No regular income schedules yet." />}
+                        {!loading && !schedules.length && <EmptyRows label={ledgerCopy.income.noSchedules} />}
                         {schedules.map((s) => {
                             const v = currentVersion(s);
                             const m = toggleMeta(s);
                             const busy = removingId === s.id;
                             return (
-                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy}>
+                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy} onClick={() => selectRow(s)}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{s.name}</p>
@@ -429,12 +429,12 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                                             <div className="flex items-center gap-1.5">
                                                 {m.badge && <StatusChip label={m.badge.label} color={m.badge.color} />}
-                                                {!s.active && !m.badge && <StatusChip label="Paused" color="amber" />}
+                                                {!s.active && !m.badge && <StatusChip label={ledgerCopy.common.paused} color="amber" />}
                                                 <ToggleSwitch
                                                     on={m.switchOn}
                                                     size="sm"
                                                     disabled={toggling || busy}
-                                                    label={s.active ? 'Pause schedule' : 'Resume schedule'}
+                                                    label={s.active ? ledgerCopy.income.pauseSchedule : ledgerCopy.income.resumeSchedule}
                                                     onClick={(e) => requestToggle(s, e)}
                                                 />
                                             </div>

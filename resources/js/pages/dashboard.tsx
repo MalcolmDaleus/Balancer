@@ -3,6 +3,7 @@ import BalanceSheetHistoryCard from '@/components/balance-sheet-history-card';
 import BudgetCard from '@/components/budget-card';
 import DashboardHeader from '@/components/dashboard-header';
 import CreatorSuiteCard from '@/components/creator-suite';
+import StandingCard from '@/components/standing-card';
 import StatisticsCard from '@/components/statistics-card';
 import { tintChip, tintSectionPill, innerCardCls } from '@/components/creator-suite/shared';
 import BugReportDrawer from '@/components/bug-report/bug-report-drawer';
@@ -13,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { BugReportProvider, useBugReport } from '@/contexts/bug-report';
 import { FinanceDataProvider, useFinanceData } from '@/contexts/finance-data';
 import { SettingsProvider, useSettings } from '@/contexts/settings';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useDashboardDensity } from '@/hooks/use-dashboard-density';
 import { type BalanceSheetExpanded } from '@/types/api';
@@ -76,7 +78,7 @@ function IncomeBalanceContent({
                                         onClick={() => toggleSchedule(key)}
                                         className="text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
                                     >
-                                        Show {hiddenCount} more
+                                        {dashboardCopy.balanceSheet.showMore(hiddenCount)}
                                     </button>
                                 )}
                                 {expanded && schedule.entries.length > VISIBLE_REGULAR_ENTRIES && (
@@ -86,7 +88,7 @@ function IncomeBalanceContent({
                                         onClick={() => toggleSchedule(key)}
                                         className="text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-neutral-400"
                                     >
-                                        Show less
+                                        {dashboardCopy.balanceSheet.showLess}
                                     </button>
                                 )}
                             </div>
@@ -96,7 +98,7 @@ function IncomeBalanceContent({
             })}
             {income.by_type.irregular.total_cents > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
-                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Irregular</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">{dashboardCopy.balanceSheet.irregular}</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
                         {signed(income.by_type.irregular.total_cents, '+')}
                     </span>
@@ -104,7 +106,7 @@ function IncomeBalanceContent({
             )}
             {income.by_type.refund.total_cents > 0 && (
                 <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 dark:bg-neutral-950/50">
-                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">Refunds</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-neutral-200">{dashboardCopy.balanceSheet.refunds}</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-neutral-100">
                         {signed(income.by_type.refund.total_cents, '+')}
                     </span>
@@ -114,24 +116,23 @@ function IncomeBalanceContent({
     );
 }
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 function fmtRecurringEntryLabel(
     entry: BalanceSheetExpanded['recurring_payments']['streams'][number]['entries'][number],
 ) {
+    const t = dashboardCopy.balanceSheet;
     if (entry.frequency === 'yearly') {
-        const base = entry.day_of_month ? `Annual · day ${entry.day_of_month}` : 'Annual';
-        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+        const base = entry.day_of_month ? t.annualDay(entry.day_of_month) : t.annual;
+        return entry.occurrence_count > 1 ? t.times(base, entry.occurrence_count) : base;
     }
     if (entry.frequency === 'weekly' && entry.day_of_week != null) {
-        const base = `Weekly · ${DAY_NAMES[entry.day_of_week]}`;
-        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+        const base = t.weekly(t.dayNames[entry.day_of_week]);
+        return entry.occurrence_count > 1 ? t.times(base, entry.occurrence_count) : base;
     }
     if (entry.frequency === 'monthly') {
-        const base = entry.day_of_month ? `Monthly · day ${entry.day_of_month}` : 'Monthly';
-        return entry.occurrence_count > 1 ? `${base} × ${entry.occurrence_count}` : base;
+        const base = entry.day_of_month ? t.monthlyDay(entry.day_of_month) : t.monthly;
+        return entry.occurrence_count > 1 ? t.times(base, entry.occurrence_count) : base;
     }
-    return entry.occurrence_count > 1 ? `${entry.frequency} × ${entry.occurrence_count}` : entry.frequency;
+    return entry.occurrence_count > 1 ? t.times(entry.frequency, entry.occurrence_count) : entry.frequency;
 }
 
 function RecurringStreamList({
@@ -176,7 +177,7 @@ function RecurringStreamList({
                                 <div className="shrink-0 text-right">
                                     {entry.occurrence_count > 1 && (
                                         <span className="mr-2 text-xs text-slate-400 dark:text-neutral-500">
-                                            {signed(entry.amount_cents, '-')} each
+                                            {signed(entry.amount_cents, '-')} {dashboardCopy.balanceSheet.each}
                                         </span>
                                     )}
                                     <span className="font-medium text-slate-700 dark:text-neutral-200">
@@ -207,25 +208,25 @@ function RecurringBalanceContent({
         <div className="space-y-4">
             <div>
                 <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">
-                    <span>Charged</span>
+                    <span>{dashboardCopy.balanceSheet.charged}</span>
                     <span>{signed(chargedTotal, '-')}</span>
                 </div>
                 <RecurringStreamList
                     streams={recurring.streams}
                     signed={signed}
-                    emptyLabel="No charges yet this month"
+                    emptyLabel={dashboardCopy.balanceSheet.noChargesYet}
                 />
             </div>
             {(projectedTotal > 0 || projected.length > 0) && (
                 <div>
                     <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">
-                        <span>Projected remaining</span>
+                        <span>{dashboardCopy.balanceSheet.projectedRemaining}</span>
                         <span>{signed(projectedTotal, '-')}</span>
                     </div>
                     <RecurringStreamList
                         streams={projected}
                         signed={signed}
-                        emptyLabel="No remaining scheduled charges"
+                        emptyLabel={dashboardCopy.balanceSheet.noRemainingCharges}
                     />
                 </div>
             )}
@@ -254,7 +255,7 @@ function ModuleCard({
                 {subtitle && <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">{subtitle}</p>}
             </div>
             <div className="flex flex-1 items-center justify-center text-sm text-slate-300 dark:text-neutral-500">
-                {children ?? 'Coming soon'}
+                {children ?? dashboardCopy.comingSoon}
             </div>
         </div>
     );
@@ -262,13 +263,14 @@ function ModuleCard({
 
 // ─── Mobile module list ───────────────────────────────────────────────────────
 const MODULES = [
-    { id: 'balance-sheet', title: 'Balance Sheet', subtitle: 'Monthly financial overview' },
-    { id: 'budget', title: 'Budget', subtitle: 'Left to spend this month' },
-    { id: 'creator-suite', title: 'Ledger', subtitle: 'Facts you typed this month' },
-    { id: 'statistics', title: 'Statistics', subtitle: 'Trends and insights' },
-    { id: 'sheet-history', title: 'Past Balance Sheets', subtitle: 'Closed monthly snapshots' },
-    { id: 'settings', title: 'Settings', subtitle: 'Account preferences' },
-    { id: 'bug-report', title: 'Report a problem', subtitle: 'Tell us what went wrong' },
+    { id: 'balance-sheet', ...dashboardCopy.modules.balanceSheet },
+    { id: 'budget', ...dashboardCopy.modules.budget },
+    { id: 'creator-suite', ...dashboardCopy.modules.ledger },
+    { id: 'statistics', ...dashboardCopy.modules.statistics },
+    { id: 'sheet-history', ...dashboardCopy.modules.history },
+    { id: 'standing', ...dashboardCopy.modules.standing },
+    { id: 'settings', ...dashboardCopy.modules.settings },
+    { id: 'bug-report', ...dashboardCopy.modules.bugReport },
 ];
 
 function BalanceSheetCard({ className = '' }: { className?: string }) {
@@ -343,27 +345,27 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         ? [
               {
                   key: 'income',
-                  label: 'Income',
+                  label: dashboardCopy.balanceSheet.income,
                   pillClass: tintSectionPill.emerald,
                   amountNode: sectionAmount(
                       signed(data.income.total_cents, '+'),
                       hasIncome
-                          ? `${regularScheduleCount} schedule${regularScheduleCount === 1 ? '' : 's'}`
-                          : 'No entries',
+                          ? dashboardCopy.balanceSheet.schedules(regularScheduleCount)
+                          : dashboardCopy.balanceSheet.noEntries,
                   ),
                   content: hasIncome ? (
                       <IncomeBalanceContent income={data.income} signed={signed} />
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.balanceSheet.noEntriesThisMonth}</p>
                   ),
               },
               {
                   key: 'debt',
-                  label: 'Debt',
+                  label: dashboardCopy.balanceSheet.debt,
                   pillClass: tintSectionPill.red,
                   amountNode: sectionAmount(
-                      <>Paid {signed(data.debt.total_cents, '-')}</>,
-                      <>Balance {amount(data.debt.balance_total_cents)}</>,
+                      <>{dashboardCopy.balanceSheet.paid} {signed(data.debt.total_cents, '-')}</>,
+                      <>{dashboardCopy.balanceSheet.balance} {amount(data.debt.balance_total_cents)}</>,
                       'text-base font-semibold text-rose-500 dark:text-rose-400',
                   ),
                   content: data.debt.debts.length ? (
@@ -374,30 +376,30 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                       <span className="truncate text-base font-medium text-slate-800 dark:text-neutral-100">{debt.description}</span>
                                       {(debt.is_forgiven || debt.is_settled) && (
                                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(debt)}`}>
-                                              {debt.is_forgiven ? 'Forgiven' : 'Settled'}
+                                              {debt.is_forgiven ? dashboardCopy.balanceSheet.forgiven : dashboardCopy.balanceSheet.settled}
                                           </span>
                                       )}
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                      <span className="font-medium text-rose-500 dark:text-rose-400">Paid {signed(debt.total_paid_in_period_cents, '-')}</span>
-                                      <span className="text-slate-600 dark:text-neutral-200">Remaining {amount(debt.remaining_cents)}</span>
+                                      <span className="font-medium text-rose-500 dark:text-rose-400">{dashboardCopy.balanceSheet.paid} {signed(debt.total_paid_in_period_cents, '-')}</span>
+                                      <span className="text-slate-600 dark:text-neutral-200">{dashboardCopy.balanceSheet.remaining} {amount(debt.remaining_cents)}</span>
                                   </div>
                               </div>
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.balanceSheet.noEntriesThisMonth}</p>
                   ),
               },
               {
                   key: 'spending',
-                  label: 'Purchases',
+                  label: dashboardCopy.balanceSheet.purchases,
                   pillClass: tintSectionPill.yellow,
                   amountNode: sectionAmount(
                       signed(data.spending.total_cents, '-'),
                       purchaseItemCount
-                          ? `${purchaseItemCount} item${purchaseItemCount === 1 ? '' : 's'}`
-                          : 'No entries',
+                          ? dashboardCopy.balanceSheet.items(purchaseItemCount)
+                          : dashboardCopy.balanceSheet.noEntries,
                   ),
                   content: data.spending.categories.length ? (
                       <div className="space-y-2">
@@ -411,21 +413,21 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                           ))}
                       </div>
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.balanceSheet.noEntriesThisMonth}</p>
                   ),
               },
               {
                   key: 'recurring',
-                  label: 'Recurring',
+                  label: dashboardCopy.balanceSheet.recurring,
                   pillClass: tintSectionPill.orange,
                   amountNode: sectionAmount(
                       signed(data.recurring_payments.total_cents, '-'),
                       (data.recurring_payments.streams.length || (data.recurring_payments.projected?.length ?? 0))
-                          ? `${data.recurring_payments.streams.length} charged` +
+                          ? dashboardCopy.balanceSheet.chargedCount(data.recurring_payments.streams.length) +
                             ((data.recurring_payments.projected_total_cents ?? 0) > 0
-                                ? ` · ${signed(data.recurring_payments.projected_total_cents ?? 0, '-')} projected`
+                                ? dashboardCopy.balanceSheet.projectedAmount(signed(data.recurring_payments.projected_total_cents ?? 0, '-'))
                                 : '')
-                          : 'No entries',
+                          : dashboardCopy.balanceSheet.noEntries,
                   ),
                   content: (
                       data.recurring_payments.streams.length ||
@@ -433,21 +435,21 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                   ) ? (
                       <RecurringBalanceContent recurring={data.recurring_payments} signed={signed} />
                   ) : (
-                      <p className="text-sm text-slate-500 dark:text-neutral-200">No charges this month</p>
+                      <p className="text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.balanceSheet.noChargesThisMonth}</p>
                   ),
               },
               {
                   key: 'savings',
-                  label: 'Savings',
+                  label: dashboardCopy.balanceSheet.savings,
                   pillClass: tintSectionPill.sky,
                   amountNode: sectionAmount(
                       amount(data.savings.grand_total_cents),
-                      <>This month {amount(data.savings.monthly_total_cents)}</>,
+                      <>{dashboardCopy.balanceSheet.thisMonth} {amount(data.savings.monthly_total_cents)}</>,
                   ),
                   content: (
                       <div className="space-y-2">
                           <div className="flex items-center justify-between rounded-lg bg-slate-100/80 px-3 py-2.5 text-sm dark:bg-neutral-950/50">
-                              <span className="text-slate-700 dark:text-neutral-200">This month</span>
+                              <span className="text-slate-700 dark:text-neutral-200">{dashboardCopy.balanceSheet.thisMonth}</span>
                               <div className="flex items-center gap-2">
                                   {data.savings.monthly_deposits_cents > 0 && (
                                       <span className="text-emerald-600 dark:text-emerald-400">+{amount(data.savings.monthly_deposits_cents)}</span>
@@ -463,7 +465,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                   <div key={row.id} className="flex items-center justify-between text-sm text-slate-600 dark:text-neutral-200">
                                       <div className="flex min-w-0 items-center gap-2">
                                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${row.type === 'deposit' ? tintChip.emerald : tintChip.rose}`}>
-                                              {row.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                                              {row.type === 'deposit' ? dashboardCopy.balanceSheet.deposit : dashboardCopy.balanceSheet.withdrawal}
                                           </span>
                                           {row.notes && <span className="truncate">{row.notes}</span>}
                                       </div>
@@ -473,7 +475,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
                                   </div>
                               ))
                           ) : (
-                              <p className="text-sm text-slate-500 dark:text-neutral-200">No entries this month</p>
+                              <p className="text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.balanceSheet.noEntriesThisMonth}</p>
                           )}
                       </div>
                   ),
@@ -485,21 +487,14 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
         <div className={`flex flex-col overflow-hidden rounded-2xl bg-white p-5 shadow-[0_4px_32px_rgba(0,0,0,0.08)] dark:bg-neutral-900 dark:shadow-[0_4px_40px_rgba(0,0,0,0.45)] ${className}`}>
             <div className="mb-4 flex items-start justify-between gap-2">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Balance Sheet</h2>
-                    <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{data?.month ?? 'Loading month...'}</p>
-                    {data?.wallet && (
-                        <p className="mt-2 text-sm tabular-nums text-slate-600 dark:text-neutral-300">
-                            Available cash {amount(data.wallet.available_cash_cents)}
-                            <span className="mx-1.5 text-slate-300 dark:text-neutral-600">·</span>
-                            Savings {amount(data.wallet.savings_total_cents)}
-                        </p>
-                    )}
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{dashboardCopy.balanceSheet.title}</h2>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{data?.month ?? dashboardCopy.balanceSheet.loadingMonth}</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => void loadBalanceSheet(true)}
                     disabled={isLoading || isRefreshing}
-                    aria-label="Refresh balance sheet"
+                    aria-label={dashboardCopy.balanceSheet.refresh}
                     className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                 >
                     <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -507,7 +502,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                {isLoading && <Spinner label="Loading balance sheet" />}
+                {isLoading && <Spinner label={dashboardCopy.balanceSheet.loading} />}
 
                 {!isLoading && error && !data && (
                     <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
@@ -544,7 +539,7 @@ function BalanceSheetCard({ className = '' }: { className?: string }) {
 
             <div className="mt-4 border-t border-slate-200 pt-4 dark:border-neutral-800">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-neutral-200">Roll over</span>
+                    <span className="text-sm font-semibold uppercase tracking-wide text-slate-600 dark:text-neutral-200">{dashboardCopy.balanceSheet.rollOver}</span>
                     <span className="text-sm font-semibold text-slate-900 dark:text-neutral-100">{amount(data?.roll_over.total_cents ?? 0)}</span>
                 </div>
             </div>
@@ -620,6 +615,7 @@ function DashboardShell() {
         if (id === 'creator-suite') return <CreatorSuiteCard className={className} />;
         if (id === 'statistics') return <StatisticsCard className={className} />;
         if (id === 'sheet-history') return <BalanceSheetHistoryCard className={className} />;
+        if (id === 'standing') return <StandingCard className={className} />;
         if (id === 'settings') {
             return <SettingsModuleCard title={title} subtitle={subtitle} className={className} />;
         }
@@ -674,7 +670,7 @@ function DashboardShell() {
 
     return (
         <>
-            <Head title="Dashboard" />
+            <Head title={dashboardCopy.headTitle} />
             <DashboardHeader />
             <SettingsDrawer />
             <BugReportDrawer />
@@ -701,7 +697,7 @@ function DashboardShell() {
                             <button
                                 key={i}
                                 onClick={() => scrollToSlide(i)}
-                                aria-label={`Go to slide ${i + 1}`}
+                                aria-label={dashboardCopy.goToSlide(i + 1)}
                                 className={`h-2 rounded-full transition-all duration-300 ${
                                     i === activeIndex
                                         ? 'w-6 bg-slate-700 dark:bg-neutral-200'
@@ -716,7 +712,7 @@ function DashboardShell() {
                 <div className={`hidden md:block ${compact ? 'p-4 lg:p-5' : 'p-7 lg:p-10'}`}>
                     {compact ? (
                         <div
-                            data-density="compact"
+                            data-dashboard
                             className="mx-auto grid max-w-screen-xl grid-cols-[repeat(11,minmax(0,1fr))] gap-3"
                         >
                             <StatisticsCard className="col-span-5 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
@@ -724,16 +720,18 @@ function DashboardShell() {
                             <BudgetCard className="col-span-3 h-[calc((100dvh-7.5rem)*0.7)]" />
 
                             <BalanceSheetHistoryCard className="col-span-3 min-h-0 h-[calc((100dvh-7.5rem)*0.7)]" />
-                            <CreatorSuiteCard className="col-span-8 h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <CreatorSuiteCard className="col-span-5 h-[calc((100dvh-7.5rem)*0.7)]" />
+                            <StandingCard className="col-span-3 h-[calc((100dvh-7.5rem)*0.7)]" />
                         </div>
                     ) : (
-                        <div className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
+                        <div data-dashboard className="mx-auto grid max-w-screen-xl grid-cols-12 gap-6">
                             <StatisticsCard className="col-span-6 min-h-[32rem]" />
                             <BudgetCard className="col-span-3 h-[32rem]" />
                             <BalanceSheetCard className="col-span-3 h-[32rem]" />
 
-                            <BalanceSheetHistoryCard className="col-span-4 h-[42rem] min-h-0" />
-                            <CreatorSuiteCard className="col-span-8 h-[42rem]" />
+                            <BalanceSheetHistoryCard className="col-span-3 h-[42rem] min-h-0" />
+                            <CreatorSuiteCard className="col-span-6 h-[42rem]" />
+                            <StandingCard className="col-span-3 h-[42rem]" />
                         </div>
                     )}
                 </div>

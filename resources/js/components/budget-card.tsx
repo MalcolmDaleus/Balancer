@@ -1,5 +1,6 @@
 import { apiFetch, errorMessage } from '@/api/client';
 import BudgetEditSheet from '@/components/budget-edit-sheet';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { greyBtnFillCls } from '@/components/creator-suite/shared';
 import { Spinner } from '@/components/ui/spinner';
 import { useFinanceData } from '@/contexts/finance-data';
@@ -93,7 +94,8 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
 
     const disc = data?.discretionary;
     const over = (disc?.left_cents ?? 0) < 0;
-    const heroLabel = over ? 'Over by' : 'Left to spend';
+    const t = dashboardCopy.budget;
+    const heroLabel = over ? t.overBy : t.leftToSpend;
     const heroValue = disc ? fromCents(Math.abs(disc.left_cents)) : '';
     const heroTone = disc ? toneFor(disc.left_cents, disc.plan_cents, disc.actual_cents) : '';
 
@@ -103,14 +105,14 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
         >
             <div className="mb-3 flex shrink-0 items-start justify-between gap-2">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Budget</h2>
-                    <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">What you meant to spend</p>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{t.title}</h2>
+                    <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">{t.subtitle}</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => void load(true)}
                     className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    aria-label="Refresh budget"
+                    aria-label={t.refresh}
                 >
                     <RefreshCw className={`h-4 w-4 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
                 </button>
@@ -118,16 +120,16 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
 
             <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-                {!error && isLoading && !data && <Spinner label="Loading budget" />}
+                {!error && isLoading && !data && <Spinner label={t.loading} />}
                 {!error && data && !data.has_plan && (
                     <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-                        <p className="text-sm text-slate-500 dark:text-neutral-400">No spending plan this month.</p>
+                        <p className="text-sm text-slate-500 dark:text-neutral-400">{t.noPlan}</p>
                         <button
                             type="button"
                             onClick={() => setEditOpen(true)}
                             className={`mt-3 rounded-full px-4 py-1.5 text-sm font-medium ${greyBtnFillCls}`}
                         >
-                            Set a monthly spending plan
+                            {t.setPlan}
                         </button>
                     </div>
                 )}
@@ -146,23 +148,23 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                                 />
                             </div>
                             <p className="mt-1.5 text-xs text-slate-500 dark:text-neutral-400">
-                                {fromCents(disc.actual_cents)} of {fromCents(disc.plan_cents)}
+                                {t.ofPlan(fromCents(disc.actual_cents), fromCents(disc.plan_cents))}
                                 {' · '}
                                 {data.is_locked
-                                    ? 'Month closed'
+                                    ? t.monthClosed
                                     : data.days_left === 1
-                                      ? '1 day left'
-                                      : `${data.days_left} days left`}
+                                      ? t.dayLeft
+                                      : t.daysLeft(data.days_left)}
                             </p>
                         </div>
 
                         <Collapsible
-                            title="Purchases"
+                            title={t.purchases}
                             open={openBlock === 'purchases'}
                             onToggle={() => setOpenBlock((v) => (v === 'purchases' ? '' : 'purchases'))}
                         >
                             {data.categories.length === 0 && !data.unallocated ? (
-                                <p className="text-sm text-slate-500 dark:text-neutral-400">No category caps.</p>
+                                <p className="text-sm text-slate-500 dark:text-neutral-400">{t.noCategoryCaps}</p>
                             ) : (
                                 <div className="space-y-2.5">
                                     {data.categories.map((row) => (
@@ -177,7 +179,7 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                                     ))}
                                     {data.unallocated && (
                                         <EnvelopeRow
-                                            name={data.categories.length === 0 ? 'Day-to-day' : 'Everything else'}
+                                            name={data.categories.length === 0 ? t.dayToDay : t.everythingElse}
                                             leftCents={data.unallocated.left_cents}
                                             planCents={data.unallocated.plan_cents}
                                             actualCents={data.unallocated.actual_cents}
@@ -189,18 +191,20 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                         </Collapsible>
 
                         <Collapsible
-                            title="Recurring"
+                            title={t.recurring}
                             open={openBlock === 'recurring'}
                             onToggle={() => setOpenBlock((v) => (v === 'recurring' ? '' : 'recurring'))}
                         >
                             <p className="text-sm text-slate-700 dark:text-neutral-200">
-                                Posted {fromCents(data.bills.charged_cents)} of {fromCents(data.bills.plan_cents)}{' '}
-                                planned
-                                {data.bills.auto ? ' (auto)' : ''}
+                                {t.postedOfPlanned(
+                                    fromCents(data.bills.charged_cents),
+                                    fromCents(data.bills.plan_cents),
+                                    data.bills.auto,
+                                )}
                             </p>
                             {data.bills.charged_cents > data.bills.plan_cents && (
                                 <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
-                                    Recurring ran over the plan.
+                                    {t.recurringOver}
                                 </p>
                             )}
                             {data.bills.streams.length > 0 && (
@@ -213,7 +217,7 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                                             </span>
                                             <span className="shrink-0 tabular-nums">
                                                 {s.remaining_cents > 0
-                                                    ? `${fromCents(s.remaining_cents)} left`
+                                                    ? t.left(fromCents(s.remaining_cents))
                                                     : fromCents(s.charged_cents)}
                                             </span>
                                         </li>
@@ -223,7 +227,7 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                         </Collapsible>
 
                         <Collapsible
-                            title="Obligations"
+                            title={t.obligations}
                             open={openBlock === 'debts'}
                             onToggle={() => setOpenBlock((v) => (v === 'debts' ? '' : 'debts'))}
                         >
@@ -236,30 +240,30 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                                                     {debt.name}
                                                 </span>
                                                 <span className="shrink-0 tabular-nums text-slate-700 dark:text-neutral-200">
-                                                    {fromCents(debt.remaining_cents)} left
+                                                    {t.left(fromCents(debt.remaining_cents))}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-slate-500 dark:text-neutral-400">
-                                                of {fromCents(debt.original_cents)}
+                                                {t.ofOriginal(fromCents(debt.original_cents))}
                                                 {debt.paid_this_month_cents > 0
-                                                    ? ` · paid ${fromCents(debt.paid_this_month_cents)} this month`
+                                                    ? t.paidThisMonth(fromCents(debt.paid_this_month_cents))
                                                     : ''}
                                             </p>
                                         </li>
                                     ))}
                                 </ul>
                             ) : (
-                                <p className="text-sm text-slate-500 dark:text-neutral-400">No open debts.</p>
+                                <p className="text-sm text-slate-500 dark:text-neutral-400">{t.noOpenDebts}</p>
                             )}
                             {data.debts.open.length > 1 && (
                                 <p className="mt-2 text-sm font-medium text-slate-800 dark:text-neutral-100">
-                                    Still owed in total {fromCents(data.debts.remaining_cents)}
+                                    {t.stillOwed(fromCents(data.debts.remaining_cents))}
                                 </p>
                             )}
                             <p className="mt-2 text-sm text-slate-600 dark:text-neutral-300">
-                                Paid this month {fromCents(data.debts.paid_cents)}
+                                {t.paidThisMonthTotal(fromCents(data.debts.paid_cents))}
                                 {data.debts.plan_cents !== null
-                                    ? ` of ${fromCents(data.debts.plan_cents)} planned`
+                                    ? t.ofPlanned(fromCents(data.debts.plan_cents))
                                     : ''}
                             </p>
                         </Collapsible>
@@ -275,7 +279,7 @@ export default function BudgetCard({ className = '' }: { className?: string }) {
                         disabled={data.is_locked}
                         className="rounded-full bg-sky-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-sky-600 dark:hover:bg-sky-500"
                     >
-                        {data.is_locked ? 'Plan locked with the month' : 'Edit plan'}
+                        {data.is_locked ? t.planLocked : t.editPlan}
                     </button>
                 </div>
             )}
@@ -311,7 +315,9 @@ function EnvelopeRow({
             <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
                 <span className="truncate text-slate-800 dark:text-neutral-100">{name}</span>
                 <span className={`shrink-0 tabular-nums ${toneFor(leftCents, planCents, actualCents)}`}>
-                    {over ? `over ${fromCents(Math.abs(leftCents))}` : `${fromCents(leftCents)} left`}
+                    {over
+                        ? dashboardCopy.budget.over(fromCents(Math.abs(leftCents)))
+                        : dashboardCopy.budget.left(fromCents(leftCents))}
                 </span>
             </div>
             <MiniBar planCents={planCents} actualCents={actualCents} leftCents={leftCents} />

@@ -1,8 +1,8 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { Debt, DebtCategory, DebtPayment } from '@/types/api';
 import { MutableRefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryTab } from './category-tab';
@@ -42,7 +42,6 @@ import {
 // ---------------------------------------------------------------------------
 
 function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRefObject<(() => void) | null> }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
@@ -89,7 +88,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             notes: d.notes ?? '',
         });
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
     };
     const reset = () => {
         setSelected(null);
@@ -115,7 +114,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.issue_date)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -134,13 +133,13 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                 await apiFetch(`/api/v1/debts/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 await apiFetch('/api/v1/debts', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Debt added',
+                    toast: ledgerCopy.debts.debtAdded,
                 });
             }
             reset();
@@ -158,7 +157,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
         try {
             await apiFetch(`/api/v1/debts/${d.id}`, {
                 method: 'DELETE',
-                toast: d.can_hard_delete ? 'Deleted' : 'Archived',
+                toast: d.can_hard_delete ? ledgerCopy.common.deleted : ledgerCopy.common.archived,
             });
             setDebts(dropById(d.id));
             if (selected?.id === d.id) reset();
@@ -176,7 +175,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
 
     const handleForgive = async (d: Debt) => {
         try {
-            await apiFetch(`/api/v1/debts/${d.id}/forgive`, { method: 'POST', toast: 'Forgiven' });
+            await apiFetch(`/api/v1/debts/${d.id}/forgive`, { method: 'POST', toast: ledgerCopy.debts.forgivenToast });
             setFetched(false);
         } catch (err: unknown) {
             setError(errorMessage(err));
@@ -185,15 +184,15 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
     };
 
     const statusChip = (d: Debt) => {
-        if (d.is_forgiven) return <StatusChip label="Forgiven" color="amber" />;
-        if (d.is_settled) return <StatusChip label="Settled" color="blue" />;
+        if (d.is_forgiven) return <StatusChip label={ledgerCopy.debts.forgiven} color="amber" />;
+        if (d.is_settled) return <StatusChip label={ledgerCopy.debts.settled} color="blue" />;
         return null;
     };
 
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Description">
+            <Field label={ledgerCopy.debts.description}>
                 <input
                     type="text"
                     required
@@ -203,9 +202,9 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
             </Field>
-            <Field label="Category (optional)">
+            <Field label={ledgerCopy.debts.categoryOptional}>
                 <select className={selectCls} value={form.category_id} onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))}>
-                    <option value="">— none —</option>
+                    <option value="">{ledgerCopy.common.noneOption}</option>
                     {cats.map((c) => (
                         <option key={c.id} value={c.id}>
                             {c.name}
@@ -213,7 +212,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     ))}
                 </select>
             </Field>
-            <Field label="Total Amount">
+            <Field label={ledgerCopy.debts.totalAmount}>
                 <input
                     type="number"
                     step="0.01"
@@ -224,7 +223,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Issue Date">
+            <Field label={ledgerCopy.debts.issueDate}>
                 <input
                     type="date"
                     required
@@ -233,7 +232,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     onChange={(e) => setForm((f) => ({ ...f, issue_date: e.target.value }))}
                 />
             </Field>
-            <Field label="Notes (optional)">
+            <Field label={ledgerCopy.common.notesOptional}>
                 <textarea
                     rows={2}
                     maxLength={1000}
@@ -253,7 +252,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                     {...instrumentRemoveConfirm(
                         confirm.description,
                         confirm.can_hard_delete,
-                        `Archive "${confirm.description}"? It stays on past balance sheets.`,
+                        ledgerCopy.debts.archiveDebt(confirm.description),
                     )}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
@@ -261,7 +260,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             )}
             {forgiving && (
                 <ConfirmModal
-                    message={`Mark "${forgiving.description}" as forgiven? Remaining balance will be written off.`}
+                    message={ledgerCopy.debts.forgiveDebt(forgiving.description)}
                     onConfirm={() => handleForgive(forgiving)}
                     onCancel={() => setForgiving(null)}
                 />
@@ -269,11 +268,12 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Debt' : 'New Debt'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.debts.editDebt : ledgerCopy.debts.newDebt}
                 list={
                     <ListStack>
                         {loading && !debts.length && <LoadingRows />}
-                        {!loading && !debts.length && <EmptyRows label="No debts yet." />}
+                        {!loading && !debts.length && <EmptyRows label={ledgerCopy.debts.noDebts} />}
                         {debts.map((d) => {
                             const closed = d.is_settled || d.is_forgiven || d.is_closed;
                             const monthLocked = !canMutateFact(d.issue_date);
@@ -284,12 +284,12 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                             const forgiveOnly = canForgive && !canEdit && !canDelete;
                             const busy = removingId === d.id;
                             return (
-                                <ListRow key={d.id} selected={selected?.id === d.id} busy={busy}>
+                                <ListRow key={d.id} selected={selected?.id === d.id} busy={busy} onClick={() => selectRow(d)}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <p className={rowTitleCls}>{d.description}</p>
                                             <p className={`mt-1 ${rowDetailCls}`}>
-                                                Balance: {fmtAmount(d.remaining_cents)} / {fmtAmount(d.amount_cents)}
+                                                {ledgerCopy.debts.balance(fmtAmount(d.remaining_cents), fmtAmount(d.amount_cents))}
                                             </p>
                                         </div>
                                         {closed ? (
@@ -322,7 +322,7 @@ function DebtsListTab({ active, addRef }: { active: boolean; addRef?: MutableRef
                                                         }}
                                                         className={secondaryBtnFullCls}
                                                     >
-                                                        Forgive
+                                                        {ledgerCopy.debts.forgive}
                                                     </button>
                                                 )}
                                             </div>
@@ -354,7 +354,6 @@ function PaymentsTab({
     focus?: LedgerFocus | null;
     onFocusConsumed?: () => void;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [debts, setDebts] = useState<Debt[]>([]);
@@ -428,7 +427,7 @@ function PaymentsTab({
         setSelected(p);
         setForm({ amount: centsToInput(p.amount_cents), paid_at: p.paid_at, notes: p.notes ?? '' });
         setError(null);
-        if (isMobile && canMutateFact(p.paid_at)) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     useEffect(() => {
@@ -471,7 +470,7 @@ function PaymentsTab({
         if (!debtId) return;
         e.preventDefault();
         if (!canMutateFact(form.paid_at)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -484,13 +483,13 @@ function PaymentsTab({
                 await apiFetch(`/api/v1/debt-payments/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 await apiFetch(`/api/v1/debts/${debtId}/payments`, {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Payment added',
+                    toast: ledgerCopy.debts.paymentAdded,
                 });
             }
             reset();
@@ -506,7 +505,7 @@ function PaymentsTab({
         setConfirm(null);
         setRemovingId(p.id);
         try {
-            await apiFetch(`/api/v1/debt-payments/${p.id}`, { method: 'DELETE', toast: 'Deleted' });
+            await apiFetch(`/api/v1/debt-payments/${p.id}`, { method: 'DELETE', toast: ledgerCopy.common.deleted });
             setPayments(dropById(p.id));
             if (selected?.id === p.id) reset();
         } catch (err: unknown) {
@@ -520,11 +519,11 @@ function PaymentsTab({
     const closed = selectedDebt ? selectedDebt.is_settled || selectedDebt.is_forgiven || selectedDebt.is_closed : false;
 
     const paymentForm = closed ? (
-        <p className="text-sm text-slate-400">This debt is {selectedDebt?.is_forgiven ? 'forgiven' : 'settled'} — no new payments.</p>
+        <p className="text-sm text-slate-400">{ledgerCopy.debts.closedNoPayments(selectedDebt?.is_forgiven ? ledgerCopy.debts.forgivenLower : ledgerCopy.debts.settledLower)}</p>
     ) : (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Amount">
+            <Field label={ledgerCopy.common.amount}>
                 <input
                     type="number"
                     step="0.01"
@@ -535,7 +534,7 @@ function PaymentsTab({
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Paid At">
+            <Field label={ledgerCopy.debts.paidAt}>
                 <input
                     type="date"
                     required
@@ -544,7 +543,7 @@ function PaymentsTab({
                     onChange={(e) => setForm((f) => ({ ...f, paid_at: e.target.value }))}
                 />
             </Field>
-            <Field label="Notes (optional)">
+            <Field label={ledgerCopy.common.notesOptional}>
                 <input
                     type="text"
                     maxLength={1000}
@@ -561,14 +560,14 @@ function PaymentsTab({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete payment of ${fmtAmount(confirm.amount_cents)}?`}
+                    message={ledgerCopy.debts.deletePayment(fmtAmount(confirm.amount_cents))}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
             )}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
                 <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-600 dark:text-neutral-300" htmlFor="debt-payment-debt-select">Debt</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-600 dark:text-neutral-300" htmlFor="debt-payment-debt-select">{ledgerCopy.debts.debt}</label>
                     {loading ? (
                         <LoadingRows />
                     ) : (
@@ -581,10 +580,10 @@ function PaymentsTab({
                                 reset();
                             }}
                         >
-                            <option value="">— select a debt —</option>
+                            <option value="">{ledgerCopy.debts.selectDebt}</option>
                             {debts.map((d) => (
                                 <option key={d.id} value={d.id}>
-                                    {d.description} ({fmtAmount(d.remaining_cents)} left)
+                                    {d.description} ({ledgerCopy.debts.remainingLeft(fmtAmount(d.remaining_cents))})
                                 </option>
                             ))}
                         </select>
@@ -596,18 +595,19 @@ function PaymentsTab({
                     <SplitPane
                         sheetOpen={sheetOpen}
                         onSheetOpenChange={setSheetOpen}
-                        sheetTitle={selected ? 'Edit Payment' : 'New Payment'}
+                        onDismiss={reset}
+                        sheetTitle={selected ? ledgerCopy.debts.editPayment : ledgerCopy.debts.newPayment}
                         list={
                             <ListStack>
                                 {payLoading && !payments.length && <LoadingRows />}
-                                {!payLoading && !payments.length && <EmptyRows label="No payments for this debt." />}
+                                {!payLoading && !payments.length && <EmptyRows label={ledgerCopy.debts.noPayments} />}
                                 {!payLoading && payments.length > 0 && !visiblePayments.length && (
-                                    <EmptyRows label="No payments match these filters." />
+                                    <EmptyRows label={ledgerCopy.debts.noPaymentsMatch} />
                                 )}
                                 {visiblePayments.map((p) => {
                                     const paymentLocked = !canMutateFact(p.paid_at);
                                     return (
-                                    <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed} busy={removingId === p.id}>
+                                    <ListRow key={p.id} selected={selected?.id === p.id} disabled={closed} busy={removingId === p.id} onClick={() => selectRow(p)}>
                                         <div className="flex items-start justify-between gap-3">
                                             <p className={rowTitleCls}>{fmtAmount(p.amount_cents)}</p>
                                         </div>
@@ -662,7 +662,7 @@ export function DebtsTab({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
-                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} labels={ledgerCopy.debts.sub} />
                 <AddButton onClick={() => addRef.current?.()} />
             </TabToolbar>
             {sub === 'Debts' && <DebtsListTab addRef={addRef} active={active} />}
@@ -677,8 +677,8 @@ export function DebtsTab({
                     storeUrl="/api/v1/categories/debts"
                     updateUrl={(id) => `/api/v1/categories/debts/${id}`}
                     deleteUrl={(id) => `/api/v1/categories/debts/${id}`}
-                    emptyLabel="No debt categories."
-                    deleteConfirmMessage={(name) => `Delete debt category "${name}"?`}
+                    emptyLabel={ledgerCopy.debts.noCategories}
+                    deleteConfirmMessage={ledgerCopy.debts.deleteCategory}
                 />
             )}
         </div>

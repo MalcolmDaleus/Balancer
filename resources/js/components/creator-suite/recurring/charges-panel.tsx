@@ -1,8 +1,8 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { RecurringCharge } from '@/types/api';
 import { useEffect, useMemo, useState } from 'react';
 import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from '../fact-filters';
@@ -36,7 +36,6 @@ export function RecurringChargesPanel({
     focus?: LedgerFocus | null;
     onFocusConsumed?: () => void;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [charges, setCharges] = useState<RecurringCharge[]>([]);
@@ -77,7 +76,7 @@ export function RecurringChargesPanel({
             if (charge.recurring_payment_category_id != null) {
                 seen.set(
                     charge.recurring_payment_category_id,
-                    charge.category_name ?? `Category ${charge.recurring_payment_category_id}`,
+                    charge.category_name ?? ledgerCopy.recurring.fallbackCategory(charge.recurring_payment_category_id),
                 );
             }
         }
@@ -104,7 +103,7 @@ export function RecurringChargesPanel({
         setSelected(charge);
         setAmount(centsToInput(charge.amount_cents));
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     useEffect(() => {
@@ -131,7 +130,7 @@ export function RecurringChargesPanel({
         e.preventDefault();
         if (!selected) return;
         if (!canMutateFact(selected.occurred_on)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -142,7 +141,7 @@ export function RecurringChargesPanel({
             await apiFetch(`/api/v1/recurring-payments/charges/${selected.id}`, {
                 method: 'PUT',
                 body: JSON.stringify({ amount_cents: majorInputToCents(amount) }),
-                toast: 'Saved',
+                toast: ledgerCopy.common.saved,
             });
             reset();
             setFetched(false);
@@ -159,7 +158,7 @@ export function RecurringChargesPanel({
         try {
             await apiFetch(`/api/v1/recurring-payments/charges/${charge.id}`, {
                 method: 'DELETE',
-                toast: 'Occurrence skipped',
+                toast: ledgerCopy.recurring.occurrenceSkipped,
             });
             setCharges(dropById(charge.id));
             if (selected?.id === charge.id) reset();
@@ -175,23 +174,21 @@ export function RecurringChargesPanel({
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
             {!selected && (
                 <p className="text-sm text-slate-500 dark:text-neutral-400">
-                    Charges are generated from streams. Select one to adjust the amount in an open month, or delete to skip that
-                    occurrence.
+                    {ledgerCopy.recurring.chargesHint}
                 </p>
             )}
             {selected && (
                 <>
                     <p className="text-sm text-slate-500 dark:text-neutral-400">
-                        This charge was generated from a stream. You can adjust the amount in the open month. Deleting skips this
-                        occurrence so it is not generated again.
+                        {ledgerCopy.recurring.chargeHint}
                     </p>
-                    <Field label="Stream">
+                    <Field label={ledgerCopy.recurring.stream}>
                         <input type="text" className={inputCls} value={selected.stream_name} disabled />
                     </Field>
-                    <Field label="Category">
-                        <input type="text" className={inputCls} value={selected.category_name ?? 'None'} disabled />
+                    <Field label={ledgerCopy.common.category}>
+                        <input type="text" className={inputCls} value={selected.category_name ?? ledgerCopy.common.none} disabled />
                     </Field>
-                    <Field label="Amount">
+                    <Field label={ledgerCopy.common.amount}>
                         <input
                             type="number"
                             step="0.01"
@@ -203,7 +200,7 @@ export function RecurringChargesPanel({
                             onChange={(e) => setAmount(e.target.value)}
                         />
                     </Field>
-                    <Field label="Charged on">
+                    <Field label={ledgerCopy.recurring.chargedOn}>
                         <input type="date" className={inputCls} value={selected.occurred_on.slice(0, 10)} disabled />
                     </Field>
                     <FormActions isEdit saving={saving} onCancel={reset} disabled={!formWritable} />
@@ -216,8 +213,8 @@ export function RecurringChargesPanel({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Skip "${confirm.stream_name}" on ${fmtDate(confirm.occurred_on)} (${fmtAmount(confirm.amount_cents)})? This occurrence will not be generated again.`}
-                    confirmLabel="Skip"
+                    message={ledgerCopy.recurring.skipConfirm(confirm.stream_name, fmtDate(confirm.occurred_on), fmtAmount(confirm.amount_cents))}
+                    confirmLabel={ledgerCopy.common.skip}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -230,13 +227,14 @@ export function RecurringChargesPanel({
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Charge' : 'Charges'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.recurring.charge : ledgerCopy.recurring.charges}
                 list={
                     <ListStack>
                         {loading && !charges.length && <LoadingRows />}
-                        {!loading && !charges.length && <EmptyRows label="No recurring charges yet." />}
+                        {!loading && !charges.length && <EmptyRows label={ledgerCopy.recurring.noCharges} />}
                         {!loading && charges.length > 0 && !visibleCharges.length && (
-                            <EmptyRows label="No charges match these filters." />
+                            <EmptyRows label={ledgerCopy.recurring.noChargesMatch} />
                         )}
                         {visibleCharges.map((charge) => {
                             const canWrite = canMutateFact(charge.occurred_on);
@@ -264,7 +262,7 @@ export function RecurringChargesPanel({
                                             <RowActions
                                                 onEdit={() => selectRow(charge)}
                                                 onDelete={() => setConfirm(charge)}
-                                                dangerLabel="Skip"
+                                                dangerLabel={ledgerCopy.common.skip}
                                             />
                                         )}
                                     </div>

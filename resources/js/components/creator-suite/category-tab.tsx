@@ -2,7 +2,7 @@
  * Generic category CRUD tab used by purchases, debts, and recurring.
  */
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { MutableRefObject, useEffect, useState } from 'react';
 import {
     ApiError,
@@ -45,9 +45,8 @@ export function CategoryTab({
     updateUrl,
     deleteUrl,
     emptyLabel,
-    deleteConfirmMessage = (name) => `Remove category "${name}"?`,
+    deleteConfirmMessage = ledgerCopy.categories.remove,
 }: Props) {
-    const isMobile = useIsMobile();
     const [cats, setCats] = useState<CategoryRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
@@ -79,7 +78,7 @@ export function CategoryTab({
         setSelected(c);
         setForm({ name: c.name });
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     const reset = () => {
@@ -112,10 +111,10 @@ export function CategoryTab({
                 await apiFetch(updateUrl(selected.id), {
                     method: 'PUT',
                     body: JSON.stringify(form),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
-                await apiFetch(storeUrl, { method: 'POST', body: JSON.stringify(form), toast: 'Category added' });
+                await apiFetch(storeUrl, { method: 'POST', body: JSON.stringify(form), toast: ledgerCopy.categories.added });
             }
             reset();
             setFetched(false);
@@ -130,7 +129,7 @@ export function CategoryTab({
         setConfirm(null);
         setRemovingId(c.id);
         try {
-            await apiFetch(deleteUrl(c.id), { method: 'DELETE', toast: 'Deleted' });
+            await apiFetch(deleteUrl(c.id), { method: 'DELETE', toast: ledgerCopy.common.deleted });
             if (selected?.id === c.id) reset();
             await load(true);
         } catch (err: unknown) {
@@ -143,7 +142,7 @@ export function CategoryTab({
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Name">
+            <Field label={ledgerCopy.common.name}>
                 <input
                     type="text"
                     required
@@ -169,17 +168,18 @@ export function CategoryTab({
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Category' : 'New Category'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.categories.edit : ledgerCopy.categories.new}
                 list={
                     <ListStack>
                         {loading && !cats.length && <LoadingRows />}
                         {!loading && !cats.length && <EmptyRows label={emptyLabel} />}
                         {cats.map((c) => (
-                            <ListRow key={c.id} selected={selected?.id === c.id} disabled={!!c.deleted_at} busy={removingId === c.id}>
+                            <ListRow key={c.id} selected={selected?.id === c.id} disabled={!!c.deleted_at} busy={removingId === c.id} onClick={() => selectRow(c)}>
                                 <div className="flex items-center justify-between gap-3">
                                     <span className={rowTitleCls}>{c.name}</span>
                                     <div className="flex items-center gap-2">
-                                        {c.deleted_at && <StatusChip label="Unlisted" color="amber" />}
+                                        {c.deleted_at && <StatusChip label={ledgerCopy.common.unlisted} color="amber" />}
                                         {!c.deleted_at && <RowActions onEdit={() => selectRow(c)} onDelete={() => setConfirm(c)} />}
                                     </div>
                                 </div>

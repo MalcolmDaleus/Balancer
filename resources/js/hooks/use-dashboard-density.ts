@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
-/** Desktop bento density. Mobile carousel is unchanged. */
+/** Desktop bento density (card size and ratios only). Interior type stays the same. Mobile carousel is unchanged. */
 export type DashboardDensity = 'comfortable' | 'compact';
 
 const STORAGE_KEY = 'dashboard-density';

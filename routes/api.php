@@ -17,6 +17,7 @@ use App\Http\Controllers\RecurringPaymentEntryController;
 use App\Http\Controllers\RecurringPaymentStreamController;
 use App\Http\Controllers\RegularIncomeScheduleController;
 use App\Http\Controllers\SavingController;
+use App\Http\Controllers\StandingController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
@@ -127,6 +128,8 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     // ---------------------------------------------------------------
     // Budget (plan vs actual; amounts in integer cents)
     // ---------------------------------------------------------------
+    Route::get('standing', [StandingController::class, 'show'])->name('standing.show');
+
     Route::get('budget', [BudgetController::class, 'show'])->name('budget.show');
     Route::put('budget', [BudgetController::class, 'upsert'])->name('budget.upsert');
     Route::delete('budget', [BudgetController::class, 'destroy'])->name('budget.destroy');

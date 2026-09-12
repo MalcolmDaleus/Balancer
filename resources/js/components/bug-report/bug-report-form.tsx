@@ -1,4 +1,5 @@
 import { apiFetch } from '@/api/client';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -12,26 +13,26 @@ const textareaCls =
     'flex min-h-28 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900';
 
 const TYPES: { value: BugReportType; label: string }[] = [
-    { value: 'visual', label: 'Looks wrong' },
-    { value: 'functional', label: "Doesn't work" },
-    { value: 'composite', label: 'Both' },
+    { value: 'visual', label: dashboardCopy.bugReport.types.visual },
+    { value: 'functional', label: dashboardCopy.bugReport.types.functional },
+    { value: 'composite', label: dashboardCopy.bugReport.types.composite },
 ];
 
 const ZONES: { value: BugReportZone; label: string }[] = [
-    { value: 'balance-sheet', label: 'Balance Sheet' },
-    { value: 'creator-suite', label: 'Ledger' },
-        { value: 'statistics', label: 'Statistics' },
-        { value: 'budget', label: 'Budget' },
-        { value: 'past-balance-sheets', label: 'Past Balance Sheets' },
-    { value: 'settings', label: 'Settings' },
-    { value: 'dashboard', label: 'Dashboard' },
-    { value: 'login', label: 'Login' },
-    { value: 'other', label: 'Other' },
+    { value: 'balance-sheet', label: dashboardCopy.bugReport.zones['balance-sheet'] },
+    { value: 'creator-suite', label: dashboardCopy.bugReport.zones['creator-suite'] },
+    { value: 'statistics', label: dashboardCopy.bugReport.zones.statistics },
+    { value: 'budget', label: dashboardCopy.bugReport.zones.budget },
+    { value: 'past-balance-sheets', label: dashboardCopy.bugReport.zones['past-balance-sheets'] },
+    { value: 'settings', label: dashboardCopy.bugReport.zones.settings },
+    { value: 'dashboard', label: dashboardCopy.bugReport.zones.dashboard },
+    { value: 'login', label: dashboardCopy.bugReport.zones.login },
+    { value: 'other', label: dashboardCopy.bugReport.zones.other },
 ];
 
 const VIEWS: { value: BugReportView; label: string }[] = [
-    { value: 'desktop', label: 'Desktop' },
-    { value: 'mobile', label: 'Mobile' },
+    { value: 'desktop', label: dashboardCopy.bugReport.views.desktop },
+    { value: 'mobile', label: dashboardCopy.bugReport.views.mobile },
 ];
 
 export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: string }) {
@@ -54,7 +55,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
             await apiFetch('/api/v1/bug-reports', {
                 method: 'POST',
                 notifyFinance: false,
-                toast: 'Thanks — we got it.',
+                toast: dashboardCopy.bugReport.thanks,
                 body: JSON.stringify({ type, zone, view, description: description.trim() }),
             });
             setType('');
@@ -70,7 +71,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-1.5">
-                <Label htmlFor={`${idPrefix}-type`}>Type</Label>
+                <Label htmlFor={`${idPrefix}-type`}>{dashboardCopy.bugReport.type}</Label>
                 <select
                     id={`${idPrefix}-type`}
                     required
@@ -79,10 +80,10 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
                     onChange={(e) => {
                         setType(e.target.value as BugReportType);
                     }}
-                    aria-label="Issue type"
+                    aria-label={dashboardCopy.bugReport.typeAria}
                 >
                     <option value="" disabled>
-                        What kind of issue?
+                        {dashboardCopy.bugReport.typePlaceholder}
                     </option>
                     {TYPES.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -93,7 +94,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
             </div>
 
             <div className="grid gap-1.5">
-                <Label htmlFor={`${idPrefix}-zone`}>Where</Label>
+                <Label htmlFor={`${idPrefix}-zone`}>{dashboardCopy.bugReport.where}</Label>
                 <select
                     id={`${idPrefix}-zone`}
                     required
@@ -102,10 +103,10 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
                     onChange={(e) => {
                         setZone(e.target.value as BugReportZone);
                     }}
-                    aria-label="Where it happened"
+                    aria-label={dashboardCopy.bugReport.whereAria}
                 >
                     <option value="" disabled>
-                        Where did it happen?
+                        {dashboardCopy.bugReport.wherePlaceholder}
                     </option>
                     {ZONES.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -116,7 +117,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
             </div>
 
             <div className="grid gap-1.5">
-                <Label htmlFor={`${idPrefix}-view`}>I was using</Label>
+                <Label htmlFor={`${idPrefix}-view`}>{dashboardCopy.bugReport.using}</Label>
                 <select
                     id={`${idPrefix}-view`}
                     required
@@ -125,7 +126,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
                     onChange={(e) => {
                         setView(e.target.value as BugReportView);
                     }}
-                    aria-label="Desktop or mobile"
+                    aria-label={dashboardCopy.bugReport.usingAria}
                 >
                     {VIEWS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -136,7 +137,7 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
             </div>
 
             <div className="grid gap-1.5">
-                <Label htmlFor={`${idPrefix}-description`}>What happened</Label>
+                <Label htmlFor={`${idPrefix}-description`}>{dashboardCopy.bugReport.whatHappened}</Label>
                 <textarea
                     id={`${idPrefix}-description`}
                     required
@@ -148,12 +149,12 @@ export default function BugReportForm({ idPrefix = 'bug-report' }: { idPrefix?: 
                     onChange={(e) => {
                         setDescription(e.target.value);
                     }}
-                    placeholder="What you expected, and what you saw instead."
+                    placeholder={dashboardCopy.bugReport.placeholder}
                 />
             </div>
 
             <Button type="submit" disabled={busy} className="w-full">
-                {busy ? 'Sending…' : 'Send report'}
+                {busy ? dashboardCopy.bugReport.sending : dashboardCopy.bugReport.send}
             </Button>
         </form>
     );

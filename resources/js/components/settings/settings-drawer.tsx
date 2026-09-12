@@ -1,4 +1,5 @@
 import SettingsPanel from '@/components/settings/settings-panel';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import {
     Sheet,
     SheetContent,
@@ -23,8 +24,8 @@ export default function SettingsDrawer() {
                 className="w-full gap-0 overflow-y-auto p-0 sm:max-w-md"
             >
                 <SheetHeader className="border-b border-border/60 px-4 py-4 text-left">
-                    <SheetTitle>Settings</SheetTitle>
-                    <SheetDescription>Account, money display, and finance tools.</SheetDescription>
+                    <SheetTitle>{dashboardCopy.settings.drawerTitle}</SheetTitle>
+                    <SheetDescription>{dashboardCopy.settings.drawerDescription}</SheetDescription>
                 </SheetHeader>
 
                 <div className="px-4 py-4">

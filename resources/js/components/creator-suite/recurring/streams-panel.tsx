@@ -1,7 +1,7 @@
 import { apiFetch, apiFetchList, errorMessage, isNotFound, unwrapData } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { RecurringCategory, RecurringEntry, RecurringStream } from '@/types/api';
 import { MutableRefObject, useEffect, useState } from 'react';
 import {
@@ -50,8 +50,8 @@ function toggleMeta(s: RecurringStream): {
         return {
             switchOn: s.pending_active,
             badge: s.pending_active
-                ? { label: 'Resume pending', color: 'teal' }
-                : { label: 'Pause pending', color: 'amber' },
+                ? { label: ledgerCopy.recurring.resumePending, color: 'teal' }
+                : { label: ledgerCopy.recurring.pausePending, color: 'amber' },
             pendingCancel: true,
         };
     }
@@ -77,7 +77,6 @@ export function RecurringStreamsPanel({
     active: boolean;
     addRef?: MutableRefObject<(() => void) | null>;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const [streams, setStreams] = useState<RecurringStream[]>([]);
     const [cats, setCats] = useState<RecurringCategory[]>([]);
@@ -128,7 +127,7 @@ export function RecurringStreamsPanel({
         });
         setShowPriceUpdate(false);
         setError(null);
-        if (isMobile) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     const reset = () => {
@@ -172,7 +171,7 @@ export function RecurringStreamsPanel({
                 await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 const body: Record<string, unknown> = {
@@ -193,7 +192,7 @@ export function RecurringStreamsPanel({
                 await apiFetch('/api/v1/recurring-payments/streams', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Stream added',
+                    toast: ledgerCopy.recurring.streamAdded,
                 });
             }
             reset();
@@ -224,7 +223,7 @@ export function RecurringStreamsPanel({
             await apiFetch(`/api/v1/recurring-payments/streams/${selected.id}/update-price`, {
                 method: 'POST',
                 body: JSON.stringify(body),
-                toast: 'Price updated',
+                toast: ledgerCopy.recurring.priceUpdated,
             });
             setShowPriceUpdate(false);
             setPriceForm(blankPrice());
@@ -243,7 +242,7 @@ export function RecurringStreamsPanel({
         try {
             await apiFetch(
                 hard ? `/api/v1/recurring-payments/streams/${s.id}/force` : `/api/v1/recurring-payments/streams/${s.id}`,
-                { method: 'DELETE', toast: hard ? 'Deleted' : 'Archived' },
+                { method: 'DELETE', toast: hard ? ledgerCopy.common.deleted : ledgerCopy.common.archived },
             );
             setStreams(dropById(s.id));
             if (selected?.id === s.id) reset();
@@ -265,7 +264,7 @@ export function RecurringStreamsPanel({
         try {
             const res = await apiFetch<RecurringStream | { data: RecurringStream }>(
                 `/api/v1/recurring-payments/streams/${s.id}/toggle`,
-                { method: 'PATCH', toast: 'Updated' },
+                { method: 'PATCH', toast: ledgerCopy.common.updated },
             );
             const updated = unwrapData(res);
             setStreams((prev) => prev.map((x) => (x.id === s.id ? updated : x)));
@@ -304,12 +303,12 @@ export function RecurringStreamsPanel({
                                 </p>
                                 {entry.day_of_month != null && entry.frequency !== 'weekly' && (
                                     <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
-                                        Day {entry.day_of_month} of each {entry.frequency === 'yearly' ? 'year' : 'month'}
+                                        {ledgerCopy.recurring.dayOfEach(entry.day_of_month, entry.frequency === 'yearly' ? ledgerCopy.recurring.year : ledgerCopy.recurring.month)}
                                     </p>
                                 )}
                                 {entry.day_of_week != null && entry.frequency === 'weekly' && (
                                     <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-500">
-                                        Every {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][entry.day_of_week]}
+                                        {ledgerCopy.recurring.everyShortDay(ledgerCopy.recurring.shortDays[entry.day_of_week])}
                                     </p>
                                 )}
                             </div>
@@ -319,32 +318,32 @@ export function RecurringStreamsPanel({
                                         {meta!.pendingCancel
                                             ? meta!.badge!.label
                                             : selected.active
-                                              ? 'Active'
-                                              : 'Paused'}
+                                              ? ledgerCopy.common.active
+                                              : ledgerCopy.common.paused}
                                     </p>
                                     <p className="text-xs text-slate-400 dark:text-neutral-500">
                                         {meta!.pendingCancel
-                                            ? 'Click to cancel queued change'
-                                            : 'Takes effect after next charge date'}
+                                            ? ledgerCopy.recurring.cancelQueued
+                                            : ledgerCopy.recurring.takesEffect}
                                     </p>
                                 </div>
                                 <ToggleSwitch
                                     on={meta!.switchOn}
                                     disabled={toggling}
-                                    label={selected.active ? 'Pause stream' : 'Resume stream'}
+                                    label={selected.active ? ledgerCopy.recurring.pauseStream : ledgerCopy.recurring.resumeStream}
                                     onClick={(e) => requestToggle(selected, e)}
                                 />
                             </div>
                         </div>
                     ) : (
-                        <p className="text-sm text-slate-400 dark:text-neutral-500">No price set yet — add one below.</p>
+                        <p className="text-sm text-slate-400 dark:text-neutral-500">{ledgerCopy.recurring.noPrice}</p>
                     )}
                 </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-3">
                 {error && !showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
-                <Field label="Name">
+                <Field label={ledgerCopy.common.name}>
                     <input
                         type="text"
                         required
@@ -354,14 +353,14 @@ export function RecurringStreamsPanel({
                         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     />
                 </Field>
-                <Field label="Category">
+                <Field label={ledgerCopy.common.category}>
                     <select
                         required
                         className={selectCls}
                         value={form.recurring_payment_category_id}
                         onChange={(e) => setForm((f) => ({ ...f, recurring_payment_category_id: e.target.value }))}
                     >
-                        <option value="">— select category —</option>
+                        <option value="">{ledgerCopy.recurring.selectCategory}</option>
                         {cats
                             .filter((c) => !c.deleted_at)
                             .map((c) => (
@@ -371,7 +370,7 @@ export function RecurringStreamsPanel({
                             ))}
                     </select>
                 </Field>
-                <Field label="Description (optional)">
+                <Field label={ledgerCopy.common.descriptionOptional}>
                     <input
                         type="text"
                         maxLength={255}
@@ -391,17 +390,17 @@ export function RecurringStreamsPanel({
                     <div className="border-t border-slate-100 pt-3 dark:border-neutral-800">
                         {!showPriceUpdate ? (
                             <button type="button" onClick={() => setShowPriceUpdate(true)} className={secondaryBtnCls}>
-                                + Update subscription price
+                                {ledgerCopy.recurring.updatePrice}
                             </button>
                         ) : (
                             <form onSubmit={handlePriceUpdate} className="space-y-3">
-                                <p className="text-sm font-semibold text-slate-600 dark:text-neutral-300">Update Price</p>
+                                <p className="text-sm font-semibold text-slate-600 dark:text-neutral-300">{ledgerCopy.recurring.updatePriceTitle}</p>
                                 {error && showPriceUpdate && <ApiError message={error} onDismiss={() => setError(null)} />}
                                 <RecurringPriceScheduleFields
                                     priceForm={priceForm}
                                     setPriceForm={setPriceForm}
-                                    amountLabel="New Amount"
-                                    startDateLabel="Effective From"
+                                    amountLabel={ledgerCopy.recurring.newAmount}
+                                    startDateLabel={ledgerCopy.recurring.effectiveFrom}
                                 />
                                 <FormActions
                                     isEdit={true}
@@ -410,14 +409,14 @@ export function RecurringStreamsPanel({
                                         setShowPriceUpdate(false);
                                         setPriceForm(blankPrice());
                                     }}
-                                    saveLabel="Apply Price Change"
+                                    saveLabel={ledgerCopy.recurring.applyPrice}
                                 />
                             </form>
                         )}
                     </div>
 
                     <ScheduleHistory
-                        title="Price History"
+                        title={ledgerCopy.recurring.priceHistory}
                         rows={selected.entries ?? []}
                         formatFreq={fmtRecurringFreq}
                     />
@@ -433,7 +432,7 @@ export function RecurringStreamsPanel({
                     {...instrumentRemoveConfirm(
                         removeTarget.name,
                         removeTarget.can_hard_delete,
-                        `Archive "${removeTarget.name}"? You can restore it later from the Archive tab.`,
+                        ledgerCopy.recurring.archiveStream(removeTarget.name),
                     )}
                     onConfirm={() => handleRemove(removeTarget)}
                     onCancel={() => setRemoveTarget(null)}
@@ -444,10 +443,10 @@ export function RecurringStreamsPanel({
                 <ConfirmModal
                     message={
                         toggleAction.stream.active
-                            ? `Pause "${toggleAction.stream.name}" after its next charge? It stays on the balance sheet until then.`
-                            : `Resume "${toggleAction.stream.name}" after its next charge?`
+                            ? ledgerCopy.recurring.pauseAfterCharge(toggleAction.stream.name)
+                            : ledgerCopy.recurring.resumeAfterCharge(toggleAction.stream.name)
                     }
-                    confirmLabel={toggleAction.stream.active ? 'Pause after next charge' : 'Resume after next charge'}
+                    confirmLabel={toggleAction.stream.active ? ledgerCopy.recurring.pauseAfterNext : ledgerCopy.recurring.resumeAfterNext}
                     confirmVariant={toggleAction.stream.active ? 'warning' : 'primary'}
                     onConfirm={() => execToggle(toggleAction.stream)}
                     onCancel={() => setToggleAction(null)}
@@ -457,26 +456,26 @@ export function RecurringStreamsPanel({
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Stream' : 'New Stream'}
+                sheetTitle={selected ? ledgerCopy.recurring.editStream : ledgerCopy.recurring.newStream}
                 list={
                     <ListStack>
                         {loading && !streams.length && <LoadingRows />}
-                        {!loading && !streams.length && <EmptyRows label="No recurring streams yet." />}
+                        {!loading && !streams.length && <EmptyRows label={ledgerCopy.recurring.noStreams} />}
                         {streams.map((s) => {
                             const e = currentEntry(s);
                             const m = toggleMeta(s);
                             const busy = removingId === s.id;
                             return (
-                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy}>
+                                <ListRow key={s.id} selected={selected?.id === s.id} busy={busy} onClick={() => selectRow(s)}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
                                                 <p className={rowTitleCls}>{s.name}</p>
                                                 {m.badge && <StatusChip label={m.badge.label} color={m.badge.color} />}
-                                                {!s.active && !m.badge && <StatusChip label="Paused" color="amber" />}
+                                                {!s.active && !m.badge && <StatusChip label={ledgerCopy.common.paused} color="amber" />}
                                             </div>
                                             <p className={`mt-0.5 truncate ${rowDetailCls}`}>
-                                                {s.category?.name ?? 'Uncategorized'}
+                                                {s.category?.name ?? ledgerCopy.common.uncategorized}
                                                 {e ? ` · ${fmtRecurringFreq(e.frequency)}` : ''}
                                             </p>
                                         </div>
@@ -492,7 +491,7 @@ export function RecurringStreamsPanel({
                                                     size="sm"
                                                     on={m.switchOn}
                                                     disabled={toggling || busy}
-                                                    label={s.active ? 'Pause stream' : 'Resume stream'}
+                                                    label={s.active ? ledgerCopy.recurring.pauseStream : ledgerCopy.recurring.resumeStream}
                                                     onClick={(ev) => requestToggle(s, ev)}
                                                 />
                                                 <RowActions

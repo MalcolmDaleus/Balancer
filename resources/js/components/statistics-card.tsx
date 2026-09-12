@@ -1,5 +1,6 @@
 import { apiFetch, errorMessage } from '@/api/client';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Spinner } from '@/components/ui/spinner';
 import { useFinanceDataOptional } from '@/contexts/finance-data';
 import { useFormatMoney } from '@/hooks/use-format-money';
@@ -28,46 +29,46 @@ import {
 } from 'recharts';
 
 const VIEWS: { id: StatisticsView | 'markers'; title: string; color: string }[] = [
-    { id: 'trend', title: 'Trend', color: '#8b5cf6' },
-    { id: 'compare', title: 'Compare', color: '#0ea5e9' },
-    { id: 'share', title: 'Share', color: '#f59e0b' },
-    { id: 'markers', title: 'Markers', color: '#10b981' },
+    { id: 'trend', title: dashboardCopy.statistics.views.trend, color: '#8b5cf6' },
+    { id: 'compare', title: dashboardCopy.statistics.views.compare, color: '#0ea5e9' },
+    { id: 'share', title: dashboardCopy.statistics.views.share, color: '#f59e0b' },
+    { id: 'markers', title: dashboardCopy.statistics.views.markers, color: '#10b981' },
 ];
 
 const TREND_SERIES = [
-    { id: 'leftover', label: 'What’s leftover', color: '#8b5cf6' },
-    { id: 'income_total', label: 'Income', color: '#10b981' },
-    { id: 'spend_net', label: 'Purchases', color: '#eab308' },
-    { id: 'recurring_total', label: 'Recurring charges', color: '#fb923c' },
-    { id: 'savings_net', label: 'Savings', color: '#0ea5e9' },
-    { id: 'savings_running', label: 'Savings total', color: '#38bdf8' },
-    { id: 'recurring_load', label: 'Recurring vs income', color: '#f97316' },
-    { id: 'budget_adherence', label: 'Budget followed', color: '#14b8a6' },
-    { id: 'budget_left', label: 'Budget leftover', color: '#0d9488' },
+    { id: 'leftover', label: dashboardCopy.statistics.trendSeries.leftover, color: '#8b5cf6' },
+    { id: 'income_total', label: dashboardCopy.statistics.trendSeries.income_total, color: '#10b981' },
+    { id: 'spend_net', label: dashboardCopy.statistics.trendSeries.spend_net, color: '#eab308' },
+    { id: 'recurring_total', label: dashboardCopy.statistics.trendSeries.recurring_total, color: '#fb923c' },
+    { id: 'savings_net', label: dashboardCopy.statistics.trendSeries.savings_net, color: '#0ea5e9' },
+    { id: 'savings_running', label: dashboardCopy.statistics.trendSeries.savings_running, color: '#38bdf8' },
+    { id: 'recurring_load', label: dashboardCopy.statistics.trendSeries.recurring_load, color: '#f97316' },
+    { id: 'budget_adherence', label: dashboardCopy.statistics.trendSeries.budget_adherence, color: '#14b8a6' },
+    { id: 'budget_left', label: dashboardCopy.statistics.trendSeries.budget_left, color: '#0d9488' },
 ];
 
 const COMPARE_SERIES = [
-    { id: 'purchase_categories_month', label: 'Purchases by category' },
-    { id: 'purchase_categories_avg', label: 'Average by category' },
-    { id: 'outflow_domains_month', label: 'Spending by type' },
-    { id: 'leftover_by_month', label: 'Leftover by month' },
-    { id: 'budget_by_category', label: 'Budget vs spent' },
+    { id: 'purchase_categories_month', label: dashboardCopy.statistics.compareSeries.purchase_categories_month },
+    { id: 'purchase_categories_avg', label: dashboardCopy.statistics.compareSeries.purchase_categories_avg },
+    { id: 'outflow_domains_month', label: dashboardCopy.statistics.compareSeries.outflow_domains_month },
+    { id: 'leftover_by_month', label: dashboardCopy.statistics.compareSeries.leftover_by_month },
+    { id: 'budget_by_category', label: dashboardCopy.statistics.compareSeries.budget_by_category },
 ];
 
 const SHARE_SERIES = [
-    { id: 'outflow_mix', label: 'How money was used' },
-    { id: 'purchase_categories', label: 'Share of purchases' },
-    { id: 'income_mix', label: 'Types of income' },
+    { id: 'outflow_mix', label: dashboardCopy.statistics.shareSeries.outflow_mix },
+    { id: 'purchase_categories', label: dashboardCopy.statistics.shareSeries.purchase_categories },
+    { id: 'income_mix', label: dashboardCopy.statistics.shareSeries.income_mix },
 ];
 
 const WINDOWS: { id: StatisticsWindow; label: string }[] = [
-    { id: 1, label: 'This month' },
-    { id: 3, label: 'Last 3 months' },
-    { id: 6, label: 'Last 6 months' },
-    { id: 12, label: 'Last 12 months' },
-    { id: 24, label: 'Last 2 years' },
-    { id: 60, label: 'Last 5 years' },
-    { id: 'all', label: 'All time' },
+    { id: 1, label: dashboardCopy.statistics.windows[1] },
+    { id: 3, label: dashboardCopy.statistics.windows[3] },
+    { id: 6, label: dashboardCopy.statistics.windows[6] },
+    { id: 12, label: dashboardCopy.statistics.windows[12] },
+    { id: 24, label: dashboardCopy.statistics.windows[24] },
+    { id: 60, label: dashboardCopy.statistics.windows[60] },
+    { id: 'all', label: dashboardCopy.statistics.windows.all },
 ];
 
 /** Domain colors — match Creator Suite / Balance Sheet. */
@@ -401,7 +402,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
     }, [chartData, isMobile]);
 
     const chartConfig = {
-        value: { label: series?.label ?? 'Value', color: trendColor },
+        value: { label: series?.label ?? dashboardCopy.statistics.value, color: trendColor },
     };
 
     const periodLabel =
@@ -424,9 +425,9 @@ export default function StatisticsCard({ className = '' }: { className?: string 
         >
             <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Statistics</h2>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{dashboardCopy.statistics.title}</h2>
                     <p className="mt-0.5 text-xs text-slate-400 dark:text-neutral-400">
-                        What’s typical, and what’s off
+                        {dashboardCopy.statistics.subtitle}
                         {periodLabel ? <span className="text-slate-500 dark:text-neutral-400"> · {periodLabel}</span> : null}
                     </p>
                 </div>
@@ -434,7 +435,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                     type="button"
                     onClick={() => void load()}
                     className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
-                    aria-label="Refresh statistics"
+                    aria-label={dashboardCopy.statistics.refresh}
                 >
                     <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 </button>
@@ -445,7 +446,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                     className={selectCls}
                     value={String(windowSize)}
                     onChange={(e) => setWindowSize(parseWindowSelect(e.target.value))}
-                    aria-label="Time window"
+                    aria-label={dashboardCopy.statistics.timeWindow}
                 >
                     {visibleWindows.map((w) => (
                         <option key={String(w.id)} value={String(w.id)}>
@@ -459,7 +460,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                         className={`${selectCls} min-w-0 flex-1`}
                         value={selectedSeries}
                         onChange={(e) => setSelectedSeries(e.target.value)}
-                        aria-label="Series"
+                        aria-label={dashboardCopy.statistics.series}
                     >
                         {seriesOptions.map((s) => (
                             <option key={s.id} value={s.id}>
@@ -472,17 +473,17 @@ export default function StatisticsCard({ className = '' }: { className?: string 
 
             <div className="flex min-h-0 flex-1 flex-col">
                 {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-                {!error && !seriesReady && !markersReady && <Spinner label="Loading statistics" />}
+                {!error && !seriesReady && !markersReady && <Spinner label={dashboardCopy.statistics.loading} />}
                 {!error && markersReady && markers && (
                     <MarkersGrid markers={markers.markers} formatValue={formatValue} />
                 )}
                 {!error && seriesReady && series && (
                     <div ref={chartBoxRef} className="flex min-h-0 w-full flex-1 flex-col">
                         {chartData.length === 0 ? (
-                            <p className="text-sm text-slate-400 dark:text-neutral-500">No data in this window.</p>
+                            <p className="text-sm text-slate-400 dark:text-neutral-500">{dashboardCopy.statistics.noData}</p>
                         ) : activeView === 'trend' && chartData.length < 2 ? (
                             <p className="text-sm text-slate-400 dark:text-neutral-500">
-                                A trend needs at least two months of data.
+                                {dashboardCopy.statistics.trendNeedsTwo}
                             </p>
                         ) : activeView === 'trend' ? (
                             <ChartContainer config={chartConfig} className="h-full w-full">
@@ -600,7 +601,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                             />
                                         }
                                     />
-                                    <Bar dataKey="value" name="Spent" radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}>
+                                    <Bar dataKey="value" name={dashboardCopy.statistics.spent} radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}>
                                         {chartData.map((d, i) => (
                                             <Cell key={d.label + i} fill={d.fill} />
                                         ))}
@@ -608,7 +609,7 @@ export default function StatisticsCard({ className = '' }: { className?: string 
                                     {series.series === 'budget_by_category' && (
                                         <Bar
                                             dataKey="plan"
-                                            name="Plan"
+                                            name={dashboardCopy.statistics.plan}
                                             fill="#94a3b8"
                                             radius={isMobile ? [0, 6, 6, 0] : [6, 6, 0, 0]}
                                         />
@@ -734,13 +735,15 @@ function MarkersGrid({
                     )}
                     {m.delta !== undefined && m.baseline !== undefined && Math.abs(m.delta) >= 0.005 && (
                         <p className={`text-xs tabular-nums ${markerDeltaClass(m.delta)}`}>
-                            {m.delta > 0 ? '+' : ''}
-                            {formatValue(m.delta, m.unit)} vs avg {formatValue(m.baseline, m.unit)}
+                            {dashboardCopy.statistics.vsAvg(
+                                `${m.delta > 0 ? '+' : ''}${formatValue(m.delta, m.unit)}`,
+                                formatValue(m.baseline, m.unit),
+                            )}
                         </p>
                     )}
                     {m.baseline !== undefined && (m.delta === undefined || Math.abs(m.delta) < 0.005) && (
                         <p className="text-xs text-slate-500 dark:text-neutral-400">
-                            avg {formatValue(m.baseline, m.unit)}/mo
+                            {dashboardCopy.statistics.avgPerMonth(formatValue(m.baseline, m.unit))}
                         </p>
                     )}
                 </div>

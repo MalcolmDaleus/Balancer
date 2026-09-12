@@ -1,3 +1,4 @@
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Appearance, useAppearance } from '@/hooks/use-appearance';
 import { cn } from '@/lib/utils';
 import { LucideIcon, Monitor, Moon, Sun } from 'lucide-react';
@@ -7,9 +8,9 @@ export default function AppearanceToggleTab({ className = '', ...props }: HTMLAt
     const { appearance, updateAppearance } = useAppearance();
 
     const tabs: { value: Appearance; icon: LucideIcon; label: string }[] = [
-        { value: 'light', icon: Sun, label: 'Light' },
-        { value: 'dark', icon: Moon, label: 'Dark' },
-        { value: 'system', icon: Monitor, label: 'System' },
+        { value: 'light', icon: Sun, label: dashboardCopy.settings.appearance.light },
+        { value: 'dark', icon: Moon, label: dashboardCopy.settings.appearance.dark },
+        { value: 'system', icon: Monitor, label: dashboardCopy.settings.appearance.system },
     ];
 
     return (

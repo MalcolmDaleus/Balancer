@@ -1,5 +1,6 @@
 import { apiFetch, errorMessage } from '@/api/client';
 import AppearanceTabs from '@/components/appearance-tabs';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import DeleteUser from '@/components/delete-user';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function formatProcessedAt(iso: string | null | undefined): string {
     if (!iso) {
-        return 'Never';
+        return dashboardCopy.settings.never;
     }
 
     try {
@@ -48,8 +49,8 @@ function formatProcessedAt(iso: string | null | undefined): string {
 function DashboardDensityTabs() {
     const { density, updateDensity } = useDashboardDensity();
     const tabs: { value: DashboardDensity; label: string }[] = [
-        { value: 'comfortable', label: 'Big' },
-        { value: 'compact', label: 'Small' },
+        { value: 'comfortable', label: dashboardCopy.settings.layoutBig },
+        { value: 'compact', label: dashboardCopy.settings.layoutSmall },
     ];
 
     return (
@@ -99,9 +100,9 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => toastSuccess('Saved'),
+                onSuccess: () => toastSuccess(dashboardCopy.settings.saved),
                 onError: (errors) => {
-                    toastError(errors.currency ?? errors.locale ?? 'Could not update.');
+                    toastError(errors.currency ?? errors.locale ?? dashboardCopy.settings.couldNotUpdate);
                 },
                 onFinish: () => setMoneyBusy(false),
             },
@@ -121,11 +122,11 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
             router.reload({ only: ['auth'] });
 
             if (result.skipped) {
-                toastWarning('Sync skipped — another process is already running.');
+                toastWarning(dashboardCopy.settings.syncSkipped);
             } else if (result.closed_months.length > 0) {
-                toastSuccess(`Synced. Closed: ${result.closed_months.join(', ')}`);
+                toastSuccess(dashboardCopy.settings.syncedClosed(result.closed_months.join(', ')));
             } else {
-                toastSuccess('Synced.');
+                toastSuccess(dashboardCopy.settings.synced);
             }
         } catch (err: unknown) {
             toastError(errorMessage(err));
@@ -136,12 +137,12 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
 
     return (
         <div className="space-y-5">
-            <Section title="Account">
+            <Section title={dashboardCopy.settings.sections.account}>
                 <Form
                     {...ProfileController.update.form()}
                     options={{ preserveScroll: true, preserveState: true }}
-                    onSuccess={() => toastSuccess('Saved')}
-                    onError={() => toastError('Could not save profile.')}
+                    onSuccess={() => toastSuccess(dashboardCopy.settings.saved)}
+                    onError={() => toastError(dashboardCopy.settings.couldNotSaveProfile)}
                     className="space-y-3"
                 >
                     {({ processing, errors }) => (
@@ -151,7 +152,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
 
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor={`${idPrefix}-first-name`}>First name</Label>
+                                    <Label htmlFor={`${idPrefix}-first-name`}>{dashboardCopy.settings.firstName}</Label>
                                     <Input
                                         id={`${idPrefix}-first-name`}
                                         name="first_name"
@@ -162,7 +163,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                     <InputError message={errors.first_name} />
                                 </div>
                                 <div className="grid gap-1.5">
-                                    <Label htmlFor={`${idPrefix}-last-name`}>Last name</Label>
+                                    <Label htmlFor={`${idPrefix}-last-name`}>{dashboardCopy.settings.lastName}</Label>
                                     <Input
                                         id={`${idPrefix}-last-name`}
                                         name="last_name"
@@ -175,7 +176,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                             </div>
 
                             <div className="grid gap-1.5">
-                                <Label htmlFor={`${idPrefix}-email`}>Email</Label>
+                                <Label htmlFor={`${idPrefix}-email`}>{dashboardCopy.settings.email}</Label>
                                 <Input
                                     id={`${idPrefix}-email`}
                                     type="email"
@@ -189,26 +190,26 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
 
                             {user.email_verified_at === null && (
                                 <p className="text-sm text-muted-foreground">
-                                    Email unverified.{' '}
+                                    {dashboardCopy.settings.emailUnverified}{' '}
                                     <Link
                                         href={send()}
                                         as="button"
                                         className="text-foreground underline underline-offset-4"
                                     >
-                                        Resend verification
+                                        {dashboardCopy.settings.resendVerification}
                                     </Link>
                                 </p>
                             )}
 
                             {flash?.status === 'verification-link-sent' && (
                                 <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                                    Verification link sent.
+                                    {dashboardCopy.settings.verificationSent}
                                 </p>
                             )}
 
                             <div className="flex items-center gap-3">
                                 <Button type="submit" size="sm" disabled={processing}>
-                                    Save
+                                    {dashboardCopy.settings.save}
                                 </Button>
                             </div>
                         </>
@@ -216,10 +217,10 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                 </Form>
             </Section>
 
-            <Section title="Money display">
+            <Section title={dashboardCopy.settings.sections.money}>
                 <div className="grid gap-3">
                     <div className="grid gap-1.5">
-                        <Label htmlFor={`${idPrefix}-currency`}>Currency</Label>
+                        <Label htmlFor={`${idPrefix}-currency`}>{dashboardCopy.settings.currency}</Label>
                         <select
                             id={`${idPrefix}-currency`}
                             className={selectCls}
@@ -227,13 +228,13 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                             disabled={moneyBusy}
                             onChange={(e) => patchProfile({ currency: e.target.value })}
                         >
-                            <option value="USD">USD — US Dollar</option>
-                            <option value="EUR">EUR — Euro</option>
+                            <option value="USD">{dashboardCopy.settings.usd}</option>
+                            <option value="EUR">{dashboardCopy.settings.eur}</option>
                         </select>
                     </div>
 
                     <div className="grid gap-1.5">
-                        <Label htmlFor={`${idPrefix}-locale`}>Number format</Label>
+                        <Label htmlFor={`${idPrefix}-locale`}>{dashboardCopy.settings.numberFormat}</Label>
                         <select
                             id={`${idPrefix}-locale`}
                             className={selectCls}
@@ -243,7 +244,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                 patchProfile({ locale: e.target.value === '' ? null : e.target.value })
                             }
                         >
-                            <option value="">Browser default</option>
+                            <option value="">{dashboardCopy.settings.browserDefault}</option>
                             {SUPPORTED_LOCALES.map((loc) => (
                                 <option key={loc.value} value={loc.value}>
                                     {loc.label}
@@ -255,36 +256,36 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     {moneyBusy && (
                         <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Updating…
+                            {dashboardCopy.settings.updating}
                         </p>
                     )}
                 </div>
             </Section>
 
-            <Section title="Appearance">
+            <Section title={dashboardCopy.settings.sections.appearance}>
                 <AppearanceTabs />
             </Section>
 
-            <Section title="Desktop layout">
+            <Section title={dashboardCopy.settings.sections.layout}>
                 <DashboardDensityTabs />
                 <p className="text-sm text-muted-foreground">
-                    Compact keeps a 5∶3 wide-to-thin ratio, shrinks type and padding, and leaves a thin-card slot on each row. The second row can sit partly below the fold. Mobile is unchanged.
+                    {dashboardCopy.settings.layoutHint}
                 </p>
             </Section>
 
-            <Section title="Tour">
+            <Section title={dashboardCopy.settings.sections.tour}>
                 <p className="text-sm text-muted-foreground">
-                    Rewatch the slideshow. Your available cash and savings numbers stay as they are.
+                    {dashboardCopy.settings.tourHint}
                 </p>
                 <Button type="button" variant="outline" size="sm" onClick={() => router.visit('/onboarding')}>
-                    Show the tour again
+                    {dashboardCopy.settings.showTour}
                 </Button>
             </Section>
 
             {isLocal && (
-                <Section title="Local only">
+                <Section title={dashboardCopy.settings.sections.local}>
                     <p className="text-sm text-muted-foreground">
-                        Temporary. Reset wipes Facts and sends you through onboarding. Load demo rebuilds 24 months and skips the tour. Do not mix a typed seed with demo history.
+                        {dashboardCopy.settings.localHint}
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <Button
@@ -292,32 +293,32 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                if (window.confirm('Wipe all financial data and return to onboarding?')) {
+                                if (window.confirm(dashboardCopy.settings.resetConfirm)) {
                                     router.post('/dev/reset-onboarding');
                                 }
                             }}
                         >
-                            Reset to onboarding
+                            {dashboardCopy.settings.resetOnboarding}
                         </Button>
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                if (window.confirm('Replace all financial data with the 24-month demo?')) {
+                                if (window.confirm(dashboardCopy.settings.loadDemoConfirm)) {
                                     router.post('/dev/load-demo');
                                 }
                             }}
                         >
-                            Load demo
+                            {dashboardCopy.settings.loadDemo}
                         </Button>
                     </div>
                 </Section>
             )}
 
-            <Section title="Finance">
+            <Section title={dashboardCopy.settings.sections.finance}>
                 <p className="text-sm text-muted-foreground">
-                    Last processed:{' '}
+                    {dashboardCopy.settings.lastProcessed}{' '}
                     <span className="text-foreground">
                         {formatProcessedAt(user.last_finance_processed_at)}
                     </span>
@@ -335,11 +336,11 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     ) : (
                         <RefreshCw className="h-4 w-4" />
                     )}
-                    Sync now
+                    {dashboardCopy.settings.syncNow}
                 </Button>
             </Section>
 
-            <Section title="Security">
+            <Section title={dashboardCopy.settings.sections.security}>
                 <Form
                     {...PasswordController.update.form()}
                     options={{ preserveScroll: true, preserveState: true }}
@@ -348,15 +349,15 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     onError={(errors) => {
                         if (errors.password) passwordInput.current?.focus();
                         if (errors.current_password) currentPasswordInput.current?.focus();
-                        toastError(errors.current_password ?? errors.password ?? errors.password_confirmation ?? 'Could not update password.');
+                        toastError(errors.current_password ?? errors.password ?? errors.password_confirmation ?? dashboardCopy.settings.couldNotUpdatePassword);
                     }}
-                    onSuccess={() => toastSuccess('Password updated')}
+                    onSuccess={() => toastSuccess(dashboardCopy.settings.passwordUpdated)}
                     className="space-y-3"
                 >
                     {({ errors, processing }) => (
                         <>
                             <div className="grid gap-1.5">
-                                <Label htmlFor={`${idPrefix}-current-password`}>Current password</Label>
+                                <Label htmlFor={`${idPrefix}-current-password`}>{dashboardCopy.settings.currentPassword}</Label>
                                 <Input
                                     id={`${idPrefix}-current-password`}
                                     ref={currentPasswordInput}
@@ -367,7 +368,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                 <InputError message={errors.current_password} />
                             </div>
                             <div className="grid gap-1.5">
-                                <Label htmlFor={`${idPrefix}-password`}>New password</Label>
+                                <Label htmlFor={`${idPrefix}-password`}>{dashboardCopy.settings.newPassword}</Label>
                                 <Input
                                     id={`${idPrefix}-password`}
                                     ref={passwordInput}
@@ -389,7 +390,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                             </div>
                             <div className="flex items-center gap-3">
                                 <Button type="submit" size="sm" disabled={processing}>
-                                    Update password
+                                    {dashboardCopy.settings.updatePassword}
                                 </Button>
                             </div>
                         </>
@@ -397,7 +398,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                 </Form>
             </Section>
 
-            <Section title="Session">
+            <Section title={dashboardCopy.settings.sections.session}>
                 <Button
                     type="button"
                     variant="outline"
@@ -406,7 +407,7 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                     onClick={() => router.post(logout().url)}
                 >
                     <LogOut className="h-4 w-4" />
-                    Log out
+                    {dashboardCopy.settings.logOut}
                 </Button>
             </Section>
 

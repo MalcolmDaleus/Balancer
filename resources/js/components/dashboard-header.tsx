@@ -1,4 +1,5 @@
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Button } from '@/components/ui/button';
 import { useBugReport } from '@/contexts/bug-report';
 import { useSettings } from '@/contexts/settings';
@@ -18,7 +19,7 @@ export default function DashboardHeader() {
                         variant="ghost"
                         size="icon"
                         onClick={openSettings}
-                        aria-label="Open settings"
+                        aria-label={dashboardCopy.header.openSettings}
                         className="hidden h-9 w-9 text-slate-600 hover:text-slate-900 md:inline-flex dark:text-neutral-300 dark:hover:text-neutral-100"
                     >
                         <Settings className="h-4 w-4" />
@@ -28,7 +29,7 @@ export default function DashboardHeader() {
                         variant="ghost"
                         size="icon"
                         onClick={openBugReport}
-                        aria-label="Report a problem"
+                        aria-label={dashboardCopy.header.reportProblem}
                         className="h-9 w-9 text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-neutral-100"
                     >
                         <Bug className="h-4 w-4" />
@@ -38,12 +39,12 @@ export default function DashboardHeader() {
                 <div className="flex items-center justify-center">
                     <img
                         src="/branding/logo_dark.svg"
-                        alt="Balancer"
+                        alt={dashboardCopy.header.logoAlt}
                         className="h-auto w-36 dark:hidden"
                     />
                     <img
                         src="/branding/logo_light.svg"
-                        alt="Balancer"
+                        alt={dashboardCopy.header.logoAlt}
                         className="hidden h-auto w-36 dark:block"
                     />
                 </div>

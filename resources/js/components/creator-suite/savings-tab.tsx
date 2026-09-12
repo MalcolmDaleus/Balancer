@@ -1,8 +1,8 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { Saving } from '@/types/api';
 import { useEffect, useMemo, useState } from 'react';
 import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from './fact-filters';
@@ -40,7 +40,6 @@ export function SavingsTab({
     focus?: LedgerFocus | null;
     onFocusConsumed?: () => void;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [savings, setSavings] = useState<Saving[]>([]);
@@ -92,7 +91,7 @@ export function SavingsTab({
         setSelected(s);
         setForm({ amount: centsToInput(s.amount_cents), type: s.type, notes: s.notes ?? '', month: s.month?.slice(0, 7) ?? thisMonthStr() });
         setError(null);
-        if (isMobile && canMutateFact(s.month)) setSheetOpen(true);
+        setSheetOpen(true);
     };
 
     useEffect(() => {
@@ -117,7 +116,7 @@ export function SavingsTab({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.month)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -130,13 +129,13 @@ export function SavingsTab({
                 await apiFetch(`/api/v1/savings/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 await apiFetch('/api/v1/savings', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: form.type === 'withdrawal' ? 'Withdrawal added' : 'Deposit added',
+                    toast: form.type === 'withdrawal' ? ledgerCopy.savings.withdrawalAdded : ledgerCopy.savings.depositAdded,
                 });
             }
             reset();
@@ -152,7 +151,7 @@ export function SavingsTab({
         setConfirm(null);
         setRemovingId(s.id);
         try {
-            await apiFetch(`/api/v1/savings/${s.id}`, { method: 'DELETE', toast: 'Deleted' });
+            await apiFetch(`/api/v1/savings/${s.id}`, { method: 'DELETE', toast: ledgerCopy.common.deleted });
             setSavings(dropById(s.id));
             if (selected?.id === s.id) reset();
         } catch (err: unknown) {
@@ -167,17 +166,17 @@ export function SavingsTab({
     const formContent = (
         <form onSubmit={handleSubmit} className="space-y-3">
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
-            <Field label="Type">
+            <Field label={ledgerCopy.savings.type}>
                 <select
                     className={selectCls}
                     value={form.type}
                     onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as 'deposit' | 'withdrawal' }))}
                 >
-                    <option value="deposit">Deposit</option>
-                    <option value="withdrawal">Withdrawal</option>
+                    <option value="deposit">{ledgerCopy.savings.deposit}</option>
+                    <option value="withdrawal">{ledgerCopy.savings.withdrawal}</option>
                 </select>
             </Field>
-            <Field label="Amount">
+            <Field label={ledgerCopy.common.amount}>
                 <input
                     type="number"
                     step="0.01"
@@ -188,7 +187,7 @@ export function SavingsTab({
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Month (YYYY-MM)">
+            <Field label={ledgerCopy.savings.month}>
                 <input
                     type="month"
                     required
@@ -197,7 +196,7 @@ export function SavingsTab({
                     onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))}
                 />
             </Field>
-            <Field label="Notes (optional)">
+            <Field label={ledgerCopy.common.notesOptional}>
                 <input
                     type="text"
                     maxLength={500}
@@ -214,7 +213,7 @@ export function SavingsTab({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete this ${confirm.type} of ${fmtAmount(confirm.amount_cents)}?`}
+                    message={ledgerCopy.savings.deleteTxn(confirm.type, fmtAmount(confirm.amount_cents))}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -223,7 +222,7 @@ export function SavingsTab({
                 <TabToolbar>
                     {!loading && savings.length > 0 ? (
                         <span className={rowDetailCls}>
-                            Total: <span className="font-semibold text-slate-800 dark:text-neutral-100">{fmtAmount(grandTotal)}</span>
+                            {ledgerCopy.savings.total} <span className="font-semibold text-slate-800 dark:text-neutral-100">{fmtAmount(grandTotal)}</span>
                         </span>
                     ) : (
                         <span />
@@ -241,28 +240,29 @@ export function SavingsTab({
                 <SplitPane
                     sheetOpen={sheetOpen}
                     onSheetOpenChange={setSheetOpen}
-                    sheetTitle={selected ? 'Edit Transaction' : 'New Transaction'}
+                    onDismiss={reset}
+                    sheetTitle={selected ? ledgerCopy.savings.editTxn : ledgerCopy.savings.newTxn}
                     list={
                         <ListStack>
                             {loading && !savings.length && <LoadingRows />}
-                            {!loading && !savings.length && <EmptyRows label="No savings transactions yet." />}
+                            {!loading && !savings.length && <EmptyRows label={ledgerCopy.savings.noTxns} />}
                             {!loading && savings.length > 0 && !visibleSavings.length && (
-                                <EmptyRows label="No transactions match these filters." />
+                                <EmptyRows label={ledgerCopy.savings.noTxnsMatch} />
                             )}
                             {visibleSavings.map((s) => {
                                 const canWrite = canMutateFact(s.month);
                                 return (
-                                    <ListRow key={s.id} selected={selected?.id === s.id} busy={removingId === s.id}>
+                                    <ListRow key={s.id} selected={selected?.id === s.id} busy={removingId === s.id} onClick={() => selectRow(s)}>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1">
                                                 {s.notes ? (
                                                     <p className={rowTitleCls}>{s.notes}</p>
                                                 ) : (
-                                                    <p className={`${rowTitleCls} italic text-slate-400 dark:text-neutral-400`}>No notes</p>
+                                                    <p className={`${rowTitleCls} italic text-slate-400 dark:text-neutral-400`}>{ledgerCopy.savings.noNotes}</p>
                                                 )}
                                                 <div className="mt-1 flex flex-wrap items-center gap-2">
                                                     <StatusChip
-                                                        label={s.type === 'deposit' ? 'Deposit' : 'Withdrawal'}
+                                                        label={s.type === 'deposit' ? ledgerCopy.savings.deposit : ledgerCopy.savings.withdrawal}
                                                         color={s.type === 'deposit' ? 'green' : 'red'}
                                                     />
                                                     <span className={rowDetailCls}>{s.month?.slice(0, 7)}</span>

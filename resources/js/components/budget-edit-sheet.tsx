@@ -1,5 +1,6 @@
 import { apiFetch, errorMessage } from '@/api/client';
 import { greyBtnFillCls } from '@/components/creator-suite/shared';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Button } from '@/components/ui/button';
 import {
     Sheet,
@@ -60,7 +61,7 @@ function AmountField({
             >
                 {label}
                 {optional ? (
-                    <span className="ml-1 font-normal text-slate-400 dark:text-neutral-500">optional</span>
+                    <span className="ml-1 font-normal text-slate-400 dark:text-neutral-500">{dashboardCopy.budgetEdit.optional}</span>
                 ) : null}
             </label>
             {hint && !hideLabel ? <p className="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">{hint}</p> : null}
@@ -72,7 +73,7 @@ function AmountField({
                     inputMode="decimal"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder={placeholder ?? '0.00'}
+                    placeholder={placeholder ?? dashboardCopy.budgetEdit.amountPlaceholder}
                     autoComplete="off"
                 />
             </div>
@@ -96,6 +97,7 @@ export default function BudgetEditSheet({
     const { auth } = usePage<SharedData>().props;
     const symbol = currencySymbol(auth.user.currency ?? 'USD', auth.user.locale);
     const fromCents = amount;
+    const t = dashboardCopy.budgetEdit;
 
     const [global, setGlobal] = useState('');
     const [categoryCaps, setCategoryCaps] = useState<Record<number, string>>({});
@@ -158,7 +160,7 @@ export default function BudgetEditSheet({
     const submit = async () => {
         const discretionary = majorInputToCents(global);
         if (discretionary === null || Number.isNaN(discretionary)) {
-            setFormError('Enter how much you want to spend on purchases this month. 0 is allowed.');
+            setFormError(t.errPurchases);
             return;
         }
 
@@ -170,7 +172,7 @@ export default function BudgetEditSheet({
                 continue;
             }
             if (Number.isNaN(cents)) {
-                setFormError('Category limits must be a number.');
+                setFormError(t.errCategory);
                 return;
             }
             clean.push({ domain: 'purchase', category_id: id, amount_cents: cents });
@@ -180,7 +182,7 @@ export default function BudgetEditSheet({
         if (billsManual) {
             const parsed = majorInputToCents(bills);
             if (parsed === null || Number.isNaN(parsed)) {
-                setFormError('Enter a recurring total, or switch back to auto.');
+                setFormError(t.errRecurring);
                 return;
             }
             billsCents = parsed;
@@ -189,7 +191,7 @@ export default function BudgetEditSheet({
         const debtCents = majorInputToCents(debtPlan);
         const saveCents = majorInputToCents(savePlan);
         if (Number.isNaN(debtCents) || Number.isNaN(saveCents)) {
-            setFormError('Optional amounts must be empty or a valid number.');
+            setFormError(t.errOptional);
             return;
         }
 
@@ -206,7 +208,7 @@ export default function BudgetEditSheet({
                     save_cents: saveCents,
                     envelopes: clean,
                 }),
-                toast: 'Plan saved',
+                toast: t.savedToast,
             });
             onSaved(next);
             onOpenChange(false);
@@ -230,9 +232,9 @@ export default function BudgetEditSheet({
                         <p className="truncate text-sm font-medium text-slate-800 dark:text-neutral-100">{cat.name}</p>
                         <p className="text-xs text-slate-500 dark:text-neutral-400">
                             {cat.actual_cents > 0
-                                ? `Spent ${fromCents(cat.actual_cents)} so far this month`
-                                : 'Nothing spent in this category yet'}
-                            {!enabled && capped ? ` · limit ${fromCents(parsedCap(cat.id) ?? 0)}` : ''}
+                                ? t.spentSoFar(fromCents(cat.actual_cents))
+                                : t.nothingSpent}
+                            {!enabled && capped ? t.limitSuffix(fromCents(parsedCap(cat.id) ?? 0)) : ''}
                         </p>
                     </div>
                     <button
@@ -261,19 +263,19 @@ export default function BudgetEditSheet({
                             }));
                         }}
                     >
-                        {enabled ? 'Close' : 'Set a limit'}
+                        {enabled ? t.close : t.setLimit}
                     </button>
                 </div>
                 {enabled && (
                     <div className="mt-2">
                         <AmountField
                             id={`cap-${cat.id}`}
-                            label={`Limit for ${cat.name}`}
+                            label={t.limitFor(cat.name)}
                             hideLabel
                             value={categoryCaps[cat.id] ?? ''}
                             onChange={(v) => setCategoryCaps((prev) => ({ ...prev, [cat.id]: v }))}
                             symbol={symbol}
-                            placeholder="0.00"
+                            placeholder={t.amountPlaceholder}
                         />
                     </div>
                 )}
@@ -292,29 +294,28 @@ export default function BudgetEditSheet({
                 }
             >
                 <SheetHeader className="border-b border-border/60 px-5 py-4 text-left">
-                    <SheetTitle>Plan for {monthLabel(data.month, auth.user.locale)}</SheetTitle>
+                    <SheetTitle>{t.title(monthLabel(data.month, auth.user.locale))}</SheetTitle>
                     <SheetDescription>
-                        Tell Balancer what you intend to spend. Unused room stays in your cash — it does not raise next
-                        month’s numbers.
+                        {t.description}
                     </SheetDescription>
                 </SheetHeader>
 
                 <div className="space-y-8 px-5 py-5">
                     <section className="space-y-3">
                         <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-500 dark:text-neutral-400">
-                            Purchases
+                            {t.purchases}
                         </p>
                         <AmountField
                             id="budget-global"
-                            label="How much for purchases this month?"
-                            hint="Food, shopping, extras — not rent or subscriptions. Those are under Recurring."
+                            label={t.purchasesLabel}
+                            hint={t.purchasesHint}
                             value={global}
                             onChange={setGlobal}
                             symbol={symbol}
                         />
                         {data.discretionary.actual_cents > 0 && (
                             <p className="text-xs text-slate-500 dark:text-neutral-400">
-                                You’ve already spent {fromCents(data.discretionary.actual_cents)} on purchases this month.
+                                {t.alreadySpent(fromCents(data.discretionary.actual_cents))}
                             </p>
                         )}
                         {unallocated !== null && hasAnyCap && (
@@ -326,8 +327,8 @@ export default function BudgetEditSheet({
                                 }`}
                             >
                                 {unallocated < 0
-                                    ? `Category limits are ${fromCents(Math.abs(unallocated))} over the purchase total.`
-                                    : `${fromCents(unallocated)} of the purchase total has no category limit — that’s fine.`}
+                                    ? t.capsOver(fromCents(Math.abs(unallocated)))
+                                    : t.leftoverUncapped(fromCents(unallocated))}
                             </p>
                         )}
                     </section>
@@ -336,10 +337,10 @@ export default function BudgetEditSheet({
                         <section className="space-y-3">
                             <div>
                                 <p className="text-sm font-medium text-slate-800 dark:text-neutral-100">
-                                    Split by category
+                                    {t.splitByCategory}
                                 </p>
                                 <p className="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">
-                                    Optional. Skip this if one overall number is enough.
+                                    {t.splitHint}
                                 </p>
                             </div>
                             <div className="space-y-2">
@@ -353,10 +354,10 @@ export default function BudgetEditSheet({
                                     onClick={() => setShowQuietCategories((v) => !v)}
                                 >
                                     {showQuietCategories
-                                        ? 'Hide extra categories'
+                                        ? t.hideExtra
                                         : withSpend.length === 0 && !hasAnyCap
-                                          ? `Choose from ${hiddenQuietCount} ${hiddenQuietCount === 1 ? 'category' : 'categories'}`
-                                          : `Show ${hiddenQuietCount} more ${hiddenQuietCount === 1 ? 'category' : 'categories'}`}
+                                          ? t.chooseFrom(hiddenQuietCount)
+                                          : t.showMoreCategories(hiddenQuietCount)}
                                 </button>
                             )}
                         </section>
@@ -364,10 +365,10 @@ export default function BudgetEditSheet({
 
                     <section className="space-y-3">
                         <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-500 dark:text-neutral-400">
-                            Recurring
+                            {t.recurring}
                         </p>
                         <p className="text-sm text-slate-600 dark:text-neutral-300">
-                            Filled in from your recurring streams. You don’t need to type these unless a stream changed.
+                            {t.recurringIntro}
                         </p>
                         {data.bills.streams.length > 0 ? (
                             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200/80 dark:divide-neutral-800 dark:border-neutral-700/80">
@@ -383,20 +384,20 @@ export default function BudgetEditSheet({
                                     </li>
                                 ))}
                                 <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm font-medium">
-                                    <span className="text-slate-800 dark:text-neutral-100">This month’s recurring</span>
+                                    <span className="text-slate-800 dark:text-neutral-100">{t.thisMonthsRecurring}</span>
                                     <span className="tabular-nums">{fromCents(data.bills.plan_cents)}</span>
                                 </li>
                             </ul>
                         ) : (
                             <p className="text-sm text-slate-500 dark:text-neutral-400">
-                                No recurring streams yet — add them in the Ledger and this will fill in.
+                                {t.noStreams}
                             </p>
                         )}
                         {billsManual ? (
                             <AmountField
                                 id="budget-bills"
-                                label="Custom recurring total"
-                                hint="Overrides the automatic total from streams."
+                                label={t.customRecurring}
+                                hint={t.customRecurringHint}
                                 value={bills}
                                 onChange={setBills}
                                 symbol={symbol}
@@ -412,13 +413,13 @@ export default function BudgetEditSheet({
                                 setBillsManual((v) => !v);
                             }}
                         >
-                            {billsManual ? 'Back to automatic recurring' : 'Use a different recurring total'}
+                            {billsManual ? t.backToAuto : t.useDifferentTotal}
                         </button>
                     </section>
 
                     <section className="space-y-3">
                         <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-500 dark:text-neutral-400">
-                            Debts
+                            {t.debts}
                         </p>
                         {data.debts.open.length > 0 ? (
                             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200/80 dark:divide-neutral-800 dark:border-neutral-700/80">
@@ -429,36 +430,36 @@ export default function BudgetEditSheet({
                                                 {debt.name}
                                             </span>
                                             <span className="shrink-0 text-sm tabular-nums text-slate-800 dark:text-neutral-100">
-                                                {fromCents(debt.remaining_cents)} left
+                                                {t.left(fromCents(debt.remaining_cents))}
                                             </span>
                                         </div>
                                         <p className="mt-0.5 text-xs text-slate-500 dark:text-neutral-400">
-                                            of {fromCents(debt.original_cents)} originally
+                                            {t.ofOriginally(fromCents(debt.original_cents))}
                                             {debt.paid_this_month_cents > 0
-                                                ? ` · paid ${fromCents(debt.paid_this_month_cents)} this month`
+                                                ? t.paidThisMonth(fromCents(debt.paid_this_month_cents))
                                                 : ''}
                                         </p>
                                     </li>
                                 ))}
                                 {data.debts.open.length > 1 && (
                                     <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm font-medium">
-                                        <span className="text-slate-800 dark:text-neutral-100">Still owed in total</span>
+                                        <span className="text-slate-800 dark:text-neutral-100">{t.stillOwed}</span>
                                         <span className="tabular-nums">{fromCents(data.debts.remaining_cents)}</span>
                                     </li>
                                 )}
                             </ul>
                         ) : (
-                            <p className="text-sm text-slate-500 dark:text-neutral-400">No open debts.</p>
+                            <p className="text-sm text-slate-500 dark:text-neutral-400">{t.noOpenDebts}</p>
                         )}
                         {data.debts.open.length > 0 && (
                             <AmountField
                                 id="budget-debt"
-                                label="How much do you want to pay toward these this month?"
-                                hint="A target across all open debts — paying more or less is always allowed."
+                                label={t.debtTarget}
+                                hint={t.debtHint}
                                 value={debtPlan}
                                 onChange={setDebtPlan}
                                 symbol={symbol}
-                                placeholder="No target"
+                                placeholder={t.noTarget}
                                 optional
                             />
                         )}
@@ -466,20 +467,20 @@ export default function BudgetEditSheet({
 
                     <section className="space-y-3">
                         <p className="text-[11px] font-semibold tracking-wide uppercase text-slate-500 dark:text-neutral-400">
-                            Savings
+                            {t.savings}
                         </p>
                         <AmountField
                             id="budget-save"
-                            label="How much do you want to put aside this month?"
+                            label={t.saveTarget}
                             hint={
                                 data.savings_this_month_cents !== 0
-                                    ? `This month so far: ${fromCents(data.savings_this_month_cents)}.`
-                                    : 'A target only. Deposits and withdrawals still go in the Ledger.'
+                                    ? t.saveHintSoFar(fromCents(data.savings_this_month_cents))
+                                    : t.saveHintLedger
                             }
                             value={savePlan}
                             onChange={setSavePlan}
                             symbol={symbol}
-                            placeholder="No target"
+                            placeholder={t.noTarget}
                             optional
                         />
                     </section>
@@ -492,7 +493,7 @@ export default function BudgetEditSheet({
                         disabled={saving}
                         onClick={() => void submit()}
                     >
-                        {saving ? 'Saving…' : 'Save this month’s plan'}
+                        {saving ? t.saving : t.save}
                     </Button>
                 </div>
             </SheetContent>

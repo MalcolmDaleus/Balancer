@@ -1,5 +1,6 @@
 import { apiFetchList, errorMessage } from '@/api/client';
 import { innerCardCls, tintSectionPill } from '@/components/creator-suite/shared';
+import { dashboardCopy } from '@/config/dashboard-copy';
 import { Spinner } from '@/components/ui/spinner';
 import { useFinanceDataOptional } from '@/contexts/finance-data';
 import { useFormatMoney } from '@/hooks/use-format-money';
@@ -71,14 +72,14 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
         >
             <div className="mb-4 flex shrink-0 items-start justify-between gap-2">
                 <div>
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">Past Balance Sheets</h2>
-                    <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">Closed monthly snapshots</p>
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-neutral-50">{dashboardCopy.history.title}</h2>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-neutral-200">{dashboardCopy.history.subtitle}</p>
                 </div>
                 <button
                     type="button"
                     onClick={() => void loadHistory(true)}
                     disabled={isLoading || isRefreshing}
-                    aria-label="Refresh history"
+                    aria-label={dashboardCopy.history.refresh}
                     className="shrink-0 rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                 >
                     <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -86,7 +87,7 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                {isLoading && <Spinner label="Loading history" />}
+                {isLoading && <Spinner label={dashboardCopy.history.loading} />}
 
                 {!isLoading && error && !snapshots.length && (
                     <p className="text-sm text-rose-600 dark:text-rose-300">{error}</p>
@@ -94,7 +95,7 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
 
                 {!isLoading && !error && !snapshots.length && (
                     <p className="text-sm leading-relaxed text-slate-500 dark:text-neutral-300">
-                        No closed months yet. When you close a month, its snapshot will appear here.
+                        {dashboardCopy.history.empty}
                     </p>
                 )}
 
@@ -117,16 +118,16 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
                                             </p>
                                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                                                 <span className={`inline-flex ${pillBase} ${tintSectionPill.emerald}`}>
-                                                    Income {signed(snap.total_income_cents, '+')}
+                                                    {dashboardCopy.history.income} {signed(snap.total_income_cents, '+')}
                                                 </span>
                                                 <span className={`inline-flex ${pillBase} ${tintSectionPill.red}`}>
-                                                    Spent {signed(snap.total_spending_cents, '-')}
+                                                    {dashboardCopy.history.spent} {signed(snap.total_spending_cents, '-')}
                                                 </span>
                                             </div>
                                         </div>
                                         <div className="text-left sm:text-right">
                                             <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-neutral-400">
-                                                Roll over
+                                                {dashboardCopy.history.rollOver}
                                             </p>
                                             <p className="text-base font-semibold tabular-nums text-slate-900 dark:text-neutral-100">
                                                 {amount(snap.roll_over_cents)}
@@ -136,12 +137,12 @@ export default function BalanceSheetHistoryCard({ className = '' }: { className?
 
                                     {isOpen && (
                                         <div className="space-y-2 border-t border-slate-100 px-4 py-3.5 dark:border-neutral-700/60">
-                                            <DetailRow label="Income" value={signed(snap.total_income_cents, '+')} className="text-emerald-600 dark:text-emerald-300" />
-                                            <DetailRow label="Debt paid" value={signed(snap.total_debt_paid_cents, '-')} className="text-red-600 dark:text-red-300" />
-                                            <DetailRow label="Purchases" value={signed(snap.total_spending_cents, '-')} className="text-yellow-700 dark:text-yellow-300" />
-                                            <DetailRow label="Recurring" value={signed(snap.total_recurring_cents, '-')} className="text-orange-700 dark:text-orange-300" />
-                                            <DetailRow label="Savings (net)" value={amount(snap.savings_snapshot_cents)} />
-                                            <DetailRow label="Roll over" value={amount(snap.roll_over_cents)} className="text-slate-900 dark:text-neutral-100" />
+                                            <DetailRow label={dashboardCopy.history.income} value={signed(snap.total_income_cents, '+')} className="text-emerald-600 dark:text-emerald-300" />
+                                            <DetailRow label={dashboardCopy.history.debtPaid} value={signed(snap.total_debt_paid_cents, '-')} className="text-red-600 dark:text-red-300" />
+                                            <DetailRow label={dashboardCopy.history.purchases} value={signed(snap.total_spending_cents, '-')} className="text-yellow-700 dark:text-yellow-300" />
+                                            <DetailRow label={dashboardCopy.history.recurring} value={signed(snap.total_recurring_cents, '-')} className="text-orange-700 dark:text-orange-300" />
+                                            <DetailRow label={dashboardCopy.history.savingsNet} value={amount(snap.savings_snapshot_cents)} />
+                                            <DetailRow label={dashboardCopy.history.rollOver} value={amount(snap.roll_over_cents)} className="text-slate-900 dark:text-neutral-100" />
                                         </div>
                                     )}
                                 </div>

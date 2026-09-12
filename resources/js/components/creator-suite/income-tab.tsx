@@ -1,3 +1,4 @@
+import { ledgerCopy } from '@/config/ledger-copy';
 import { useEffect, useRef, useState } from 'react';
 import { AddButton, SubTabBar, TabToolbar } from './shared';
 import { IncomeArchivePanel } from './income/archive-panel';
@@ -29,7 +30,7 @@ export function IncomeTab({
     return (
         <div className="flex min-h-0 flex-1 flex-col">
             <TabToolbar>
-                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} />
+                <SubTabBar tabs={[...SUBTABS]} active={sub} onChange={(t) => setSub(t as SubTab)} labels={ledgerCopy.income.sub} />
                 {sub !== 'Archive' && <AddButton onClick={() => addRef.current?.()} />}
             </TabToolbar>
             {sub === 'Schedules' && <IncomeSchedulesPanel addRef={addRef} active={active} />}

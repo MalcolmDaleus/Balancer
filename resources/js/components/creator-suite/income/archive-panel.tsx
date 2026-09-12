@@ -1,3 +1,4 @@
+import { ledgerCopy } from '@/config/ledger-copy';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import type { RegularIncomeSchedule } from '@/types/api';
 import { ArchiveTabPanel } from '../archive-tab';
@@ -12,10 +13,10 @@ export function IncomeArchivePanel({ active }: { active: boolean }) {
             listUrl="/api/v1/income/schedules?archived=1"
             restoreUrl={(id) => `/api/v1/income/schedules/${id}/restore`}
             forceUrl={(id) => `/api/v1/income/schedules/${id}/force`}
-            emptyLabel="No archived schedules."
+            emptyLabel={ledgerCopy.income.noArchivedSchedules}
             renderDetail={(s) => {
                 const v = currentVersion(s);
-                return v ? `${fmtIncomeFreq(v.frequency)} · ${fmtAmount(v.amount_cents)}` : 'No version';
+                return v ? `${fmtIncomeFreq(v.frequency)} · ${fmtAmount(v.amount_cents)}` : ledgerCopy.income.noVersion;
             }}
         />
     );

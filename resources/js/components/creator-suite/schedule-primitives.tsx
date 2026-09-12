@@ -1,31 +1,23 @@
 /**
  * Shared schedule / price / toggle primitives used by income + recurring panels.
  */
+import { ledgerCopy } from '@/config/ledger-copy';
 import { useFormatMoney } from '@/hooks/use-format-money';
 import { useState } from 'react';
 import { dateCls, Field, inputCls, selectCls } from './shared';
 
-export const INCOME_FREQ_LABELS: Record<string, string> = {
-    weekly: 'Weekly',
-    biweekly: 'Biweekly',
-    monthly: 'Monthly',
-    bimonthly: 'Every 2 months',
-    quarterly: 'Quarterly',
-    trimester: 'Trimester',
-    biannually: 'Biannually',
-    annual: 'Annually',
-};
+export const INCOME_FREQ_LABELS: Record<string, string> = { ...ledgerCopy.schedule.incomeFreq };
 
-export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const DAY_NAMES = [...ledgerCopy.schedule.dayNames];
 
 export function fmtIncomeFreq(freq: string) {
     return INCOME_FREQ_LABELS[freq] ?? freq;
 }
 
 export function fmtRecurringFreq(freq: string) {
-    if (freq === 'yearly') return 'Yearly';
-    if (freq === 'weekly') return 'Weekly';
-    return 'Monthly';
+    if (freq === 'yearly') return ledgerCopy.schedule.yearly;
+    if (freq === 'weekly') return ledgerCopy.schedule.weekly;
+    return ledgerCopy.schedule.monthly;
 }
 
 export function fmtDate(d: string) {
@@ -71,7 +63,7 @@ export function ToggleSwitch({
             type="button"
             role="switch"
             aria-checked={on}
-            aria-label={label ?? (on ? 'On' : 'Off')}
+            aria-label={label ?? (on ? ledgerCopy.schedule.on : ledgerCopy.schedule.off)}
             disabled={disabled}
             onClick={onClick}
             className={`relative inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50 ${track} ${
@@ -119,7 +111,7 @@ export function ScheduleHistory({
                 <span>
                     {title} ({rows.length})
                 </span>
-                <span className="text-xs opacity-60">{open ? '▲ Hide' : '▼ Show'}</span>
+                <span className="text-xs opacity-60">{open ? ledgerCopy.schedule.hide : ledgerCopy.schedule.show}</span>
             </button>
             {open && (
                 <div className="mt-2 space-y-1.5">
@@ -140,11 +132,11 @@ export function ScheduleHistory({
                                 </div>
                                 <span className="text-xs text-slate-500 dark:text-neutral-400">
                                     {fmtDate(v.start_date)}
-                                    {v.end_date ? ` → ${fmtDate(v.end_date)}` : ' → now'}
+                                    {v.end_date ? ` → ${fmtDate(v.end_date)}` : ledgerCopy.schedule.now}
                                 </span>
                                 {isCurrent && (
                                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                        current
+                                        {ledgerCopy.schedule.current}
                                     </span>
                                 )}
                             </div>
@@ -179,8 +171,8 @@ export function blankIncomeVersionForm(today: string): IncomeVersionForm {
 export function IncomeVersionScheduleFields({
     versionForm,
     setVersionForm,
-    amountLabel = 'Amount',
-    startDateLabel = 'Effective from',
+    amountLabel = ledgerCopy.schedule.amount,
+    startDateLabel = ledgerCopy.schedule.effectiveFrom,
 }: {
     versionForm: IncomeVersionForm;
     setVersionForm: React.Dispatch<React.SetStateAction<IncomeVersionForm>>;
@@ -202,7 +194,7 @@ export function IncomeVersionScheduleFields({
                     onChange={(e) => setVersionForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Frequency">
+            <Field label={ledgerCopy.schedule.frequency}>
                 <select
                     className={selectCls}
                     value={versionForm.frequency}
@@ -216,7 +208,7 @@ export function IncomeVersionScheduleFields({
                 </select>
             </Field>
             {usesDayOfWeek(freq) && (
-                <Field label="Day of week">
+                <Field label={ledgerCopy.schedule.dayOfWeek}>
                     <select
                         className={selectCls}
                         value={versionForm.day_of_week}
@@ -231,7 +223,7 @@ export function IncomeVersionScheduleFields({
                 </Field>
             )}
             {freq === 'biweekly' && (
-                <Field label="Anchor date">
+                <Field label={ledgerCopy.schedule.anchorDate}>
                     <input
                         type="date"
                         required
@@ -242,7 +234,7 @@ export function IncomeVersionScheduleFields({
                 </Field>
             )}
             {usesDayOfMonth(freq) && (
-                <Field label="Day of month">
+                <Field label={ledgerCopy.schedule.dayOfMonth}>
                     <input
                         type="number"
                         min="1"
@@ -278,8 +270,8 @@ export type RecurringPriceForm = {
 export function RecurringPriceScheduleFields({
     priceForm,
     setPriceForm,
-    amountLabel = 'Amount',
-    startDateLabel = 'Starts on',
+    amountLabel = ledgerCopy.schedule.amount,
+    startDateLabel = ledgerCopy.schedule.startsOn,
 }: {
     priceForm: RecurringPriceForm;
     setPriceForm: React.Dispatch<React.SetStateAction<RecurringPriceForm>>;
@@ -302,7 +294,7 @@ export function RecurringPriceScheduleFields({
                 />
             </Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Frequency">
+                <Field label={ledgerCopy.schedule.frequency}>
                     <select
                         className={selectCls}
                         value={priceForm.frequency}
@@ -315,13 +307,13 @@ export function RecurringPriceScheduleFields({
                             }))
                         }
                     >
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
+                        <option value="weekly">{ledgerCopy.schedule.weekly}</option>
+                        <option value="monthly">{ledgerCopy.schedule.monthly}</option>
+                        <option value="yearly">{ledgerCopy.schedule.yearly}</option>
                     </select>
                 </Field>
                 {isWeekly ? (
-                    <Field label="Day of week">
+                    <Field label={ledgerCopy.schedule.dayOfWeek}>
                         <select
                             className={selectCls}
                             required
@@ -336,7 +328,7 @@ export function RecurringPriceScheduleFields({
                         </select>
                     </Field>
                 ) : (
-                    <Field label="Day of month">
+                    <Field label={ledgerCopy.schedule.dayOfMonth}>
                         <input
                             type="number"
                             min="1"

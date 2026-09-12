@@ -1,8 +1,8 @@
 import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import { useIsMobile } from '@/hooks/use-mobile';
 import type { IncomeEntry } from '@/types/api';
 import { MutableRefObject, useEffect, useMemo, useState } from 'react';
 import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from '../fact-filters';
@@ -31,9 +31,9 @@ import {
 } from '../shared';
 
 function entryTypeChip(type: IncomeEntry['type']) {
-    if (type === 'refund') return <StatusChip label="Refund" color="violet" />;
-    if (type === 'regular') return <StatusChip label="Regular" color="green" />;
-    return <StatusChip label="Irregular" color="slate" />;
+    if (type === 'refund') return <StatusChip label={ledgerCopy.income.refund} color="violet" />;
+    if (type === 'regular') return <StatusChip label={ledgerCopy.income.regular} color="green" />;
+    return <StatusChip label={ledgerCopy.income.irregular} color="slate" />;
 }
 
 export function IncomeEntriesPanel({
@@ -47,7 +47,6 @@ export function IncomeEntriesPanel({
     focus?: LedgerFocus | null;
     onFocusConsumed?: () => void;
 }) {
-    const isMobile = useIsMobile();
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [entries, setEntries] = useState<IncomeEntry[]>([]);
@@ -113,11 +112,9 @@ export function IncomeEntriesPanel({
                 amount: centsToInput(entry.amount_cents),
                 received_at: entry.received_at?.slice(0, 10) ?? todayStr(),
             });
-        }
-        setError(null);
-        if (isMobile && entry.type !== 'refund' && canMutateFact(entry.received_at)) {
             setSheetOpen(true);
         }
+        setError(null);
     };
 
     useEffect(() => {
@@ -157,7 +154,7 @@ export function IncomeEntriesPanel({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!canMutateFact(form.received_at)) {
-            const msg = loaded ? 'This month is locked.' : 'Checking month locks…';
+            const msg = loaded ? ledgerCopy.common.monthLocked : ledgerCopy.common.checkingLocks;
             setError(msg);
             toastError(msg);
             return;
@@ -176,13 +173,13 @@ export function IncomeEntriesPanel({
                 await apiFetch(`/api/v1/income/entries/${selected.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
-                    toast: 'Saved',
+                    toast: ledgerCopy.common.saved,
                 });
             } else {
                 await apiFetch('/api/v1/income/entries', {
                     method: 'POST',
                     body: JSON.stringify(body),
-                    toast: 'Income added',
+                    toast: ledgerCopy.income.incomeAdded,
                 });
             }
             reset();
@@ -198,7 +195,7 @@ export function IncomeEntriesPanel({
         setConfirm(null);
         setRemovingId(entry.id);
         try {
-            await apiFetch(`/api/v1/income/entries/${entry.id}`, { method: 'DELETE', toast: 'Deleted' });
+            await apiFetch(`/api/v1/income/entries/${entry.id}`, { method: 'DELETE', toast: ledgerCopy.common.deleted });
             setEntries(dropById(entry.id));
             if (selected?.id === entry.id) reset();
         } catch (err: unknown) {
@@ -213,15 +210,15 @@ export function IncomeEntriesPanel({
             {error && <ApiError message={error} onDismiss={() => setError(null)} />}
             {!selected && (
                 <p className="text-sm text-slate-500 dark:text-neutral-400">
-                    Add one-off irregular income. Regular income is generated from schedules; refunds come from purchases.
+                    {ledgerCopy.income.entriesHint}
                 </p>
             )}
             {selected?.type === 'regular' && (
                 <p className="text-sm text-slate-500 dark:text-neutral-400">
-                    This entry was auto-generated from a schedule. You can adjust amount or date in the open month.
+                    {ledgerCopy.income.regularHint}
                 </p>
             )}
-            <Field label="Name">
+            <Field label={ledgerCopy.common.name}>
                 <input
                     type="text"
                     required
@@ -231,7 +228,7 @@ export function IncomeEntriesPanel({
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 />
             </Field>
-            <Field label="Description (optional)">
+            <Field label={ledgerCopy.common.descriptionOptional}>
                 <input
                     type="text"
                     maxLength={255}
@@ -240,7 +237,7 @@ export function IncomeEntriesPanel({
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
             </Field>
-            <Field label="Amount">
+            <Field label={ledgerCopy.common.amount}>
                 <input
                     type="number"
                     step="0.01"
@@ -251,7 +248,7 @@ export function IncomeEntriesPanel({
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 />
             </Field>
-            <Field label="Received on">
+            <Field label={ledgerCopy.income.receivedOn}>
                 <input
                     type="date"
                     required
@@ -268,7 +265,7 @@ export function IncomeEntriesPanel({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={`Delete "${confirm.name}" (${fmtAmount(confirm.amount_cents)})?`}
+                    message={ledgerCopy.income.deleteEntry(confirm.name, fmtAmount(confirm.amount_cents))}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -277,18 +274,24 @@ export function IncomeEntriesPanel({
             <SplitPane
                 sheetOpen={sheetOpen}
                 onSheetOpenChange={setSheetOpen}
-                sheetTitle={selected ? 'Edit Entry' : 'New Irregular Entry'}
+                onDismiss={reset}
+                sheetTitle={selected ? ledgerCopy.income.editEntry : ledgerCopy.income.newIrregular}
                 list={
                     <ListStack>
                         {loading && !entries.length && <LoadingRows />}
-                        {!loading && !entries.length && <EmptyRows label="No income entries yet." />}
+                        {!loading && !entries.length && <EmptyRows label={ledgerCopy.income.noEntries} />}
                         {!loading && entries.length > 0 && !visibleEntries.length && (
-                            <EmptyRows label="No entries match these filters." />
+                            <EmptyRows label={ledgerCopy.income.noEntriesMatch} />
                         )}
                         {visibleEntries.map((entry) => {
                             const canEdit = entry.type !== 'refund' && canMutateFact(entry.received_at);
                             return (
-                                <ListRow key={entry.id} selected={selected?.id === entry.id} busy={removingId === entry.id}>
+                                <ListRow
+                                    key={entry.id}
+                                    selected={selected?.id === entry.id}
+                                    busy={removingId === entry.id}
+                                    onClick={entry.type !== 'refund' ? () => selectRow(entry) : undefined}
+                                >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">

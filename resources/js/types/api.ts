@@ -160,6 +160,14 @@ export type BalanceSheetSnapshot = {
     roll_over_cents: number;
 };
 
+export type StandingRead = {
+    available_cash_cents: number;
+    savings_total_cents: number;
+    owed_cents: number;
+    tracking_since: string;
+    months_tracked: number;
+};
+
 // ---------------------------------------------------------------------------
 // Creator Suite domain types (Laravel API resource shapes)
 // ---------------------------------------------------------------------------
