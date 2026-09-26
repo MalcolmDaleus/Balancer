@@ -3,8 +3,15 @@
 use App\Models\BalanceSheetTotal;
 use App\Models\RecurringCharge;
 use App\Models\RecurringOccurrenceSkip;
+use App\Models\RecurringPaymentCategory;
+use App\Models\RecurringPaymentEntry;
 use App\Models\RecurringPaymentStream;
 use App\Models\User;
+use Carbon\Carbon;
+
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 
@@ -115,4 +122,36 @@ test('updating a recurring charge rejects zero amount', function () {
     $this->actingAs($user)->putJson("/api/v1/recurring-payments/charges/{$charge->id}", [
         'amount_cents' => 0,
     ])->assertStatus(422);
+});
+
+test('charges list includes live projected rows for the rest of the open month', function () {
+    Carbon::setTestNow('2026-09-13 12:00:00');
+
+    $user = User::factory()->create();
+    $category = RecurringPaymentCategory::factory()->create([
+        'user_id' => $user->id,
+        'name' => 'Utilities',
+    ]);
+    $stream = RecurringPaymentStream::factory()->create([
+        'user_id' => $user->id,
+        'recurring_payment_category_id' => $category->id,
+        'name' => 'Power',
+        'active' => true,
+    ]);
+    RecurringPaymentEntry::factory()->create([
+        'user_id' => $user->id,
+        'recurring_payment_stream_id' => $stream->id,
+        'amount' => 50,
+        'frequency' => 'monthly',
+        'day_of_month' => 28,
+        'start_date' => '2026-01-28',
+        'active' => true,
+    ]);
+
+    $this->actingAs($user)->getJson('/api/v1/recurring-payments/charges')
+        ->assertOk()
+        ->assertJsonCount(0, 'data')
+        ->assertJsonPath('projected.0.name', 'Power')
+        ->assertJsonPath('projected.0.date', '2026-09-28')
+        ->assertJsonPath('projected.0.amount_cents', 5000);
 });

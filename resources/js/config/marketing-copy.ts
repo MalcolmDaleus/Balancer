@@ -3,7 +3,15 @@
  * Edit strings here; layout, icons, and colors stay in the page components.
  */
 export const marketingCopy = {
-    still: '/img/landing/elementor-placeholder-image.png',
+    images: {
+        dashboard: '/img/landing/dashboard.png',
+        ledger: '/img/landing/ledger.png',
+        balanceSheet: '/img/landing/balance_sheet.png',
+        budget: '/img/landing/budget.png',
+        statistics: '/img/landing/statistics.png',
+        history: '/img/landing/past_balance_sheets.png',
+        standing: '/img/landing/standing.png',
+    },
 
     domains: ['Purchases', 'Income', 'Recurring', 'Debts', 'Savings'] as const,
 
@@ -27,7 +35,7 @@ export const marketingCopy = {
             leftToSpend: 'Left to spend',
             leftAmount: '€412.00',
             exampleCaption: 'Example · not your books',
-            dashboardChrome: 'Dashboard',
+            dashboardAlt: 'Balancer dashboard with statistics, balance sheet, budget, ledger, and standing',
             availableCash: 'Available cash',
             cashAmount: '€1,840',
             leftoverCaption: 'Leftover updates this',
@@ -42,18 +50,24 @@ export const marketingCopy = {
                     name: 'Ledger',
                     title: 'Record it',
                     body: 'Purchases, income, recurring, debts, and savings are Facts you type. Recurring streams and pay schedules generate the repeats so you are not retyping rent every month.',
+                    image: '/img/landing/ledger.png',
+                    imageAlt: 'Ledger purchases list',
                 },
                 {
                     kicker: '02',
                     name: 'Balance Sheet',
                     title: 'See the month',
                     body: 'Balance Sheet is what moved this month. Statistics is what’s typical. Past months stay locked once you close them.',
+                    image: '/img/landing/balance_sheet.png',
+                    imageAlt: 'Balance sheet for the current month',
                 },
                 {
                     kicker: '03',
                     name: 'Budget',
                     title: 'Plan what’s left',
                     body: 'Set one monthly amount for day-to-day purchases if you want. You can always overspend; the card just shows what’s left.',
+                    image: '/img/landing/budget.png',
+                    imageAlt: 'Budget card with leftover to spend',
                 },
             ],
         },
@@ -66,6 +80,28 @@ export const marketingCopy = {
             savingsLabel: 'Savings',
             savingsValue: 'Set aside',
             badge: 'Not a fake paycheck',
+            imageAlt: 'Standing card with cash, savings, and upcoming charges',
+        },
+        modules: {
+            kicker: 'The rest of the board',
+            title: 'Statistics, history, and where you stand',
+            items: [
+                {
+                    name: 'Statistics',
+                    image: '/img/landing/statistics.png',
+                    imageAlt: 'Statistics trend chart',
+                },
+                {
+                    name: 'Past Balance Sheets',
+                    image: '/img/landing/past_balance_sheets.png',
+                    imageAlt: 'Closed monthly balance sheet snapshots',
+                },
+                {
+                    name: 'Standing',
+                    image: '/img/landing/standing.png',
+                    imageAlt: 'Standing card with cash and upcoming bills',
+                },
+            ],
         },
         close: {
             title: 'Keep this month tidy.',
@@ -100,22 +136,32 @@ export const marketingCopy = {
             {
                 title: 'Your month, in one place',
                 body: 'Balancer is not a bank connection. You write down what came in and what went out. We keep the month tidy so you can see what’s left.',
+                image: '/img/landing/dashboard.png',
+                imageAlt: 'The Balancer dashboard',
             },
             {
-                title: 'Five cards, one dashboard',
-                body: 'Balance Sheet is what moved this month. Ledger is where you type. Statistics is what’s typical. Budget is what you meant to spend. Past months stay locked once you close them.',
+                title: 'The cards on one dashboard',
+                body: 'Balance Sheet is what moved this month. Ledger is where you type. Statistics is what’s typical. Budget is what you meant to spend. Standing is cash, savings, and what’s still due. Past months stay locked once you close them.',
+                image: '/img/landing/balance_sheet.png',
+                imageAlt: 'Balance sheet for the current month',
             },
             {
                 title: 'You type Facts. Schedules do the rest.',
                 body: 'Purchases, income, recurring, debts, and savings are Facts you enter. Recurring streams and pay schedules generate the repeats so you are not retyping rent every month.',
+                image: '/img/landing/ledger.png',
+                imageAlt: 'Ledger where you type Facts',
             },
             {
                 title: 'Available cash and savings',
                 body: 'Two starting numbers: spendable cash on hand, and money already in savings. We remember them. Each month’s leftover updates your available cash. A savings deposit moves cash into savings — we do not create a fake income for these.',
+                image: '/img/landing/standing.png',
+                imageAlt: 'Standing card with cash and savings',
             },
             {
                 title: 'A simple purchase budget',
                 body: 'Optional: set one monthly amount for day-to-day purchases. You can always overspend; the card just shows what’s left. Category limits come later, once you have categories.',
+                image: '/img/landing/budget.png',
+                imageAlt: 'Budget card with leftover to spend',
             },
         ],
         forms: {

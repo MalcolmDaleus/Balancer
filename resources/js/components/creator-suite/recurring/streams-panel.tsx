@@ -494,15 +494,17 @@ export function RecurringStreamsPanel({
                                                     label={s.active ? ledgerCopy.recurring.pauseStream : ledgerCopy.recurring.resumeStream}
                                                     onClick={(ev) => requestToggle(s, ev)}
                                                 />
-                                                <RowActions
-                                                    onEdit={() => selectRow(s)}
-                                                    onDelete={() => setRemoveTarget(s)}
-                                                    editDisabled={busy}
-                                                    deleteDisabled={busy}
-                                                    {...instrumentDanger(s.can_hard_delete)}
-                                                />
                                             </div>
                                         </div>
+                                    </div>
+                                    <div className="mt-2 flex justify-end">
+                                        <RowActions
+                                            onEdit={() => selectRow(s)}
+                                            onDelete={() => setRemoveTarget(s)}
+                                            editDisabled={busy}
+                                            deleteDisabled={busy}
+                                            {...instrumentDanger(s.can_hard_delete)}
+                                        />
                                     </div>
                                 </ListRow>
                             );

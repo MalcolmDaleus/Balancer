@@ -69,27 +69,14 @@ final class RecurringSection
      */
     public function projectedGrouped(): Collection
     {
-        $today = DateTimeService::today();
-        $projectionStart = $today->copy()->addDay()->startOfDay();
-
-        if ($projectionStart->gt($this->ctx->periodEnd)) {
+        $window = $this->projectionWindow();
+        if ($window === null) {
             return collect();
         }
 
-        if ($this->ctx->periodEnd->lt($today)) {
-            return collect();
-        }
-
-        $from = $projectionStart->gt($this->ctx->periodStart)
-            ? $projectionStart
-            : $this->ctx->periodStart->copy();
+        [$from] = $window;
         $calculator = $this->occurrenceCalculator();
-
-        $chargedDatesByEntry = $this->facts->recurringCharges()
-            ->groupBy('recurring_payment_entry_id')
-            ->map(fn (Collection $group) => $group
-                ->map(fn (RecurringCharge $c) => $c->occurred_on->toDateString())
-                ->all());
+        $chargedDatesByEntry = $this->chargedDatesByEntry();
 
         return $this->facts->recurringEntries()
             ->groupBy(fn ($e) => $e->recurring_payment_stream_id)
@@ -131,6 +118,81 @@ final class RecurringSection
             })
             ->filter(fn ($stream) => $stream['entries']->isNotEmpty())
             ->values();
+    }
+
+    /**
+     * Dated remaining charges in the open month, tomorrow through period end.
+     *
+     * @return Collection<int, array{name: string, date: string, amount_cents: int, stream_id: int|null, category_id: int|null, category_name: string|null}>
+     */
+    public function upcomingOccurrences(): Collection
+    {
+        $window = $this->projectionWindow();
+        if ($window === null) {
+            return collect();
+        }
+
+        [$from] = $window;
+        $calculator = $this->occurrenceCalculator();
+        $chargedDatesByEntry = $this->chargedDatesByEntry();
+
+        $items = collect();
+        foreach ($this->facts->recurringEntries() as $entry) {
+            $existing = $chargedDatesByEntry->get($entry->id, []);
+            $dates = array_values(array_filter(
+                $calculator->recurringEntryDatesInPeriod($entry, $from, $this->ctx->periodEnd),
+                fn (Carbon $date) => ! in_array($date->toDateString(), $existing, true)
+            ));
+            $unit = MoneyCents::fromMajor($entry->amount);
+            $stream = $entry->stream;
+            $name = $stream?->name ?? 'Unknown';
+
+            foreach ($dates as $date) {
+                $items->push([
+                    'name' => $name,
+                    'date' => $date->toDateString(),
+                    'amount_cents' => $unit,
+                    'stream_id' => $stream?->id,
+                    'category_id' => $stream?->recurring_payment_category_id,
+                    'category_name' => $stream?->category?->name,
+                ]);
+            }
+        }
+
+        return $items
+            ->sortBy(fn (array $row) => $row['date'].'|'.$row['name'])
+            ->values();
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}|null
+     */
+    private function projectionWindow(): ?array
+    {
+        $today = DateTimeService::today();
+        $projectionStart = $today->copy()->addDay()->startOfDay();
+
+        if ($projectionStart->gt($this->ctx->periodEnd) || $this->ctx->periodEnd->lt($today)) {
+            return null;
+        }
+
+        $from = $projectionStart->gt($this->ctx->periodStart)
+            ? $projectionStart
+            : $this->ctx->periodStart->copy();
+
+        return [$from, $this->ctx->periodEnd];
+    }
+
+    /**
+     * @return Collection<int|string, list<string>>
+     */
+    private function chargedDatesByEntry(): Collection
+    {
+        return $this->facts->recurringCharges()
+            ->groupBy('recurring_payment_entry_id')
+            ->map(fn (Collection $group) => $group
+                ->map(fn (RecurringCharge $charge) => $charge->occurred_on->toDateString())
+                ->all());
     }
 
     private function occurrenceCalculator(): OccurrenceCalculatorService

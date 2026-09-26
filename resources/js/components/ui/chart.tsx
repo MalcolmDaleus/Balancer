@@ -40,16 +40,23 @@ function ChartContainer({
     const uniqueId = React.useId();
     const chartId = `chart-${id ?? uniqueId.replace(/:/g, '')}`;
     const boxRef = React.useRef<HTMLDivElement>(null);
-    const [ready, setReady] = React.useState(false);
+    const [size, setSize] = React.useState<{ width: number; height: number } | null>(null);
 
     React.useLayoutEffect(() => {
         const el = boxRef.current;
         if (!el) {
             return;
         }
+
         const sync = () => {
-            setReady(el.clientWidth > 0 && el.clientHeight > 0);
+            const width = Math.round(el.clientWidth);
+            const height = Math.round(el.clientHeight);
+            if (width <= 0 || height <= 0) {
+                return;
+            }
+            setSize((prev) => (prev?.width === width && prev.height === height ? prev : { width, height }));
         };
+
         sync();
         const ro = new ResizeObserver(sync);
         ro.observe(el);
@@ -63,14 +70,20 @@ function ChartContainer({
                 data-slot="chart"
                 data-chart={chartId}
                 className={cn(
-                    "flex aspect-auto justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+                    "flex aspect-auto justify-center text-xs [transform:translateZ(0)] [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-responsive-container]:overflow-visible [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:overflow-visible [&_.recharts-surface]:outline-hidden [&_.recharts-wrapper]:overflow-visible",
                     className,
                 )}
                 {...props}
             >
                 <ChartStyle id={chartId} config={config} />
-                {ready && (
-                    <RechartsPrimitive.ResponsiveContainer width="100%" height="100%">
+                {size && (
+                    <RechartsPrimitive.ResponsiveContainer
+                        width={size.width}
+                        height={size.height}
+                        minWidth={size.width}
+                        minHeight={size.height}
+                        initialDimension={size}
+                    >
                         {children}
                     </RechartsPrimitive.ResponsiveContainer>
                 )}

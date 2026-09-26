@@ -38,6 +38,18 @@ export type FactFilterValues = {
     domain: string;
 };
 
+function formatMonthChip(ym: string) {
+    const [year, month] = ym.split('-').map(Number);
+    if (!year || !month) {
+        return ym;
+    }
+
+    return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
 export function monthRangeFor(date = new Date()): { from: string; to: string } {
     const y = date.getFullYear();
     const m = date.getMonth();
@@ -139,14 +151,17 @@ export function FactFilterBar({
                     value={value.q}
                     onChange={(e) => set({ q: e.target.value })}
                 />
-                <label className={`${inputCls} items-center gap-2`}>
+                <label className={`${inputCls} relative cursor-pointer items-center gap-2`}>
                     <span className="shrink-0 text-xs font-medium text-slate-500 dark:text-neutral-400">
                         {ledgerCopy.filters.month}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate" aria-hidden>
+                        {formatMonthChip(monthValue)}
                     </span>
                     <input
                         type="month"
                         aria-label={ledgerCopy.filters.month}
-                        className="cs-date-input min-w-0 flex-1 border-0 bg-transparent p-0 text-inherit shadow-none outline-none focus:ring-0"
+                        className="cs-date-input cs-month-hit absolute inset-0 cursor-pointer border-0 bg-transparent p-0 opacity-0 shadow-none outline-none focus:ring-0"
                         value={monthValue}
                         onChange={(e) => setMonth(e.target.value)}
                     />

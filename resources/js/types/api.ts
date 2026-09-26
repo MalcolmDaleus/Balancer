@@ -160,10 +160,21 @@ export type BalanceSheetSnapshot = {
     roll_over_cents: number;
 };
 
+export type StandingUpcomingCharge = {
+    name: string;
+    date: string;
+    amount_cents: number;
+    stream_id?: number | null;
+    category_id?: number | null;
+    category_name?: string | null;
+};
+
 export type StandingRead = {
     available_cash_cents: number;
     savings_total_cents: number;
     owed_cents: number;
+    upcoming_cents: number;
+    upcoming: StandingUpcomingCharge[];
     tracking_since: string;
     months_tracked: number;
 };

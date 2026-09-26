@@ -10,6 +10,7 @@ use App\Models\BalanceSheetTotal;
 use App\Services\BalanceSheetService;
 use App\Services\DateTimeService;
 use App\Services\MonthLockService;
+use App\Services\RecurringPaymentMaterializationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,6 +26,9 @@ class BalanceSheetTotalController extends Controller
     public function expanded(BalanceSheetMonthQueryRequest $request): JsonResponse
     {
         $this->authorize('viewAny', BalanceSheetTotal::class);
+
+        app(RecurringPaymentMaterializationService::class)
+            ->pruneFutureOpenMonthCharges((int) auth()->id());
 
         $month = $request->validated('month');
         $svc = new BalanceSheetService(auth()->id(), $month);

@@ -119,7 +119,7 @@ export function ListRow({
     className?: string;
 }) {
     const interactive = Boolean(onClick && !disabled && !busy);
-    const baseCls = `relative overflow-hidden rounded-xl px-4 py-4 transition-colors text-left w-full ${
+    const baseCls = `relative rounded-xl px-4 py-4 transition-colors text-left w-full ${busy ? 'overflow-hidden' : ''} ${
         busy
             ? 'cursor-wait'
             : disabled
@@ -280,7 +280,7 @@ export function SplitPane({ list, form, sheetOpen = false, onSheetOpenChange, on
 }
 
 /** Status chip for debt/stream/category states */
-export function StatusChip({ label, color }: { label: string; color: 'green' | 'blue' | 'red' | 'amber' | 'slate' | 'violet' | 'teal' }) {
+export function StatusChip({ label, color }: { label: string; color: 'green' | 'blue' | 'red' | 'amber' | 'slate' | 'violet' | 'teal' | 'orange' }) {
     const map: Record<string, string> = {
         green: tintChip.emerald,
         blue: tintChip.sky,
@@ -289,6 +289,7 @@ export function StatusChip({ label, color }: { label: string; color: 'green' | '
         slate: tintChip.slate,
         violet: tintChip.violet,
         teal: tintChip.teal,
+        orange: tintChip.orange,
     };
     return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase ${map[color]}`}>{label}</span>;
 }
@@ -460,7 +461,7 @@ export function RowActions({
     const dangerCls = dangerKind === 'archive' ? archiveBtnCls : deleteBtnCls;
 
     return (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             {extra}
             {onEdit && (
                 <button

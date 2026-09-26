@@ -12,8 +12,24 @@ export default function DashboardHeader() {
     return (
         <header className="fixed inset-x-0 top-3 z-30 mx-4 h-14 rounded-full bg-white/40 shadow-sm backdrop-blur-md dark:bg-neutral-950/70 dark:shadow-neutral-950/60 md:mx-8">
             <div className="grid h-full grid-cols-[1fr_auto_1fr] items-center px-4">
-                <div className="flex items-center gap-1 justify-self-start">
+                <div className="flex items-center justify-self-start">
                     <AppearanceToggleDropdown />
+                </div>
+
+                <div className="flex items-center justify-center">
+                    <img
+                        src="/branding/logo_dark.svg"
+                        alt={dashboardCopy.header.logoAlt}
+                        className="h-auto w-36 dark:hidden"
+                    />
+                    <img
+                        src="/branding/logo_light.svg"
+                        alt={dashboardCopy.header.logoAlt}
+                        className="hidden h-auto w-36 dark:block"
+                    />
+                </div>
+
+                <div className="flex items-center gap-1 justify-self-end">
                     <Button
                         type="button"
                         variant="ghost"
@@ -35,21 +51,6 @@ export default function DashboardHeader() {
                         <Bug className="h-4 w-4" />
                     </Button>
                 </div>
-
-                <div className="flex items-center justify-center">
-                    <img
-                        src="/branding/logo_dark.svg"
-                        alt={dashboardCopy.header.logoAlt}
-                        className="h-auto w-36 dark:hidden"
-                    />
-                    <img
-                        src="/branding/logo_light.svg"
-                        alt={dashboardCopy.header.logoAlt}
-                        className="hidden h-auto w-36 dark:block"
-                    />
-                </div>
-
-                <div aria-hidden />
             </div>
         </header>
     );

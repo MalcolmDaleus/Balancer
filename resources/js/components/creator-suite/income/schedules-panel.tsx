@@ -438,14 +438,16 @@ export function IncomeSchedulesPanel({ active, addRef }: { active: boolean; addR
                                                     onClick={(e) => requestToggle(s, e)}
                                                 />
                                             </div>
-                                            <RowActions
-                                                onEdit={() => selectRow(s)}
-                                                onDelete={() => setRemoveTarget(s)}
-                                                editDisabled={busy}
-                                                deleteDisabled={busy}
-                                                {...instrumentDanger(s.can_hard_delete)}
-                                            />
                                         </div>
+                                    </div>
+                                    <div className="mt-2 flex justify-end">
+                                        <RowActions
+                                            onEdit={() => selectRow(s)}
+                                            onDelete={() => setRemoveTarget(s)}
+                                            editDisabled={busy}
+                                            deleteDisabled={busy}
+                                            {...instrumentDanger(s.can_hard_delete)}
+                                        />
                                     </div>
                                 </ListRow>
                             );

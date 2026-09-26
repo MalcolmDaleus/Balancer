@@ -1,9 +1,9 @@
-import { apiFetch, apiFetchList, errorMessage } from '@/api/client';
+import { apiFetch, errorMessage } from '@/api/client';
 import { ledgerCopy } from '@/config/ledger-copy';
 import { centsToInput, majorInputToCents } from '@/lib/money';
 import { toastError } from '@/lib/toast';
 import { useFormatMoney } from '@/hooks/use-format-money';
-import type { RecurringCharge } from '@/types/api';
+import type { RecurringCharge, StandingUpcomingCharge } from '@/types/api';
 import { useEffect, useMemo, useState } from 'react';
 import { blankFactFilter, FactFilterBar, matchesFactFilter, monthRangeContaining, type FactFilterValues } from '../fact-filters';
 import type { LedgerFocus } from '../ledger-focus';
@@ -21,6 +21,7 @@ import {
     LoadingRows,
     RowActions,
     SplitPane,
+    StatusChip,
     dropById,
     rowAmountCls,
     rowDetailCls,
@@ -39,6 +40,7 @@ export function RecurringChargesPanel({
     const fmtAmount = useFormatMoney();
     const { canMutateFact, loaded } = useLockedMonths();
     const [charges, setCharges] = useState<RecurringCharge[]>([]);
+    const [projected, setProjected] = useState<StandingUpcomingCharge[]>([]);
     const [loading, setLoading] = useState(false);
     const [fetched, setFetched] = useState(false);
     const [selected, setSelected] = useState<RecurringCharge | null>(null);
@@ -55,7 +57,11 @@ export function RecurringChargesPanel({
     const load = async () => {
         setLoading(true);
         try {
-            setCharges(await apiFetchList<RecurringCharge>('/api/v1/recurring-payments/charges'));
+            const payload = await apiFetch<{ data: RecurringCharge[]; projected?: StandingUpcomingCharge[] }>(
+                '/api/v1/recurring-payments/charges',
+            );
+            setCharges(payload.data);
+            setProjected(payload.projected ?? []);
             setFetched(true);
         } catch (err: unknown) {
             setError(errorMessage(err));
@@ -65,12 +71,10 @@ export function RecurringChargesPanel({
     };
 
     useEffect(() => {
-        if (active && !fetched) void load();
-    }, [active, fetched]);
+        if (active) void load();
+    }, [active]);
 
-    const allHaveCategory = charges.length > 0 && charges.every((c) => c.recurring_payment_category_id != null);
     const categoryOptions = useMemo(() => {
-        if (!allHaveCategory) return undefined;
         const seen = new Map<number, string>();
         for (const charge of charges) {
             if (charge.recurring_payment_category_id != null) {
@@ -80,8 +84,13 @@ export function RecurringChargesPanel({
                 );
             }
         }
-        return [...seen.entries()].map(([id, name]) => ({ id, name }));
-    }, [charges, allHaveCategory]);
+        for (const row of projected) {
+            if (row.category_id != null) {
+                seen.set(row.category_id, row.category_name ?? ledgerCopy.recurring.fallbackCategory(row.category_id));
+            }
+        }
+        return seen.size > 0 ? [...seen.entries()].map(([id, name]) => ({ id, name })) : undefined;
+    }, [charges, projected]);
 
     const visibleCharges = useMemo(
         () =>
@@ -97,6 +106,22 @@ export function RecurringChargesPanel({
                 ),
             ),
         [charges, filter],
+    );
+
+    const visibleProjected = useMemo(
+        () =>
+            projected.filter((row) =>
+                matchesFactFilter(
+                    {
+                        date: row.date,
+                        amountCents: row.amount_cents,
+                        text: `${row.name} ${row.category_name ?? ''}`,
+                        categoryId: row.category_id,
+                    },
+                    filter,
+                ),
+            ),
+        [projected, filter],
     );
 
     const selectRow = (charge: RecurringCharge) => {
@@ -158,7 +183,7 @@ export function RecurringChargesPanel({
         try {
             await apiFetch(`/api/v1/recurring-payments/charges/${charge.id}`, {
                 method: 'DELETE',
-                toast: ledgerCopy.recurring.occurrenceSkipped,
+                toast: ledgerCopy.recurring.chargeRemoved,
             });
             setCharges(dropById(charge.id));
             if (selected?.id === charge.id) reset();
@@ -213,8 +238,8 @@ export function RecurringChargesPanel({
         <>
             {confirm && (
                 <ConfirmModal
-                    message={ledgerCopy.recurring.skipConfirm(confirm.stream_name, fmtDate(confirm.occurred_on), fmtAmount(confirm.amount_cents))}
-                    confirmLabel={ledgerCopy.common.skip}
+                    message={ledgerCopy.recurring.deleteConfirm(confirm.stream_name, fmtDate(confirm.occurred_on), fmtAmount(confirm.amount_cents))}
+                    confirmLabel={ledgerCopy.common.delete}
                     onConfirm={() => handleDelete(confirm)}
                     onCancel={() => setConfirm(null)}
                 />
@@ -231,9 +256,11 @@ export function RecurringChargesPanel({
                 sheetTitle={selected ? ledgerCopy.recurring.charge : ledgerCopy.recurring.charges}
                 list={
                     <ListStack>
-                        {loading && !charges.length && <LoadingRows />}
-                        {!loading && !charges.length && <EmptyRows label={ledgerCopy.recurring.noCharges} />}
-                        {!loading && charges.length > 0 && !visibleCharges.length && (
+                        {loading && !charges.length && !projected.length && <LoadingRows />}
+                        {!loading && !charges.length && !projected.length && (
+                            <EmptyRows label={ledgerCopy.recurring.noCharges} />
+                        )}
+                        {!loading && (charges.length > 0 || projected.length > 0) && !visibleCharges.length && !visibleProjected.length && (
                             <EmptyRows label={ledgerCopy.recurring.noChargesMatch} />
                         )}
                         {visibleCharges.map((charge) => {
@@ -262,13 +289,31 @@ export function RecurringChargesPanel({
                                             <RowActions
                                                 onEdit={() => selectRow(charge)}
                                                 onDelete={() => setConfirm(charge)}
-                                                dangerLabel={ledgerCopy.common.skip}
                                             />
                                         )}
                                     </div>
                                 </ListRow>
                             );
                         })}
+                        {visibleProjected.map((row) => (
+                            <ListRow key={`projected-${row.stream_id ?? row.name}-${row.date}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className={rowTitleCls}>{row.name}</p>
+                                            <StatusChip label={ledgerCopy.recurring.upcoming} color="orange" />
+                                        </div>
+                                        {row.category_name && (
+                                            <p className={`mt-0.5 truncate ${rowDetailCls}`}>{row.category_name}</p>
+                                        )}
+                                    </div>
+                                    <span className={`${rowAmountCls} text-rose-500 dark:text-rose-400`}>
+                                        {fmtAmount(row.amount_cents)}
+                                    </span>
+                                </div>
+                                <p className={`mt-2 ${rowDetailCls}`}>{fmtDate(row.date)}</p>
+                            </ListRow>
+                        ))}
                     </ListStack>
                 }
                 form={formContent}

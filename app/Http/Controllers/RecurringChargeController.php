@@ -6,6 +6,8 @@ use App\Http\Requests\Api\UpdateRecurringChargeRequest;
 use App\Http\Resources\RecurringChargeResource;
 use App\Models\RecurringCharge;
 use App\Models\RecurringOccurrenceSkip;
+use App\Services\BalanceSheetService;
+use App\Services\RecurringPaymentMaterializationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -16,11 +18,17 @@ class RecurringChargeController extends Controller
     {
         $this->authorize('viewAny', RecurringCharge::class);
 
-        $charges = RecurringCharge::forUser(auth()->id())
+        $userId = (int) auth()->id();
+        app(RecurringPaymentMaterializationService::class)
+            ->pruneFutureOpenMonthCharges($userId);
+        $charges = RecurringCharge::forUser($userId)
             ->latest('occurred_on')
             ->get();
 
-        return RecurringChargeResource::collection($charges);
+        return RecurringChargeResource::collection($charges)
+            ->additional([
+                'projected' => (new BalanceSheetService($userId))->upcomingRecurringCharges(),
+            ]);
     }
 
     public function show(RecurringCharge $recurringCharge): RecurringChargeResource

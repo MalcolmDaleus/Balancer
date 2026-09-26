@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Api\LedgerFeedRequest;
 use App\Services\DateTimeService;
 use App\Services\FinancialFlowReadModel;
+use App\Services\RecurringPaymentMaterializationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 
@@ -23,6 +24,9 @@ class LedgerFeedController extends Controller
         $to = isset($data['to'])
             ? DateTimeService::dayEnd($data['to'])
             : Carbon::now('UTC')->endOfMonth();
+
+        app(RecurringPaymentMaterializationService::class)
+            ->pruneFutureOpenMonthCharges((int) $request->user()->id);
 
         $facts = $this->facts->forFeed((int) $request->user()->id, [
             'from' => $from,

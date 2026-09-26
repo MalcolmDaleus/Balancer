@@ -13,9 +13,8 @@ use Illuminate\Support\Facades\Log;
 /**
  * Materialize recurring charges as RecurringCharge Facts.
  *
- * Horizon: as-of date through end of that calendar month (aligned with income).
- * Catch-up for past due days in the open month is included when as-of is mid-month
- * by also covering month-start → as-of (union with as-of → month-end = full open month).
+ * Horizon: month start through the as-of day (usually today). Later days in the
+ * open month stay projected until they come due.
  */
 class RecurringPaymentMaterializationService
 {
@@ -30,7 +29,7 @@ class RecurringPaymentMaterializationService
     {
         $asOf = Carbon::parse($asOf ?? now())->startOfDay();
         $monthStart = $asOf->copy()->startOfMonth();
-        $horizonEnd = $asOf->copy()->endOfMonth()->startOfDay();
+        $horizonEnd = $asOf->copy()->startOfDay();
 
         $streams = RecurringPaymentStream::where('user_id', $userId)
             ->where('active', true)
@@ -63,7 +62,26 @@ class RecurringPaymentMaterializationService
             }
         }
 
+        $this->pruneFutureOpenMonthCharges($userId, $asOf);
+
         return $created;
+    }
+
+    /**
+     * Drop open-month Facts after as-of so they can show as upcoming again.
+     * Does not write skip rows — those dates should still charge when due.
+     */
+    public function pruneFutureOpenMonthCharges(int $userId, Carbon|string|null $asOf = null): int
+    {
+        $asOf = Carbon::parse($asOf ?? now())->startOfDay();
+
+        return RecurringCharge::query()
+            ->where('user_id', $userId)
+            ->whereDate('occurred_on', '>', $asOf->toDateString())
+            ->whereDate('occurred_on', '<=', $asOf->copy()->endOfMonth()->toDateString())
+            ->get()
+            ->each(fn (RecurringCharge $charge) => $charge->delete())
+            ->count();
     }
 
     /**
@@ -97,14 +115,16 @@ class RecurringPaymentMaterializationService
         $rangeEnd = $horizonEnd->toDateString();
 
         $skipDates = RecurringOccurrenceSkip::where('recurring_payment_entry_id', $entry->id)
-            ->whereBetween('occurrence_date', [$rangeStart, $rangeEnd])
+            ->whereDate('occurrence_date', '>=', $rangeStart)
+            ->whereDate('occurrence_date', '<=', $rangeEnd)
             ->pluck('occurrence_date')
             ->map(fn ($d) => Carbon::parse($d)->toDateString())
             ->flip()
             ->all();
 
         $chargeDates = RecurringCharge::where('recurring_payment_entry_id', $entry->id)
-            ->whereBetween('occurred_on', [$rangeStart, $rangeEnd])
+            ->whereDate('occurred_on', '>=', $rangeStart)
+            ->whereDate('occurred_on', '<=', $rangeEnd)
             ->pluck('occurred_on')
             ->map(fn ($d) => Carbon::parse($d)->toDateString())
             ->flip()

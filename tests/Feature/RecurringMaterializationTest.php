@@ -46,12 +46,18 @@ function seedActiveMonthlyStream(User $user, array $entryOverrides = []): array
     return compact('category', 'stream', 'entry');
 }
 
-test('process-due materializes a recurring charge Fact through month end', function () {
+test('process-due materializes recurring charges through as-of, not the rest of the month', function () {
     Carbon::setTestNow('2026-06-10 12:00:00');
 
     $user = User::factory()->create();
     seedActiveMonthlyStream($user);
 
+    app(FinanceProcessingService::class)->processDueForUser($user->id);
+
+    expect(RecurringCharge::where('user_id', $user->id)->count())->toBe(0);
+
+    Carbon::setTestNow('2026-06-15 12:00:00');
+    Cache::flush();
     app(FinanceProcessingService::class)->processDueForUser($user->id);
 
     expect(RecurringCharge::where('user_id', $user->id)->count())->toBe(1);
@@ -61,6 +67,31 @@ test('process-due materializes a recurring charge Fact through month end', funct
     expect($charge->stream_name)->toBe('Netflix');
     expect($charge->occurred_on->toDateString())->toBe('2026-06-15');
     expect(Purchase::where('user_id', $user->id)->count())->toBe(0);
+});
+
+test('process-due removes previously materialized future open-month charges', function () {
+    Carbon::setTestNow('2026-06-15 12:00:00');
+
+    $user = User::factory()->create();
+    ['entry' => $entry, 'stream' => $stream] = seedActiveMonthlyStream($user, [
+        'day_of_month' => 28,
+        'start_date' => '2026-01-28',
+    ]);
+
+    RecurringCharge::create([
+        'user_id' => $user->id,
+        'recurring_payment_entry_id' => $entry->id,
+        'recurring_payment_stream_id' => $stream->id,
+        'recurring_payment_category_id' => $stream->recurring_payment_category_id,
+        'stream_name' => $stream->name,
+        'category_name' => 'Subscriptions',
+        'amount' => $entry->amount,
+        'occurred_on' => '2026-06-28',
+    ]);
+
+    app(FinanceProcessingService::class)->processDueForUser($user->id);
+
+    expect(RecurringCharge::where('user_id', $user->id)->count())->toBe(0);
 });
 
 test('materialization is idempotent across process-due runs', function () {
@@ -124,7 +155,7 @@ test('balance sheet: charged Facts vs projected; spending is one-off only', func
         'amount' => 20.00,
     ]);
 
-    // Second monthly stream — also month-ahead materialized after process-due.
+    // Second monthly stream — stays projected until the 28th.
     $cat = RecurringPaymentCategory::factory()->create(['user_id' => $user->id, 'name' => 'Utilities']);
     $stream2 = RecurringPaymentStream::factory()->create([
         'user_id' => $user->id,
@@ -158,10 +189,10 @@ test('balance sheet: charged Facts vs projected; spending is one-off only', func
     $expanded = (new BalanceSheetService($user->id, '2026-06'))->getExpanded();
     $simple = (new BalanceSheetService($user->id, '2026-06'))->getSimplified();
 
-    expect($simple['total_recurring_cents'])->toBe(7000);
+    expect($simple['total_recurring_cents'])->toBe(2000);
     expect($simple['total_spending_cents'])->toBe(1200);
-    expect($expanded['recurring_payments']['charged_total_cents'])->toBe(7000);
-    expect($expanded['recurring_payments']['projected_total_cents'])->toBe(0);
+    expect($expanded['recurring_payments']['charged_total_cents'])->toBe(2000);
+    expect($expanded['recurring_payments']['projected_total_cents'])->toBe(5000);
     expect($expanded['spending']['total_cents'])->toBe(1200);
 });
 
@@ -169,15 +200,22 @@ test('deactivation removes future open-month Facts', function () {
     Carbon::setTestNow('2026-06-15 12:00:00');
 
     $user = User::factory()->create();
-    ['stream' => $stream] = seedActiveMonthlyStream($user, [
+    ['stream' => $stream, 'entry' => $entry] = seedActiveMonthlyStream($user, [
         'day_of_month' => 28,
         'amount' => 40.00,
         'start_date' => '2026-01-28',
     ]);
 
-    app(FinanceProcessingService::class)->processDueForUser($user->id);
-    expect(RecurringCharge::where('user_id', $user->id)->count())->toBe(1);
-    expect(RecurringCharge::first()->occurred_on->toDateString())->toBe('2026-06-28');
+    RecurringCharge::create([
+        'user_id' => $user->id,
+        'recurring_payment_entry_id' => $entry->id,
+        'recurring_payment_stream_id' => $stream->id,
+        'recurring_payment_category_id' => $stream->recurring_payment_category_id,
+        'stream_name' => $stream->name,
+        'category_name' => 'Subscriptions',
+        'amount' => 40.00,
+        'occurred_on' => '2026-06-28',
+    ]);
 
     app(RecurringPaymentMaterializationService::class)
         ->removeFutureChargesForStream($stream, Carbon::parse('2026-06-15'));

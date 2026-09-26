@@ -3,26 +3,15 @@ import { marketingCopy } from '@/config/marketing-copy';
 import { dashboard, login, register } from '@/routes';
 import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { BookOpen, LayoutDashboard, type LucideIcon, PiggyBank, Wallet } from 'lucide-react';
+import { PiggyBank } from 'lucide-react';
 
 const copy = marketingCopy.landing;
+const shots = marketingCopy.images;
 
-const BEAT_PRESENTATION: Record<(typeof copy.beats.items)[number]['name'], { icon: LucideIcon; accent: string; tint: string }> = {
-    Ledger: {
-        icon: BookOpen,
-        accent: 'bg-emerald-500',
-        tint: 'text-emerald-700 dark:text-emerald-400',
-    },
-    'Balance Sheet': {
-        icon: LayoutDashboard,
-        accent: 'bg-yellow-500',
-        tint: 'text-yellow-700 dark:text-yellow-400',
-    },
-    Budget: {
-        icon: Wallet,
-        accent: 'bg-sky-500',
-        tint: 'text-sky-700 dark:text-sky-400',
-    },
+const BEAT_ACCENT: Record<(typeof copy.beats.items)[number]['name'], string> = {
+    Ledger: 'bg-emerald-500',
+    'Balance Sheet': 'bg-yellow-500',
+    Budget: 'bg-sky-500',
 };
 
 export default function Welcome() {
@@ -108,30 +97,16 @@ export default function Welcome() {
                             </div>
 
                             <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-                                <div className="absolute -top-4 -left-3 z-20 hidden w-44 rounded-2xl bg-white/90 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur sm:block dark:bg-neutral-900/90 dark:ring-1 dark:ring-white/10">
-                                    <p className="text-[10px] font-semibold tracking-widest text-slate-400 uppercase">{copy.mock.leftToSpend}</p>
-                                    <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{copy.mock.leftAmount}</p>
-                                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-neutral-700">
-                                        <div className="h-full w-[58%] rounded-full bg-emerald-500" />
-                                    </div>
-                                    <p className="mt-1.5 text-[11px] text-slate-400">{copy.mock.exampleCaption}</p>
+                                <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_30px_80px_rgba(15,23,42,0.16)] ring-1 ring-slate-900/8 dark:bg-neutral-900 dark:shadow-[0_30px_80px_rgba(0,0,0,0.45)] dark:ring-white/10">
+                                    <img
+                                        src={shots.dashboard}
+                                        alt={copy.mock.dashboardAlt}
+                                        className="w-full"
+                                    />
                                 </div>
-
-                                <div className="rotate-2 overflow-hidden rounded-[1.75rem] bg-slate-900 shadow-[0_30px_80px_rgba(15,23,42,0.28)] dark:bg-neutral-800">
-                                    <div className="flex items-center gap-1.5 px-4 py-3">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                                        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                                        <span className="h-2.5 w-2.5 rounded-full bg-white/20" />
-                                        <span className="ml-3 text-[11px] text-white/40">{copy.mock.dashboardChrome}</span>
-                                    </div>
-                                    <img src={marketingCopy.still} alt="" className="aspect-[16/11] w-full object-cover" />
-                                </div>
-
-                                <div className="absolute -right-2 -bottom-5 z-20 hidden w-40 rounded-2xl bg-slate-900 p-4 text-white shadow-[0_18px_50px_rgba(15,23,42,0.28)] sm:block dark:bg-neutral-800">
-                                    <p className="text-[10px] font-semibold tracking-widest text-white/50 uppercase">{copy.mock.availableCash}</p>
-                                    <p className="mt-1 text-xl font-semibold tabular-nums">{copy.mock.cashAmount}</p>
-                                    <p className="mt-1 text-[11px] text-white/45">{copy.mock.leftoverCaption}</p>
-                                </div>
+                                <p className="mt-3 text-center text-[11px] text-slate-400 dark:text-neutral-500">
+                                    {copy.mock.exampleCaption}
+                                </p>
                             </div>
                         </div>
                     </section>
@@ -158,28 +133,30 @@ export default function Welcome() {
                         </div>
 
                         <div className="mt-12 grid gap-6 md:grid-cols-3">
-                            {copy.beats.items.map((beat) => {
-                                const presentation = BEAT_PRESENTATION[beat.name];
-                                const Icon = presentation.icon;
-                                return (
-                                    <article
-                                        key={beat.name}
-                                        className="group relative overflow-hidden rounded-[1.6rem] bg-white p-7 shadow-[0_8px_40px_rgba(15,23,42,0.08)] dark:bg-neutral-900 dark:shadow-[0_8px_40px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/8"
-                                    >
-                                        <span className={`absolute top-0 left-0 h-1 w-full ${presentation.accent}`} />
+                            {copy.beats.items.map((beat) => (
+                                <article
+                                    key={beat.name}
+                                    className="group relative overflow-hidden rounded-[1.6rem] bg-white shadow-[0_8px_40px_rgba(15,23,42,0.08)] dark:bg-neutral-900 dark:shadow-[0_8px_40px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/8"
+                                >
+                                    <span className={`absolute top-0 left-0 z-10 h-1 w-full ${BEAT_ACCENT[beat.name]}`} />
+                                    <div className="bg-slate-50 px-4 pt-6 dark:bg-neutral-950/40">
+                                        <img
+                                            src={beat.image}
+                                            alt={beat.imageAlt}
+                                            className="mx-auto max-h-56 w-full object-contain object-top"
+                                        />
+                                    </div>
+                                    <div className="p-7 pt-6">
                                         <p className="text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
                                             {beat.kicker} · {beat.name}
                                         </p>
-                                        <div className={`mt-5 ${presentation.tint}`}>
-                                            <Icon className="h-7 w-7" strokeWidth={1.5} />
-                                        </div>
                                         <h3 className="mt-4 text-2xl font-semibold tracking-tight">{beat.title}</h3>
                                         <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-neutral-300">
                                             {beat.body}
                                         </p>
-                                    </article>
-                                );
-                            })}
+                                    </div>
+                                </article>
+                            ))}
                         </div>
                     </section>
 
@@ -207,14 +184,48 @@ export default function Welcome() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="relative min-h-64 lg:min-h-full">
-                                    <img src={marketingCopy.still} alt="" className="h-full w-full object-cover" />
+                                <div className="relative flex min-h-64 items-center justify-center bg-neutral-800 p-6 lg:min-h-full lg:p-10">
+                                    <img
+                                        src={shots.standing}
+                                        alt={copy.cash.imageAlt}
+                                        className="max-h-[28rem] w-full rounded-2xl bg-white object-contain shadow-[0_16px_40px_rgba(0,0,0,0.25)]"
+                                    />
                                     <div className="absolute right-6 bottom-6 flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-sm backdrop-blur">
                                         <PiggyBank className="h-4 w-4" />
                                         {copy.cash.badge}
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 lg:py-24">
+                        <div className="max-w-2xl">
+                            <p className="text-[11px] font-semibold tracking-[0.22em] text-slate-500 uppercase dark:text-neutral-400">
+                                {copy.modules.kicker}
+                            </p>
+                            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                                {copy.modules.title}
+                            </h2>
+                        </div>
+                        <div className="mt-10 grid gap-6 md:grid-cols-3">
+                            {copy.modules.items.map((mod) => (
+                                <figure
+                                    key={mod.name}
+                                    className="overflow-hidden rounded-[1.6rem] bg-white shadow-[0_8px_40px_rgba(15,23,42,0.08)] dark:bg-neutral-900 dark:shadow-[0_8px_40px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/8"
+                                >
+                                    <div className="bg-slate-50 px-4 pt-6 dark:bg-neutral-950/40">
+                                        <img
+                                            src={mod.image}
+                                            alt={mod.imageAlt}
+                                            className="mx-auto max-h-56 w-full object-contain object-top"
+                                        />
+                                    </div>
+                                    <figcaption className="px-6 py-4 text-sm font-medium text-slate-700 dark:text-neutral-200">
+                                        {mod.name}
+                                    </figcaption>
+                                </figure>
+                            ))}
                         </div>
                     </section>
 

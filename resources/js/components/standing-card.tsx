@@ -8,6 +8,18 @@ import { type StandingRead } from '@/types/api';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+function formatChargeDate(iso: string) {
+    const [year, month, day] = iso.split('-').map(Number);
+    if (!year || !month || !day) {
+        return iso;
+    }
+
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+    });
+}
+
 function formatSince(ym: string) {
     const [year, month] = ym.split('-').map(Number);
     if (!year || !month) {
@@ -133,6 +145,37 @@ export default function StandingCard({ className = '' }: { className?: string })
                                         : 'text-slate-900 dark:text-neutral-100'
                                 }
                             />
+                        </div>
+
+                        <div className={`${innerCardCls} px-4 py-3.5`}>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-800 dark:text-neutral-100">{copy.upcoming}</p>
+                                <p className="text-sm font-medium tabular-nums text-slate-900 dark:text-neutral-100">
+                                    {amount(data.upcoming_cents)}
+                                </p>
+                            </div>
+                            {data.upcoming.length === 0 ? (
+                                <p className="mt-2 text-sm text-slate-500 dark:text-neutral-400">{copy.noUpcoming}</p>
+                            ) : (
+                                <ul className="mt-2.5 space-y-2">
+                                    {data.upcoming.map((charge) => (
+                                        <li
+                                            key={`${charge.name}-${charge.date}-${charge.amount_cents}`}
+                                            className="flex items-baseline justify-between gap-3 text-sm"
+                                        >
+                                            <span className="min-w-0 truncate text-slate-600 dark:text-neutral-300">
+                                                {charge.name}
+                                                <span className="ml-1.5 text-slate-400 dark:text-neutral-500">
+                                                    {formatChargeDate(charge.date)}
+                                                </span>
+                                            </span>
+                                            <span className="shrink-0 tabular-nums text-slate-800 dark:text-neutral-100">
+                                                {amount(charge.amount_cents)}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
 
                         {tenure && (

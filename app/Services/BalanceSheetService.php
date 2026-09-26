@@ -60,6 +60,20 @@ class BalanceSheetService
         return $this->snapshots->simplified();
     }
 
+    /**
+     * Dated remaining recurring charges in the open month (display only).
+     *
+     * @return list<array{name: string, date: string, amount_cents: int, stream_id: int|null, category_id: int|null, category_name: string|null}>
+     */
+    public function upcomingRecurringCharges(): array
+    {
+        if ($this->ctx->isLocked()) {
+            return [];
+        }
+
+        return $this->recurring->upcomingOccurrences()->all();
+    }
+
     public function getExpanded(): array
     {
         return $this->expanded->present();

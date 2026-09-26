@@ -169,11 +169,11 @@ export default function Onboarding({
                                     </div>
                                 </div>
                                 <div className="order-first p-4 pb-0 md:order-none md:h-full md:p-6 md:pl-3">
-                                    <div className="h-40 overflow-hidden rounded-2xl bg-slate-100 md:h-full dark:bg-neutral-800">
+                                    <div className="flex h-40 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 md:h-full dark:bg-neutral-800">
                                         <img
-                                            src={marketingCopy.still}
-                                            alt=""
-                                            className="h-full w-full object-cover"
+                                            src={slide.image}
+                                            alt={slide.imageAlt}
+                                            className="h-full w-full object-contain object-top p-2 md:p-4"
                                         />
                                     </div>
                                 </div>
