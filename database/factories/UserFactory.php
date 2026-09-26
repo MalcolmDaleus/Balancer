@@ -36,7 +36,15 @@ class UserFactory extends Factory
             'savings_seed' => 0,
             'liquidity_seed_on' => now()->toDateString(),
             'onboarded_at' => now(),
+            'is_admin' => false,
         ];
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
     }
 
     /**

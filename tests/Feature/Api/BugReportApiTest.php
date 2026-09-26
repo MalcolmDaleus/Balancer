@@ -30,14 +30,29 @@ test('user can submit a bug report', function () {
     $response->assertCreated()
         ->assertJsonPath('data.type', 'functional')
         ->assertJsonPath('data.zone', 'statistics')
-        ->assertJsonPath('data.view', 'mobile');
+        ->assertJsonPath('data.view', 'mobile')
+        ->assertJsonPath('data.status', 'new');
 
     $this->assertDatabaseHas('bug_reports', [
         'user_id' => $user->id,
         'type' => 'functional',
         'zone' => 'statistics',
         'view' => 'mobile',
+        'status' => 'new',
     ]);
+});
+
+test('submitted bug reports ignore a client-supplied status', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->postJson('/api/v1/bug-reports', [
+        ...validPayload(),
+        'status' => 'fixed',
+    ])
+        ->assertCreated()
+        ->assertJsonPath('data.status', 'new');
+
+    expect(BugReport::query()->sole()->status->value)->toBe('new');
 });
 
 test('store bug report fails without required fields', function () {

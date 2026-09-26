@@ -1,0 +1,32 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('bug_reports', function (Blueprint $table) {
+            $table->string('status')->default('new')->after('description');
+            $table->index('status');
+        });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->boolean('is_admin')->default(false)->after('email_verified_at');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('bug_reports', function (Blueprint $table) {
+            $table->dropIndex(['status']);
+            $table->dropColumn('status');
+        });
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('is_admin');
+        });
+    }
+};

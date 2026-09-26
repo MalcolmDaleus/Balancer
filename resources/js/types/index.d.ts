@@ -44,6 +44,7 @@ export interface User {
     last_finance_processed_at?: string | null;
     avatar?: string;
     email_verified_at: string | null;
+    is_admin: boolean;
     onboarded_at?: string | null;
     created_at: string;
     updated_at: string;

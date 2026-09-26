@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BugReportStatus;
 use App\Enums\BugReportType;
 use App\Enums\BugReportView;
 use App\Enums\BugReportZone;
@@ -20,6 +21,11 @@ class BugReport extends Model
         'zone',
         'view',
         'description',
+        'status',
+    ];
+
+    protected $attributes = [
+        'status' => 'new',
     ];
 
     protected function casts(): array
@@ -28,6 +34,7 @@ class BugReport extends Model
             'type' => BugReportType::class,
             'zone' => BugReportZone::class,
             'view' => BugReportView::class,
+            'status' => BugReportStatus::class,
         ];
     }
 

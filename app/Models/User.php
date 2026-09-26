@@ -44,7 +44,13 @@ class User extends Authenticatable implements MustVerifyEmail
             'savings_seed' => 'integer',
             'liquidity_seed_on' => 'date',
             'onboarded_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->is_admin === true;
     }
 
     public function isOnboarded(): bool

@@ -9,8 +9,11 @@ export const dashboardCopy = {
 
     header: {
         openSettings: 'Open settings',
+        openAdmin: 'Open admin',
+        leaveAdmin: 'Back to dashboard',
         reportProblem: 'Report a problem',
         logoAlt: 'Balancer',
+        goToDashboard: 'Go to dashboard',
     },
 
     modules: {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\BugReportStatus;
 use App\Http\Requests\Api\StoreBugReportRequest;
 use App\Http\Resources\BugReportResource;
 use App\Models\BugReport;
@@ -16,6 +17,7 @@ class BugReportController extends Controller
         $report = BugReport::create([
             ...$request->validated(),
             'user_id' => $request->user()->id,
+            'status' => BugReportStatus::New,
         ]);
 
         return (new BugReportResource($report))

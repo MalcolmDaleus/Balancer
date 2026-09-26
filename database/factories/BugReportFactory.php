@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\BugReportStatus;
 use App\Enums\BugReportType;
 use App\Enums\BugReportView;
 use App\Enums\BugReportZone;
@@ -24,6 +25,7 @@ class BugReportFactory extends Factory
             'zone' => BugReportZone::Other,
             'view' => BugReportView::Desktop,
             'description' => fake()->sentence(12),
+            'status' => BugReportStatus::New,
         ];
     }
 }

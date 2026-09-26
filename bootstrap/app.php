@@ -2,6 +2,7 @@
 
 use App\Exceptions\DomainException;
 use App\Exceptions\MonthLockedException;
+use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureOnboarded;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'onboarded' => EnsureOnboarded::class,
+            'admin' => EnsureAdmin::class,
         ]);
 
         $middleware->web(append: [

@@ -410,12 +410,14 @@ export type BugReportZone =
     | 'login'
     | 'other';
 export type BugReportView = 'desktop' | 'mobile';
+export type BugReportStatus = 'new' | 'triaged' | 'fixed' | 'wont_fix';
 
 export interface BugReport {
     id: number;
     type: BugReportType;
     zone: BugReportZone;
     view: BugReportView;
+    status: BugReportStatus;
     description: string;
     created_at: string;
 }

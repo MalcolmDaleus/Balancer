@@ -14,6 +14,7 @@ class BugReportResource extends JsonResource
             'type' => $this->type?->value,
             'zone' => $this->zone?->value,
             'view' => $this->view?->value,
+            'status' => $this->status?->value,
             'description' => $this->description,
             'created_at' => $this->created_at,
         ];

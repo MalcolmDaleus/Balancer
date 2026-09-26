@@ -32,6 +32,10 @@ class UserSeeder extends Seeder
             $gaps['locale'] = 'en-US';
         }
 
+        if (! $user->is_admin) {
+            $gaps['is_admin'] = true;
+        }
+
         if ($gaps !== []) {
             $user->forceFill($gaps)->save();
         }

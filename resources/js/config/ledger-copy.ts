@@ -205,7 +205,8 @@ export const ledgerCopy = {
         },
         selectCategory: '— select category —',
         fallbackCategory: (id: number) => `Category ${id}`,
-        chargesHint: 'Posted charges can be corrected or removed if they were written in error. Upcoming ones follow the stream and cannot be edited here.',
+        chargesHint:
+            'Posted charges can be corrected or removed if they were written in error. Upcoming ones follow the stream and cannot be edited here.',
         chargeHint: 'Correct the amount if this posting was wrong, or delete it if it should not have been recorded.',
         stream: 'Stream',
         chargedOn: 'Charged on',

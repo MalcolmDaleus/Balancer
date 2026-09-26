@@ -1,13 +1,21 @@
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
+import { adminPaths } from '@/config/admin-copy';
 import { dashboardCopy } from '@/config/dashboard-copy';
 import { Button } from '@/components/ui/button';
 import { useBugReport } from '@/contexts/bug-report';
 import { useSettings } from '@/contexts/settings';
-import { Bug, Settings } from 'lucide-react';
+import { dashboard } from '@/routes';
+import { type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
+import { Bug, Settings, Shield } from 'lucide-react';
 
 export default function DashboardHeader() {
     const { openSettings } = useSettings();
     const { openBugReport } = useBugReport();
+    const { auth } = usePage<SharedData>().props;
+    const pageUrl = usePage().url;
+    const isAdmin = Boolean(auth.user?.is_admin);
+    const onAdmin = pageUrl.startsWith('/admin');
 
     return (
         <header className="fixed inset-x-0 top-3 z-30 mx-4 h-14 rounded-full bg-white/40 shadow-sm backdrop-blur-md dark:bg-neutral-950/70 dark:shadow-neutral-950/60 md:mx-8">
@@ -16,7 +24,7 @@ export default function DashboardHeader() {
                     <AppearanceToggleDropdown />
                 </div>
 
-                <div className="flex items-center justify-center">
+                <Link href={dashboard()} className="flex items-center justify-center" aria-label={dashboardCopy.header.goToDashboard}>
                     <img
                         src="/branding/logo_dark.svg"
                         alt={dashboardCopy.header.logoAlt}
@@ -27,9 +35,28 @@ export default function DashboardHeader() {
                         alt={dashboardCopy.header.logoAlt}
                         className="hidden h-auto w-36 dark:block"
                     />
-                </div>
+                </Link>
 
                 <div className="flex items-center gap-1 justify-self-end">
+                    {isAdmin ? (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            className={`h-9 w-9 ${
+                                onAdmin
+                                    ? 'text-slate-900 dark:text-neutral-100'
+                                    : 'text-slate-600 hover:text-slate-900 dark:text-neutral-300 dark:hover:text-neutral-100'
+                            }`}
+                        >
+                            <Link
+                                href={onAdmin ? dashboard() : adminPaths.overview}
+                                aria-label={onAdmin ? dashboardCopy.header.leaveAdmin : dashboardCopy.header.openAdmin}
+                            >
+                                <Shield className="h-4 w-4" />
+                            </Link>
+                        </Button>
+                    ) : null}
                     <Button
                         type="button"
                         variant="ghost"
