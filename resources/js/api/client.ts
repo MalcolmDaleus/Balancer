@@ -77,15 +77,23 @@ export type ApiFetchOptions = RequestInit & {
     toast?: false | string;
 };
 
+/** Laravel sets this cookie on every web response; the API's CSRF check reads it back from the header. */
+function xsrfToken(): string | undefined {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 export async function apiFetch<T = unknown>(url: string, options?: ApiFetchOptions): Promise<T> {
     const { notifyFinance = true, toast: toastOpt, ...init } = options ?? {};
     const method = init.method ?? 'GET';
+    const token = xsrfToken();
     const res = await fetch(url, {
         ...init,
         headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? { 'X-XSRF-TOKEN': token } : {}),
             ...init.headers,
         },
         credentials: 'same-origin',
@@ -108,6 +116,10 @@ export async function apiFetch<T = unknown>(url: string, options?: ApiFetchOptio
                 error: body.error ?? 'validation_error',
                 details: body.details,
                 month: body.month,
+            });
+        } else if (res.status === 419) {
+            err = new ApiClientError(419, 'Your session expired. Reload the page and try again.', {
+                error: 'session_expired',
             });
         } else if (res.status === 423) {
             err = new ApiClientError(423, body.message ?? 'This month is locked.', {

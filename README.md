@@ -1,4 +1,4 @@
-App status: In Development
+App status: Early access — live at [balancer.malcolmjdstudio.com](https://balancer.malcolmjdstudio.com)
 
 # What is Balancer?
 
@@ -55,3 +55,21 @@ The mobile version of the app presents as a carousel with a slide for every modu
 
 ## Bug reporting
 Any visual or functional bugs can be reported using the bug reporting menu.
+
+## Running it locally
+Requires PHP 8.2+, Composer, Node 20+ and MySQL (XAMPP works).
+
+```bash
+composer install
+npm install
+cp .env.example .env        # then set DB_* for your local database
+php artisan key:generate
+php artisan migrate
+php artisan db:seed          # local only: admin account test@test.com / password123, plus demo data
+composer run dev             # Laravel + Vite dev servers
+```
+
+Run the tests with `php artisan test`.
+
+## Deploying
+See [docs/deploy-hostinger.md](docs/deploy-hostinger.md). Seeding is disabled outside local; production accounts are created by registering.

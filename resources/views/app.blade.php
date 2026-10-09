@@ -38,8 +38,7 @@
         <link rel="icon" href="/branding/icon_dark.svg" type="image/svg+xml" media="(prefers-color-scheme: no-preference)">
         {{-- Fallback for clients that ignore media on rel="icon" --}}
         <link rel="icon" href="/branding/icon_dark.svg" type="image/svg+xml">
-        {{-- Single default for “Add to Home Screen”; SVG is not ideal on older iOS — add a 180×180 PNG when you have one. --}}
-        <link rel="apple-touch-icon" href="/branding/icon_dark.svg">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />

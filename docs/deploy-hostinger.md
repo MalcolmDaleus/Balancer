@@ -1,183 +1,165 @@
 # Balancer — Hostinger production deployment guide
 
-Deploying Balancer (Laravel 12 + Inertia/React, MySQL) to a **Hostinger subdomain** using **file upload** (no git on the server).
+Deploying Balancer (Laravel 12 + Inertia/React, MySQL) to **https://balancer.malcolmjdstudio.com** on **Hostinger Premium Web Hosting**, by file upload (no git on the server).
 
-Placeholders used throughout — replace them with your real values:
+Your setup:
 
-| Placeholder | Meaning | Example |
+| | Value |
+|---|---|
+| Plan | Premium Web Hosting (includes SSH, weekly backups) |
+| Main domain | `malcolmjdstudio.com` — will host a small website of its own |
+| Subdomain | `balancer.malcolmjdstudio.com`, created as a folder inside the main site |
+| Email | None. Balancer doesn't need it (password resets are handled from the admin area) |
+
+One placeholder remains — replace it everywhere:
+
+| Placeholder | Meaning | Where to find it |
 |---|---|---|
-| `yourdomain.com` | Main domain on Hostinger | `daleus.com` |
-| `balancer.yourdomain.com` | The subdomain Balancer will live on | `balancer.daleus.com` |
-| `u123456789` | Your Hostinger account user (shown in hPanel → Files → FTP Accounts / SSH Access) | `u482913377` |
-| `APP_DIR` | Folder that holds the Laravel code (**not** web-accessible) | see Phase 4 |
-| `DOCROOT` | Folder hPanel serves for the subdomain | see Phase 4 |
-| `PHP` | Full path of Hostinger's CLI PHP binary | `/opt/alt/php83/usr/bin/php` |
+| `u123456789` | Your Hostinger account user | hPanel → Advanced → SSH Access (the username), or the path shown in File Manager |
+
+Paths used throughout:
+
+| Name | Path | Purpose |
+|---|---|---|
+| `APP_DIR` | `/home/u123456789/domains/malcolmjdstudio.com/balancer-app` | Laravel code, `.env`, `storage/`. **Not** web-accessible |
+| `DOCROOT` | `/home/u123456789/domains/malcolmjdstudio.com/public_html/balancer` | What hPanel serves for the subdomain. Becomes a symlink to `APP_DIR/public` |
+| `PHP` | `/opt/alt/php83/usr/bin/php` | Hostinger's CLI PHP for the version you pick (confirm in Phase 2.5) |
 
 ---
 
-## 0. Where things stand today (audit summary)
-
-Verified locally on 26 Sep 2026:
+## 0. Where things stand (audit summary)
 
 | Area | State |
 |---|---|
-| Frontend production build (`npm run build`) | Builds successfully and includes the admin + onboarding pages. `public/build` is gitignored, so it has to be copied into the release by hand (Phase 3). |
-| Fresh database build | Verified: importing `database/schema/mysql-schema.sql` and then running `php artisan migrate --force` produces all 28 tables, including `users.is_admin` and `bug_reports.status`. |
-| `php artisan optimize` | Config, event and view caches build. **Route cache fails** because of duplicate API route names (see Missing items, item 7). Skip `route:cache` until that's fixed. |
-| Admin + bug-report status work | **Not committed yet** (about 30 modified/untracked files). The release export below only packages committed files, so commit first. |
-| `.env.example` | Does not exist. A full production `.env` template is in Phase 5. |
-| Mail | Local `.env` uses `MAIL_MAILER=log`. Every app route requires a **verified email**, so production mail must work or nobody (including you) can get past sign-up. |
-| Queues | Nothing in the app is queued. Use `QUEUE_CONNECTION=sync` in production; no queue worker is needed. |
-| Scheduler | Two daily commands (`finance:process-due` 00:10 UTC, `finance:close-months` 00:30 UTC). Needs one Hostinger cron entry (Phase 8). |
-| File uploads / `storage:link` | Not used. No `storage:link` needed. |
-| SSR | `config/inertia.php` has SSR enabled, but no SSR bundle is built, so Inertia skips it. Harmless; optional cleanup. |
-| Dev-only routes (`/dev/reset-onboarding`, `/dev/load-demo`) | Return 404 outside `APP_ENV=local` (`LocalDevController::ensureLocalDev`). Safe. |
-| Seeders | `UserSeeder` hard-codes your email, password `peanut12`, and admin rights. **Never run it in production.** `DevDataSeeder` refuses to run outside local. |
-| PHP | Requires PHP **8.2+** (`composer.json`). Local is 8.2.12. PHP extensions needed: `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `ctype`, `fileinfo`, `curl`, `dom`/`xml`. No `intl`, `gd` or `bcmath` needed. |
+| Frontend build (`npm run build`) | Builds. `public/build` is gitignored, so it's copied into the release by hand (Phase 3). |
+| TypeScript (`npm run types`) | Clean. |
+| Tests (`php artisan test`) | All passing. |
+| Fresh database | Importing `database/schema/mysql-schema.sql` then `php artisan migrate --force` gives all 28 tables (4 migrations on top of the dump). No new migrations since. |
+| `php artisan optimize` | Works, including the route cache (duplicate API route names fixed). |
+| `.env` templates | `.env.example` (local) and `.env.production.example` (pre-filled for this subdomain). |
+| Mail | Not needed. Email verification is removed; password reset links are created by an admin at `/admin/password-resets` and sent to the user personally. `MAIL_MAILER=log`. |
+| Queues | Nothing is queued. `QUEUE_CONNECTION=sync`, no worker needed. |
+| Scheduler | Two daily commands (`finance:process-due` 00:10 UTC, `finance:close-months` 00:30 UTC). Needs one cron entry (Phase 8). |
+| File uploads / `storage:link` | Not used. |
+| Seeding | Disabled outside local: `db:seed` does nothing in production and `UserSeeder` refuses to run. |
+| Dev-only routes (`/dev/reset-onboarding`, `/dev/load-demo`) | 404 outside `APP_ENV=local`. |
+| Error pages | Branded 403/404/500/503 pages when `APP_DEBUG=false`. |
+| Legal | `/privacy` and `/terms` pages exist, linked from the footer and the sign-up form. Review them (item 6 in Phase 15). |
+| PHP | Requires **8.2+**. Extensions: `pdo_mysql`, `mbstring`, `openssl`, `tokenizer`, `ctype`, `fileinfo`, `curl`, `dom`/`xml`. |
 
 ---
 
-## 1. Decisions and info to gather first
+## 1. Before you start
 
-- [ ] **Hostinger plan.** SSH is included on **Premium and above**, not on Single. This guide assumes SSH (Option A). There's a no-SSH fallback (Option B), but it's clumsier.
-- [ ] **Subdomain name** (e.g. `balancer`).
-- [ ] **Where DNS is managed.** If the domain uses Hostinger nameservers, the subdomain DNS record is created automatically. If DNS is elsewhere (Cloudflare, registrar), you'll add an `A` record yourself (Phase 2.1).
-- [ ] **How to create the subdomain in hPanel** (Phase 2.1):
-  - *Part of the existing website* — no extra website slot used; folder lands inside the main site's `public_html`.
-  - *Its own website* — uses one website slot (Premium has 3); cleanest isolation.
-- [ ] **Sending address for app email**, e.g. `noreply@yourdomain.com`. Check in hPanel → Emails whether Hostinger Email is active on the domain or only a free trial.
-- [ ] **Privacy policy / terms.** Balancer stores personal financial data for EU users and there are no legal pages yet (see Missing items, item 6).
+- [ ] All work committed (Phase 3.1). The release is exported from git, so uncommitted files don't ship.
+- [ ] Your admin email for production (this guide uses `maldaleus@gmail.com`).
+- [ ] Read through `/privacy` and `/terms` locally and adjust anything that isn't true for you (Phase 15, item 6).
+- [ ] Decide where the main website goes: it lives in `public_html` next to the `balancer` folder. When you later upload the main site, **don't delete or overwrite `public_html/balancer`**.
 
 ---
 
 ## 2. Hostinger account setup (hPanel)
 
-### 2.1 Create the subdomain
+### 2.1 Subdomain
 
-**Option 1 — subdomain as part of the main website (recommended if the main site is on Hostinger):**
+You've already created it as a folder in the main site. Check:
 
-1. hPanel → **Websites** → main site → **Dashboard** → sidebar **Domains → Subdomains**.
-2. Enter `balancer`, keep the default folder, click **Create**.
-3. Hostinger creates `/home/u123456789/domains/yourdomain.com/public_html/balancer`.
-
-**Option 2 — subdomain as its own website:**
-
-1. hPanel → **Websites** → **Add website** → enter `balancer.yourdomain.com` → choose an empty/custom PHP site.
-2. Hostinger creates `/home/u123456789/domains/balancer.yourdomain.com/public_html`.
-
-If DNS is **not** on Hostinger: add an `A` record `balancer` → your Hostinger server IP (hPanel → Websites → Dashboard → sidebar, "IP address"). If that DNS provider is Cloudflare with the orange-cloud proxy on, see the trusted-proxies note in Phase 11.
+1. hPanel → **Websites** → `malcolmjdstudio.com` → **Dashboard** → sidebar **Domains → Subdomains**.
+2. `balancer.malcolmjdstudio.com` is listed with folder `public_html/balancer`.
+3. If the domain uses Hostinger nameservers, DNS is automatic. If DNS is elsewhere (registrar or Cloudflare), add an `A` record `balancer` → the server IP shown on the website dashboard. With Cloudflare's orange-cloud proxy, see the trusted-proxies note in Phase 11.
 
 ### 2.2 PHP version and extensions
 
-1. Open the subdomain's site dashboard (or the main site for Option 1) → **Advanced → PHP Configuration**.
-2. **PHP version:** choose **8.3** (8.2 minimum).
-3. **PHP extensions** tab — make sure these are ticked: `pdo_mysql` (sometimes listed as `nd_pdo_mysql`), `mbstring`, `fileinfo`, `curl`, `dom`, `xml`, `ctype`, `tokenizer`, `openssl`. Save.
-4. **PHP options**: defaults are fine. Don't raise `memory_limit` unless the logs ask for it.
+1. Website dashboard → **Advanced → PHP Configuration**. The subdomain uses the main site's PHP settings.
+2. **PHP version:** 8.3 (8.2 minimum). Make sure the main site's code is fine with this too.
+3. **PHP extensions:** tick `pdo_mysql` (sometimes `nd_pdo_mysql`), `mbstring`, `fileinfo`, `curl`, `dom`, `xml`, `ctype`, `tokenizer`, `openssl`. Save.
 
 ### 2.3 SSL
 
-1. hPanel → **Security → SSL** → make sure `balancer.yourdomain.com` has an active certificate (install the free one if it's missing; subdomains sometimes need it done manually).
-2. Turn on **Force HTTPS** for the subdomain.
-3. Wait until `https://balancer.yourdomain.com` shows a valid padlock before continuing. Email verification links are generated from `APP_URL`, which must be `https`.
+1. hPanel → **Security → SSL** → `balancer.malcolmjdstudio.com` must have an active certificate. Subdomains sometimes need the free certificate installed manually.
+2. Turn on **Force HTTPS** for it.
+3. Wait until `https://balancer.malcolmjdstudio.com` shows a valid padlock. Reset links are built from `APP_URL`, which must be `https`.
 
 ### 2.4 MySQL database
 
-1. hPanel → **Databases → Management** (MySQL Databases).
-2. Create:
-   - Database: `balancer` → Hostinger saves it as `u123456789_balancer`
-   - User: `balancer` → saved as `u123456789_balancer`
-   - A **long random password**. Store it in your password manager.
-3. Note the host. For apps on the same Hostinger server it is `localhost`; hPanel shows it next to the database. If it shows an IP or hostname, use that instead.
+1. hPanel → **Databases → Management**.
+2. Create database `balancer` and user `balancer` → hPanel saves them as `u123456789_balancer`. Use a **long random password** and store it in your password manager.
+3. Note the host (normally `localhost`; if hPanel shows a hostname or IP, use that).
 
-### 2.5 Email mailbox for the app
+### 2.5 SSH access
 
-1. hPanel → **Emails** → your domain → **Create email account** → `noreply@yourdomain.com` with a strong password.
-2. **Emails → Connect Apps & Devices** shows the SMTP settings: host `smtp.hostinger.com`, port `465` (SSL). Port `587` (STARTTLS) is the fallback.
-3. If DNS is on Hostinger, SPF/DKIM/DMARC records are usually added automatically. Check under Emails → *DNS records / Deliverability*. If DNS is elsewhere, copy those records to your DNS provider. Without them, verification emails land in spam.
-
-### 2.6 SSH access
-
-1. hPanel → **Advanced → SSH Access** → **Enable**.
-2. Note host, port (usually **65002**), username, and set a password or add your SSH key.
-3. Test from PowerShell on your PC:
+1. hPanel → **Advanced → SSH Access** → **Enable**. Note host, port (usually **65002**) and username. Add your SSH key, or set a strong password.
+2. Test from PowerShell:
 
 ```powershell
 ssh -p 65002 u123456789@YOUR_SERVER_IP
 ```
 
-4. On the server, find the CLI PHP that matches the version you picked:
+3. On the server, find the CLI PHP that matches the version you picked:
 
 ```bash
-php -v
 ls /opt/alt/ | grep php
 /opt/alt/php83/usr/bin/php -v
 ```
 
-Use the full path (e.g. `/opt/alt/php83/usr/bin/php`) everywhere this guide says `PHP`. The plain `php` command may be a different version from the website's.
+Use that full path wherever this guide says `$PHP`. The plain `php` command may be a different version. Put these in `~/.bashrc` so every session has them:
+
+```bash
+echo 'export PHP=/opt/alt/php83/usr/bin/php' >> ~/.bashrc
+echo 'export APP=~/domains/malcolmjdstudio.com/balancer-app' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ---
 
 ## 3. Build the release package on your PC
 
-This produces one zip containing code, production-only `vendor/` and the fresh frontend build — and nothing else.
-
-### 3.1 Pre-flight in the project
+### 3.1 Pre-flight
 
 ```powershell
 cd C:\xampp\htdocs\Balancer
 
-# 1) Tests green
 php artisan test --compact
+npm run types
 
-# 2) Commit everything that should ship (the export in 3.2 only includes committed files)
+# The export in 3.2 only includes committed files
 git status
 git add -A
 git commit -m "Release 1.0.0"
 
-# 3) Fresh production frontend build (also regenerates Wayfinder route helpers)
+# Fresh production frontend build (also regenerates Wayfinder route helpers)
 npm run build
 ```
 
-Confirm `public\build\manifest.json` lists `resources/js/pages/admin/overview.tsx` and `resources/js/pages/onboarding.tsx`.
-
-### 3.2 Create a clean staging copy
+### 3.2 Staging copy
 
 ```powershell
 $release = "C:\deploy\balancer"
 Remove-Item -Recurse -Force $release -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force C:\deploy | Out-Null
 
-# Export only committed files (excludes .env, node_modules, vendor, public/hot, archived, project_notes, etc.)
+# Committed files only (no .env, node_modules, vendor, public/hot, etc.)
 git archive --format=zip -o C:\deploy\balancer-src.zip HEAD
 Expand-Archive C:\deploy\balancer-src.zip $release
 
 # Production PHP dependencies only
 cd $release
 composer install --no-dev --optimize-autoloader --no-interaction
+# If composer sits silent for many minutes, Ctrl+C and re-run with -vvv to see what's stuck.
 
-# If composer sits silent for many minutes, stop it (Ctrl+C) and re-run with -vvv to see which download is stuck.
-
-# Add the frontend build (gitignored, so not in the export)
+# Frontend build (gitignored, so not in the export)
 Copy-Item -Recurse C:\xampp\htdocs\Balancer\public\build "$release\public\build"
-```
 
-### 3.3 Make sure these are NOT in the staging folder
-
-- [ ] `.env` (you'll create the production one on the server)
-- [ ] `public\hot` — if present, production pages load JS from your PC's dev server and render blank
-- [ ] `node_modules\`
-- [ ] `bootstrap\cache\*.php` and `*.tmp` — only `.gitignore` should remain. Laravel regenerates `packages.php` / `services.php` on the server; stale local copies list dev packages (Pail, Sail, Collision) that aren't installed in production.
-- [ ] `storage\logs\*.log`, `storage\framework\sessions\*`, `storage\framework\views\*.php`
-- [ ] `database\*.sqlite`
-
-```powershell
+# Leftovers that must not ship
 Remove-Item "$release\public\hot" -ErrorAction SilentlyContinue
 Get-ChildItem "$release\bootstrap\cache" -Exclude .gitignore | Remove-Item -Force
 ```
 
-Optional, to shrink the upload: delete `tests\`, `resources\js\`, `resources\css\`. The server only needs `resources\views`.
+Check the staging folder has **no** `.env`, `public\hot`, `node_modules\`, `database\*.sqlite`, or `bootstrap\cache\*.php`. Stale `bootstrap\cache\*.php` files list dev packages (Pail, Sail) that aren't installed in production.
 
-### 3.4 Zip it
+Optional, to shrink the upload: delete `tests\`, `resources\js\`, `resources\css\` from the staging copy.
+
+### 3.3 Zip it
 
 ```powershell
 cd C:\deploy
@@ -185,165 +167,66 @@ tar -a -c -f balancer-release.zip -C C:\deploy\balancer .
 (Get-Item balancer-release.zip).Length / 1MB
 ```
 
-Hostinger's File Manager extracts archives up to **256 MB**. This zip should be far below that; if it isn't, extract over SSH with `unzip`.
-
 ---
 
-## 4. Upload and folder layout
+## 4. Upload and point the subdomain at `public/`
 
-The rule: **only Laravel's `public/` folder may be reachable from the web.** `.env`, `vendor/`, `storage/` must sit outside the served folder.
-
-| Subdomain created as… | `APP_DIR` (code) | `DOCROOT` (served) |
-|---|---|---|
-| Part of main website | `/home/u123456789/domains/yourdomain.com/balancer-app` | `/home/u123456789/domains/yourdomain.com/public_html/balancer` |
-| Own website | `/home/u123456789/domains/balancer.yourdomain.com/balancer-app` | `/home/u123456789/domains/balancer.yourdomain.com/public_html` |
+Only Laravel's `public/` folder may be reachable from the web. `.env`, `vendor/` and `storage/` live in `APP_DIR`, outside `public_html`.
 
 ### 4.1 Upload
 
-1. hPanel → **Files → File Manager**.
-2. Navigate to the parent of `APP_DIR` (e.g. `domains/yourdomain.com/`), create folder `balancer-app`.
-3. Open it, **Upload** `balancer-release.zip`, right-click → **Extract** into the current folder.
-4. Check `balancer-app/artisan`, `balancer-app/vendor/`, `balancer-app/public/index.php` and `balancer-app/public/build/manifest.json` all exist (not nested one level deeper).
-5. Delete the uploaded zip.
+1. hPanel → **Files → File Manager** → open `domains/malcolmjdstudio.com/` (the folder that **contains** `public_html`).
+2. Create folder `balancer-app`, open it, **Upload** `balancer-release.zip`, right-click → **Extract** here.
+3. Check `balancer-app/artisan`, `balancer-app/vendor/`, `balancer-app/public/index.php` and `balancer-app/public/build/manifest.json` exist (not nested one level deeper). Delete the zip.
 
-(Alternatively, upload with FileZilla over SFTP on port 65002 and unzip on the server with `unzip balancer-release.zip`.)
+(Or upload with FileZilla/WinSCP over SFTP, port 65002, and `unzip` over SSH.)
 
-### 4.2 Option A (SSH) — point the subdomain at `public/` with a symlink (recommended)
-
-Part-of-main-website layout:
+### 4.2 Replace the subdomain folder with a symlink
 
 ```bash
-cd ~/domains/yourdomain.com/public_html
-ls -la balancer            # should be empty (maybe a default index.html) — confirm before deleting
+cd ~/domains/malcolmjdstudio.com/public_html
+ls -la balancer            # should only hold Hostinger's default files — confirm before deleting
 rm -rf balancer
 ln -s ../balancer-app/public balancer
 ls -la balancer            # balancer -> ../balancer-app/public
 ```
 
-Own-website layout:
-
-```bash
-cd ~/domains/balancer.yourdomain.com
-ls -la public_html         # confirm it only holds Hostinger's default files
-rm -rf public_html
-ln -s balancer-app/public public_html
-```
-
 Future releases only replace `balancer-app`; the symlink keeps working.
 
-> Part-of-main-website layout: if the main site's `public_html/.htaccess` contains rewrite rules (e.g. WordPress), Balancer's own `public/.htaccess` turns on its own `RewriteEngine` and wins for rewrites. Other parent directives (password protection, header rules) can still apply, so check if something odd happens.
+Notes for sharing `public_html` with the main site:
 
-### 4.3 Option B (no SSH) — copy `public/` into DOCROOT and patch `index.php`
-
-Use this only if you can't get SSH.
-
-1. Copy **the contents** of `balancer-app/public/` (including `.htaccess`, `build/`, `branding/`, `img/`) into `DOCROOT`.
-2. Edit `DOCROOT/index.php` to:
-
-```php
-<?php
-
-use Illuminate\Foundation\Application;
-use Illuminate\Http\Request;
-
-define('LARAVEL_START', microtime(true));
-
-$appDir = '/home/u123456789/domains/yourdomain.com/balancer-app';
-
-if (file_exists($maintenance = $appDir.'/storage/framework/maintenance.php')) {
-    require $maintenance;
-}
-
-require $appDir.'/vendor/autoload.php';
-
-/** @var Application $app */
-$app = require_once $appDir.'/bootstrap/app.php';
-
-$app->usePublicPath(__DIR__);
-
-$app->handleRequest(Request::capture());
-```
-
-3. On every release you must upload **both** `balancer-app` **and** a new `DOCROOT/build/`. Forgetting the second causes blank pages or old UI.
-4. Artisan commands without SSH: see the one-off cron trick in Phase 6.3.
+- Because the folder sits inside the main site, `malcolmjdstudio.com/balancer/...` would also reach Balancer. `public/.htaccess` already redirects those requests to `https://balancer.malcolmjdstudio.com/...`.
+- Balancer's `.htaccess` turns on its own `RewriteEngine`, so rewrite rules in the main site's `public_html/.htaccess` don't affect it. Other parent directives (password protection, headers) can still apply.
+- When you deploy the main website, upload into `public_html` without removing the `balancer` symlink.
 
 ---
 
 ## 5. Production `.env`
 
-Create `APP_DIR/.env` in File Manager (or `nano .env` over SSH). **Never put it in `DOCROOT`.**
+**You create it separately; it is never the local `.env` and it never goes into git.** The repo has a committed template with no secrets, `.env.production.example`, pre-filled for this subdomain. `.env.production` itself is gitignored, so you can keep your filled-in copy on your PC under that name.
 
-Generate a fresh key on your PC and paste the output into `APP_KEY`:
+1. On your PC:
 
 ```powershell
 cd C:\xampp\htdocs\Balancer
-php artisan key:generate --show
+Copy-Item .env.production.example .env.production
+php artisan key:generate --show      # copy the output
 ```
 
-Template:
+2. Edit `.env.production`:
+   - `APP_KEY=` → paste the generated key
+   - `DB_DATABASE` / `DB_USERNAME` → your `u123456789_balancer` names
+   - `DB_PASSWORD=""` → the database password, inside the quotes
+3. Upload it to `APP_DIR` and rename it to **`.env`** (File Manager → Upload, then Rename). Don't put it in `public_html`.
+4. Keep `.env.production` on your PC (or in your password manager) as the master copy. If you lose `APP_KEY`, everyone is logged out but no data is lost.
 
-```dotenv
-APP_NAME=Balancer
-APP_ENV=production
-APP_KEY=base64:PASTE_GENERATED_KEY
-APP_DEBUG=false
-APP_URL=https://balancer.yourdomain.com
+Settings worth knowing:
 
-APP_LOCALE=en
-APP_FALLBACK_LOCALE=en
-APP_FAKER_LOCALE=en_US
-
-APP_MAINTENANCE_DRIVER=file
-
-BCRYPT_ROUNDS=12
-
-LOG_CHANNEL=stack
-LOG_STACK=daily
-LOG_DAILY_DAYS=14
-LOG_DEPRECATIONS_CHANNEL=null
-LOG_LEVEL=warning
-
-DB_CONNECTION=mysql
-DB_HOST=localhost
-DB_PORT=3306
-DB_DATABASE=u123456789_balancer
-DB_USERNAME=u123456789_balancer
-DB_PASSWORD="LONG_RANDOM_DB_PASSWORD"
-
-SESSION_DRIVER=database
-SESSION_LIFETIME=43200
-SESSION_ENCRYPT=false
-SESSION_PATH=/
-SESSION_DOMAIN=
-SESSION_SECURE_COOKIE=true
-
-SANCTUM_STATEFUL_DOMAINS=balancer.yourdomain.com
-
-BROADCAST_CONNECTION=log
-FILESYSTEM_DISK=local
-QUEUE_CONNECTION=sync
-CACHE_STORE=database
-
-MAIL_MAILER=smtp
-MAIL_SCHEME=smtps
-MAIL_HOST=smtp.hostinger.com
-MAIL_PORT=465
-MAIL_USERNAME=noreply@yourdomain.com
-MAIL_PASSWORD="MAILBOX_PASSWORD"
-MAIL_FROM_ADDRESS=noreply@yourdomain.com
-MAIL_FROM_NAME="${APP_NAME}"
-
-VITE_APP_NAME="${APP_NAME}"
-```
-
-Notes:
-
-- `SESSION_DOMAIN` stays **empty**, so the session cookie belongs only to `balancer.yourdomain.com` and isn't shared with the main domain.
-- `SESSION_LIFETIME=43200` keeps people logged in for 30 days (same as local). Lower it if you prefer.
-- If port 465 fails: `MAIL_SCHEME=smtp`, `MAIL_PORT=587` (STARTTLS is negotiated automatically).
-- `MAIL_FROM_ADDRESS` must be the same mailbox you authenticate with, or Hostinger rejects/flags the mail.
-- Quote any value containing spaces, `#` or `$`.
-- Once config is cached (Phase 7), `.env` edits do nothing until you run `PHP artisan config:cache` again.
+- `SESSION_DOMAIN` stays **empty**, so the login cookie belongs only to `balancer.malcolmjdstudio.com` and isn't shared with the main site.
+- `SESSION_LIFETIME=43200` keeps people logged in for 30 days.
+- `AUTH_PASSWORD_RESET_EXPIRE=1440`: reset links you create stay valid for 24 hours.
+- `MAIL_MAILER=log`: nothing is emailed. If you add a mailbox later, see "Adding email later" at the end.
+- Once config is cached (Phase 7), `.env` edits do nothing until you run `$PHP artisan optimize` again.
 
 ---
 
@@ -352,217 +235,162 @@ Notes:
 ### 6.1 Import the base schema (phpMyAdmin)
 
 1. hPanel → **Databases → phpMyAdmin** → open `u123456789_balancer`.
-2. **Import** → choose `database/schema/mysql-schema.sql` from your PC (about 27 KB) → **Go**.
-3. You should see 25 tables including `migrations`, `users`, `sessions`, `cache`.
+2. **Import** → choose `database/schema/mysql-schema.sql` from your PC → **Go**.
+3. You should see 25 tables, including `migrations`, `users`, `sessions`, `cache`.
 
-Importing this through phpMyAdmin means Laravel doesn't need Hostinger's `mysql` command-line client to load the dump.
+Importing through phpMyAdmin means Laravel doesn't need the server's `mysql` command-line client to load the dump.
 
-### 6.2 Run the newer migrations (SSH)
+### 6.2 Run the newer migrations
 
 ```bash
-cd ~/domains/yourdomain.com/balancer-app
-PHP=/opt/alt/php83/usr/bin/php
+cd $APP
 $PHP artisan migrate --force
 $PHP artisan migrate:status
 ```
 
-Expected: four migrations run — `create_bug_reports_table`, `create_budget_tables`, `add_onboarding_and_liquidity_to_users`, `add_bug_report_status_and_user_is_admin`. That makes **28 tables** total.
+Expected: four migrations run (`create_bug_reports_table`, `create_budget_tables`, `add_onboarding_and_liquidity_to_users`, `add_bug_report_status_and_user_is_admin`), giving **28 tables**.
 
-**Do not run** `db:seed`, `UserSeeder` or `DevDataSeeder` in production.
-
-### 6.3 No-SSH alternatives
-
-**A. Import a complete schema built on your PC.** This is the same procedure that was verified locally:
-
-```powershell
-cd C:\xampp\htdocs\Balancer
-$mysql = "C:\xampp\mysql\bin\mysql.exe"
-& $mysql -u root -e "DROP DATABASE IF EXISTS balancer_release; CREATE DATABASE balancer_release CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-Get-Content database\schema\mysql-schema.sql -Raw | & $mysql -u root balancer_release
-
-# temporary env file pointing at the scratch DB
-(Get-Content .env) | ForEach-Object {
-  if ($_ -match '^DB_DATABASE=') { 'DB_DATABASE=balancer_release' }
-  elseif ($_ -match '^DB_USERNAME=') { 'DB_USERNAME=root' }
-  elseif ($_ -match '^DB_PASSWORD=') { 'DB_PASSWORD=' }
-  elseif ($_ -match '^APP_ENV=') { 'APP_ENV=release' }
-  else { $_ }
-} | Set-Content .env.release
-php artisan migrate --force --env=release
-Remove-Item .env.release
-
-C:\xampp\mysql\bin\mysqldump.exe -u root --single-transaction balancer_release > C:\deploy\balancer-full-schema.sql
-```
-
-Then import `balancer-full-schema.sql` in phpMyAdmin instead of `mysql-schema.sql` and skip 6.2.
-
-**B. One-off cron trick** (runs any artisan command without SSH): hPanel → **Advanced → Cron Jobs** → **Custom**, every minute:
-
-```text
-cd /home/u123456789/domains/yourdomain.com/balancer-app && /opt/alt/php83/usr/bin/php artisan migrate --force >> storage/logs/deploy.log 2>&1
-```
-
-Wait two minutes, read `storage/logs/deploy.log` in File Manager, then **delete that cron job**. The same trick works for the cache commands in Phase 7.
+Don't run `db:seed` in production. It's disabled and would only print a warning, but there's no reason to.
 
 ---
 
 ## 7. Permissions and caches
 
-Hostinger runs PHP as your own user, so standard permissions work. **Never use 777.**
-
 ```bash
-cd ~/domains/yourdomain.com/balancer-app
+cd $APP
 find storage bootstrap/cache -type d -exec chmod 755 {} \;
 find storage bootstrap/cache -type f -exec chmod 644 {} \;
 chmod 600 .env
-```
 
-Build caches (run again after every deploy and every `.env` change):
-
-```bash
-PHP=/opt/alt/php83/usr/bin/php
 $PHP artisan optimize:clear
-$PHP artisan config:cache
-$PHP artisan event:cache
-$PHP artisan view:cache
-# $PHP artisan route:cache   <- skip until duplicate API route names are fixed (Missing items, item 7)
+$PHP artisan optimize
 ```
 
-After item 7 is fixed, replace all of the above with `$PHP artisan optimize`.
+`optimize` caches config, events, routes and views. Run it again after every deploy and every `.env` change. Never use `chmod 777`.
 
 ---
 
 ## 8. Scheduler cron (required)
 
-Balancer's daily finance processing (`finance:process-due` at 00:10 UTC, `finance:close-months` at 00:30 UTC) only happens if Laravel's scheduler is triggered every minute.
+Daily finance processing only happens if Laravel's scheduler runs every minute.
 
-hPanel → **Advanced → Cron Jobs** → **Custom** → schedule **every minute** (`* * * * *`):
+hPanel → **Advanced → Cron Jobs** → **Custom**, every minute (`* * * * *`):
 
 ```text
-cd /home/u123456789/domains/yourdomain.com/balancer-app && /opt/alt/php83/usr/bin/php artisan schedule:run >> storage/logs/cron.log 2>&1
+cd /home/u123456789/domains/malcolmjdstudio.com/balancer-app && /opt/alt/php83/usr/bin/php artisan schedule:run >> storage/logs/cron.log 2>&1
 ```
 
-- For the first week, keep the log redirect so you can see it running. After that you can swap `>> storage/logs/cron.log 2>&1` for `>> /dev/null 2>&1`.
-- Check it's wired up (SSH): `$PHP artisan schedule:list` shows both commands with their next run time.
-- The day after launch, open `storage/logs/cron.log` and look for `finance:process-due` / `finance:close-months` runs.
-- Manual catch-up for one user if ever needed: `$PHP artisan finance:sync --user=ID`.
+- Check it: `$PHP artisan schedule:list` shows both commands with their next run.
+- The day after launch, `storage/logs/cron.log` should show `finance:process-due` and `finance:close-months` runs. After a week, you can change the redirect to `>> /dev/null 2>&1`.
+- Manual catch-up for one user: `$PHP artisan finance:sync --user=ID`.
 
 ---
 
 ## 9. Create your admin account
 
-`UserSeeder` must not run in production: it contains your password in source code. Instead:
-
-1. Visit `https://balancer.yourdomain.com/register` and sign up with `mdaleus21@gmail.com` and a **new** strong password.
-2. Click the verification link in the email. This also proves mail works.
-3. Complete onboarding. Admin pages require a verified and onboarded user.
-4. Promote the account in phpMyAdmin → SQL:
+1. Go to `https://balancer.malcolmjdstudio.com/register` and sign up with `maldaleus@gmail.com` and a **strong, new** password (not `password123`, which is the local seed password).
+2. Complete onboarding. You get the default categories automatically.
+3. Promote the account in phpMyAdmin → SQL:
 
 ```sql
-UPDATE users SET is_admin = 1 WHERE email = 'mdaleus21@gmail.com';
+UPDATE users SET is_admin = 1 WHERE email = 'maldaleus@gmail.com';
 ```
 
-   Or over SSH: `$PHP artisan tinker --execute="App\Models\User::where('email','mdaleus21@gmail.com')->update(['is_admin'=>true]);"`
+   Or over SSH: `$PHP artisan tinker --execute="App\Models\User::where('email','maldaleus@gmail.com')->update(['is_admin'=>true]);"`
 
-5. Reload the dashboard. The shield icon appears in the header, and `/admin` works.
+4. Reload the dashboard. The shield icon appears in the header and `/admin` opens.
 
 ---
 
-## 10. Smoke test (do all of these before announcing)
+## 10. Smoke test (before announcing)
 
 Public and security:
 
-- [ ] `https://balancer.yourdomain.com` loads the landing page with styling, logo and images
-- [ ] `http://` redirects to `https://`
-- [ ] `https://balancer.yourdomain.com/up` returns 200
-- [ ] `https://balancer.yourdomain.com/.env` → **404** (if it shows content, `DOCROOT` is wrong — stop and fix Phase 4)
-- [ ] `https://balancer.yourdomain.com/vendor/` and `/storage/` → 404
-- [ ] A non-existent URL shows a plain 404, **not** a stack trace (confirms `APP_DEBUG=false`)
+- [ ] `https://balancer.malcolmjdstudio.com` shows the landing page with styling, logo and images; footer has Privacy and Terms links that open
+- [ ] `http://balancer.malcolmjdstudio.com` redirects to `https://`
+- [ ] `https://malcolmjdstudio.com/balancer` redirects to the subdomain
+- [ ] `https://balancer.malcolmjdstudio.com/up` returns 200
+- [ ] `/.env`, `/vendor/` and `/storage/` all return **404**. If `.env` shows content, stop and fix Phase 4
+- [ ] A made-up URL shows the **Balancer-styled 404**, not a stack trace (confirms `APP_DEBUG=false`)
+- [ ] `/robots.txt` disallows everything except the landing and legal pages
 
 Accounts:
 
-- [ ] Register a second test account → verification email arrives (check spam) → link works
-- [ ] Forgot password → email arrives → reset works
-- [ ] Log out / log in
-- [ ] Settings drawer opens; change locale/currency display; delete the test account at the end
+- [ ] Register a second test account → lands in onboarding → finishes with default categories in the Ledger
+- [ ] Log out / log in. The login page has no "Forgot password?" link
+- [ ] Settings drawer opens; change currency/locale display
 
-Core app (on the test account):
+Core app (test account):
 
-- [ ] Onboarding saves cash/savings/budget and lands on the dashboard
-- [ ] Ledger: add, edit and delete a purchase; add income; add a recurring payment
-- [ ] Balance Sheet, Budget, Statistics, Standing and Past Balance Sheets cards load (browser DevTools → Network: no red `/api/v1/...` requests)
-- [ ] Mobile layout (phone or DevTools device mode) — carousel, settings card, bug report card
-- [ ] Dark / light mode toggle
+- [ ] Ledger: add, edit and delete a purchase; add income; add a recurring payment. These writes prove the API's CSRF protection works on the live domain
+- [ ] Balance Sheet, Budget, Statistics, Standing and Past Balance Sheets load (DevTools → Network: no red `/api/v1/...` requests)
+- [ ] Mobile layout (phone or DevTools device mode)
+- [ ] Dark / light toggle
 
 Admin:
 
-- [ ] Submit a bug report from the test account
-- [ ] As admin: `/admin` shows counts; the report appears; changing its status sticks after reload
-- [ ] The test (non-admin) account gets **403** at `/admin` and doesn't see the shield icon
-- [ ] `POST /dev/load-demo` → 404 (dev routes disabled)
+- [ ] Submit a bug report from the test account; as admin it appears in `/admin/bug-reports` and a status change sticks after reload
+- [ ] `/admin/users` → **Reset link** on the test account → link is shown on `/admin/password-resets` → open it in a private window → set a new password → log in with it. The link disappears from "Open links"
+- [ ] The test account gets the branded **403** at `/admin` and has no shield icon
+- [ ] Delete the test account in Settings
 
 Server:
 
 - [ ] `storage/logs/laravel-YYYY-MM-DD.log` has no errors after the smoke test
-- [ ] The next morning: `cron.log` shows the scheduler ran
+- [ ] Next morning: `cron.log` shows the scheduler ran
 
 ---
 
-## 11. Security hardening checklist
+## 11. Security checklist
 
 - [ ] `APP_ENV=production`, `APP_DEBUG=false`, `LOG_LEVEL=warning`
-- [ ] `.env` outside `DOCROOT`, `chmod 600`, and the `/.env` URL test returns 404
+- [ ] `.env` in `APP_DIR`, `chmod 600`, and the `/.env` URL returns 404
 - [ ] No `public/hot` on the server
-- [ ] `UserSeeder` never run; your production password differs from `peanut12`
-- [ ] Strong, unique DB and mailbox passwords
+- [ ] Strong, unique database password and admin password
 - [ ] `SESSION_SECURE_COOKIE=true` and Force HTTPS on
-- [ ] Hostinger SSH uses a key, or a strong password
-- [ ] **Trusted proxies — only if you put Cloudflare (proxied) or Hostinger CDN in front.** Laravel then sees the proxy's IP and `http` scheme, which breaks rate limiting per IP and secure-URL generation. Add to `bootstrap/app.php` inside `withMiddleware`: `$middleware->trustProxies(at: '*');`. Without a proxy in front, leave it out.
-- [ ] Optional: `public/robots.txt` → add `Disallow: /admin` and `Disallow: /dashboard`
+- [ ] SSH uses a key or a strong password
+- [ ] **Trusted proxies — only if you put Cloudflare (proxied) or Hostinger CDN in front.** Laravel then sees the proxy's IP and `http` scheme, which breaks per-IP rate limits and secure URLs. Add `$middleware->trustProxies(at: '*');` inside `withMiddleware` in `bootstrap/app.php`. Without a proxy, leave it out.
 
 ---
 
 ## 12. Backups and monitoring
 
-- Hostinger automatic backups: **weekly on Premium, daily on Business/Unlimited** (hPanel → Files → Backups). Check yours and know how to restore.
-- **Before every release:** phpMyAdmin → Export (Quick, SQL) → keep the file with the release zip.
-- Keep the previous `balancer-release.zip` so you can roll back code quickly.
-- Monitoring: there is no error tracking in the app. At minimum, check `storage/logs` weekly. Consider a free uptime monitor (e.g. UptimeRobot) on `https://balancer.yourdomain.com/up`.
+- Premium has **weekly** automatic backups (hPanel → Files → Backups). Know how to restore one.
+- **Before every release:** phpMyAdmin → Export (Quick, SQL), and keep the file with that release's zip.
+- Keep the previous `balancer-release.zip` for quick code rollback.
+- Error monitoring is postponed (Phase 15). Until then, glance at `storage/logs` weekly and consider a free uptime monitor (e.g. UptimeRobot) on `https://balancer.malcolmjdstudio.com/up`.
 
 ---
 
-## 13. Shipping updates later (repeatable release procedure)
+## 13. Shipping updates (repeatable release)
 
-1. On your PC: tests green → commit → `npm run build` → Phase 3.2–3.4 to produce a new zip.
-2. Export the production DB in phpMyAdmin (backup).
-3. Put the site in maintenance mode (SSH):
+1. PC: tests and types green → commit → `npm run build` → Phase 3.2–3.3 for a new zip.
+2. Export the production database in phpMyAdmin.
+3. Maintenance mode (shows the branded "Back shortly" page):
 
 ```bash
-cd ~/domains/yourdomain.com/balancer-app
-$PHP artisan down --retry=60
+cd $APP && $PHP artisan down --retry=60
 ```
 
-4. Upload and extract the new zip to `~/domains/yourdomain.com/balancer-app-new`, then swap:
+4. Upload and extract the new zip into `~/domains/malcolmjdstudio.com/balancer-app-new`, then swap:
 
 ```bash
-cd ~/domains/yourdomain.com
+cd ~/domains/malcolmjdstudio.com
 cp balancer-app/.env balancer-app-new/.env
 mv balancer-app balancer-app-old
 mv balancer-app-new balancer-app
 cd balancer-app
 chmod 600 .env
 $PHP artisan migrate --force
-$PHP artisan optimize:clear && $PHP artisan config:cache && $PHP artisan event:cache && $PHP artisan view:cache
+$PHP artisan optimize:clear && $PHP artisan optimize
 $PHP artisan up
 ```
 
-   The symlink from Phase 4.2 points at the path `balancer-app`, so it follows the swap automatically. Maintenance mode ends with the swap anyway, because the new folder has no "down" file; `artisan up` is harmless.
+   The symlink points at the path `balancer-app`, so it follows the swap. The new folder has no "down" file, so maintenance ends at the swap; `artisan up` is harmless.
 
-5. Re-run the key smoke tests. Once happy, delete `balancer-app-old`.
+5. Re-run the key smoke tests, then delete `balancer-app-old`.
 
-**Rollback:** `mv balancer-app balancer-app-bad && mv balancer-app-old balancer-app`, rebuild caches, and restore the DB export if the release ran migrations.
-
-Option B (no SSH) users: also re-upload `public/build` into `DOCROOT/build`, and run migrate/caches via the cron trick (Phase 6.3 B).
+**Rollback:** `mv balancer-app balancer-app-bad && mv balancer-app-old balancer-app`, run `optimize` again, and restore the database export if the release ran migrations.
 
 ---
 
@@ -570,50 +398,63 @@ Option B (no SSH) users: also re-upload `public/build` into `DOCROOT/build`, and
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| 500 error on every page | Missing/invalid `.env`, empty `APP_KEY`, or stale config cache | Check `.env`, run `$PHP artisan config:clear`, read `storage/logs` |
-| 500 and no log file written | `storage/` not writable, or wrong PHP version | Phase 7 permissions; hPanel PHP version 8.2+ |
-| Page is blank, console shows requests to `[::1]:5173` | `public/hot` was uploaded | Delete `public/hot` |
-| Page is blank, 404s for `/build/assets/...` | `public/build` missing (git archive excludes it) or, with Option B, not copied to `DOCROOT/build` | Phase 3.2 copy step / Option B step 3 |
-| "Vite manifest not found" | Same as above | Same |
-| Directory listing or the source files are visible | `DOCROOT` points at the project root, not `public/` | Fix Phase 4 immediately; rotate `APP_KEY` and passwords if `.env` was exposed |
-| `419 Page Expired` on login | Cookie/HTTPS mismatch | `APP_URL` https, `SESSION_SECURE_COOKIE=true`, Force HTTPS on, clear config cache |
-| Verification or reset emails never arrive | Mail settings or DNS | Check `storage/logs`; try port 587 with `MAIL_SCHEME=smtp`; confirm SPF/DKIM; test with mail-tester.com |
+| 500 on every page | Missing/invalid `.env`, empty `APP_KEY`, stale config cache | Check `.env`, `$PHP artisan optimize:clear`, read `storage/logs` |
+| 500 and no log written | `storage/` not writable, or wrong PHP version | Phase 7 permissions; PHP 8.2+ in hPanel |
+| Blank page, console shows requests to `[::1]:5173` | `public/hot` was uploaded | Delete `public/hot` |
+| Blank page, 404s for `/build/assets/...`, or "Vite manifest not found" | `public/build` missing from the zip | Phase 3.2 copy step |
+| Source files or a directory listing visible | Subdomain serves the project root, not `public/` | Fix Phase 4 now; rotate `APP_KEY` and passwords if `.env` was exposed |
+| `419 Page Expired` on login | Cookie/HTTPS mismatch | `APP_URL` with https, `SESSION_SECURE_COOKIE=true`, Force HTTPS on, re-run `optimize` |
+| Saving in the Ledger says "Your session expired" | Session ended, or the `XSRF-TOKEN` cookie is blocked | Reload the page. If it keeps happening, check `SESSION_DOMAIN` is empty and `APP_URL` matches the address bar |
+| Reset link says "This password reset token is invalid" | Expired (24 h), already used, or replaced by a newer link | Create a new one in `/admin/password-resets` |
 | `Class "Laravel\Pail\..." not found` | Stale `bootstrap/cache/packages.php` from your PC | Delete `bootstrap/cache/*.php` on the server |
-| `route:cache` fails "Another route has already been assigned name" | Duplicate API route names | Skip `route:cache` until fixed (Missing items, item 7) |
-| `migrate` on an empty DB fails calling `mysql` | No MySQL CLI or `proc_open` restricted | Import `mysql-schema.sql` via phpMyAdmin first (Phase 6.1) |
-| Finance month-close never happens | Cron missing or wrong PHP path | Phase 8; test the exact command over SSH |
-| `403` on `/admin` for you | `is_admin` not set, or not verified/onboarded | Phase 9 |
+| `migrate` on an empty DB tries to call `mysql` | Schema dump not imported first | Phase 6.1 |
+| Month-close never happens | Cron missing or wrong PHP path | Phase 8; run the exact command over SSH |
+| `403` on `/admin` for you | `is_admin` not set, or not onboarded | Phase 9 |
+| Main site upload broke Balancer | `public_html/balancer` symlink deleted | Recreate it (Phase 4.2) |
 
 ---
 
-## 15. Still missing or undecided (acknowledged)
+## 15. Launch items — status
 
-### Blockers — must be handled before a public launch
+| # | Item | Status |
+|---|---|---|
+| 1 | Commit the work | **You:** commit everything before Phase 3. |
+| 2 | Password reset | Done. Manual: Admin → Password resets (or **Reset link** on Admin → Users) creates a 24-hour single-use link to send yourself. `/forgot-password` does not exist. |
+| 3 | Production `.env` | Done. `.env.production.example` → fill in → upload as `.env` (Phase 5). |
+| 4 | Frontend build in the zip | Covered by Phase 3.2. |
+| 5 | Admin bootstrap | Seeding disabled outside local; local seed account is `test@test.com` / `password123`. Production admin via Phase 9. |
+| 6 | Privacy policy and terms | Drafted at `/privacy` and `/terms` (text in `resources/js/config/legal-copy.ts`). **You:** check the contact email (`maldaleus@gmail.com` is shown publicly), confirm the facts match how you run it, and ideally have it reviewed. Bump `updated` whenever the text changes. |
+| 7 | Duplicate API route names | Fixed. `route:cache` works. |
+| 8 | Default categories | Done. On finishing onboarding: purchases (Groceries, Dining, Household, Entertainment, Gifts, Other), debts (Personal, Loan), recurring (Rent / Mortgage, Utilities, Subscriptions, Insurance, Phone / Internet). Skipped per type if the user already has categories. |
+| 9 | Branded emails | N/A — no email. |
+| 10 | Error pages | Done. Branded 403/404/500/503 (including maintenance mode). |
+| 11 | Error monitoring | Postponed. |
+| 12 | SSR config | Fixed (disabled). |
+| 13 | `.env.example` | Added. |
+| 14 | TypeScript errors | Fixed. `npm run types` is clean. |
+| 15 | API CSRF | Fixed. `/api/v1` writes require the `X-XSRF-TOKEN` header, which the app sends automatically. |
+| 16 | Performance (546 KB dashboard chunk) | Postponed. |
+| 17 | Small polish | Done. Real Balancer `apple-touch-icon.png` and `favicon.ico` (the old ones were Laravel's logo); README updated; `robots.txt` only allows the landing and legal pages. |
 
-1. **Commit the current work.** The admin area, bug-report status, `is_admin` migration and header changes are uncommitted. The release export (`git archive HEAD`) only ships committed files; without a commit the server gets no admin area and is missing one migration.
-2. **Working production email.** All app routes require a verified email (`MustVerifyEmail`). Without SMTP nobody can use Balancer. The mailbox, SMTP credentials and SPF/DKIM all need to be in place (Phase 2.5 and Phase 5).
-3. **Production `.env`.** Doesn't exist yet and there's no `.env.example` to start from. Use the Phase 5 template.
-4. **Fresh frontend build in the zip.** `public/build` is gitignored, so it must be copied into the release every time (Phase 3.2).
-5. **Admin bootstrap without the seeder.** `UserSeeder` hard-codes credentials. Use the Phase 9 procedure.
-6. **Privacy policy (and ideally terms of use).** None exist. Balancer handles personal financial data of EU users (GDPR). The landing page footer has no legal links. Cookies are only strictly necessary ones (session, XSRF, appearance), so no consent banner should be needed — but a privacy policy is.
+Still open, only you can answer:
 
-### Should fix soon (not hard blockers)
+- Where DNS for `malcolmjdstudio.com` is managed (Hostinger or elsewhere). Only matters for Phase 2.1 and the trusted-proxies note.
 
-7. **Duplicate API route names.** In `routes/api.php`, `apiResource('categories/purchases', …)` and `apiResource('categories/debts', …)` generate the same names as the main `purchases` / `debts` resources (e.g. `api.v1.purchases.index`). This breaks `php artisan route:cache` and causes most of the TypeScript errors in the generated Wayfinder files under `resources/js/routes/`. Likely fix: add `->names('categories.purchases')` / `->names('categories.debts')` to those two routes, then re-run `npm run build`. The frontend calls the API by URL string, so renaming should be safe, but re-test the Ledger category tabs afterwards.
-8. **New users start with no categories.** The category seeders only fill in defaults for the *first* user in the database; registration doesn't create any. Decide whether new accounts should get default purchase/debt/recurring categories on sign-up (or on onboarding completion).
-9. **Unbranded emails.** Verification and reset emails use Laravel's default template (`APP_NAME` as the header). Works, but looks generic.
-10. **Default error pages.** 404/500/503 pages are Laravel's plain defaults; no Balancer-styled error or maintenance page.
-11. **No error monitoring.** Only log files. Consider Sentry/Flare or at least an uptime monitor.
-12. **SSR config.** `config/inertia.php` has `'enabled' => true`, but no SSR bundle is built or served. Harmless (Inertia skips it); set it to `false` to avoid confusion.
-13. **`.env.example` missing.** Worth adding (with no secrets) so future deploys and Composer scripts have a template.
-14. **Pre-existing TypeScript errors.** `npm run types` fails: the generated Wayfinder files (item 7) plus `HistoryRow` typing in the Ledger schedule/stream panels. `npm run build` still succeeds because Vite doesn't type-check.
-15. **API CSRF.** `/api/v1` uses the session cookie without CSRF-token verification; protection relies on `SameSite=Lax` session cookies. Acceptable for a same-origin SPA, but a hardening candidate (e.g. Sanctum `statefulApi()` with an XSRF header in `apiFetch`).
-16. **Performance.** The dashboard JS chunk is ~546 KB (150 KB gzipped). Fine for launch; code-splitting is a later improvement.
-17. **Small polish.** `apple-touch-icon` in `app.blade.php` points to an SVG while `public/apple-touch-icon.png` exists; README still says "In Development"; `robots.txt` allows everything.
+---
 
-### Unknowns only you can answer
+## Adding email later (optional)
 
-- Which Hostinger plan (SSH or not) → Option A vs B.
-- The exact domain/subdomain, and whether DNS is on Hostinger or elsewhere (Cloudflare → trusted proxies).
-- Whether the main domain already hosts a site on this Hostinger account (affects which subdomain method to use).
-- Whether Hostinger Email is fully active on the domain or a trial, and its daily sending limit. For larger sign-up volumes, a transactional provider (Postmark, Resend, Mailgun) is more reliable; Laravel supports those with only `.env` changes plus a small package.
+If you set up Hostinger Email or a provider such as Postmark/Resend, replace the mail lines in `.env`:
+
+```dotenv
+MAIL_MAILER=smtp
+MAIL_SCHEME=smtps
+MAIL_HOST=smtp.hostinger.com
+MAIL_PORT=465
+MAIL_USERNAME=noreply@malcolmjdstudio.com
+MAIL_PASSWORD="MAILBOX_PASSWORD"
+MAIL_FROM_ADDRESS=noreply@malcolmjdstudio.com
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+`MAIL_FROM_ADDRESS` must be the mailbox you log in with. If 465 fails, try `MAIL_SCHEME=smtp` and `MAIL_PORT=587`. SPF/DKIM DNS records keep mail out of spam. You would then also need a public "Forgot password?" page again; it was removed.

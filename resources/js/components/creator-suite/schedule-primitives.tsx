@@ -79,7 +79,7 @@ export function ToggleSwitch({
 
 type HistoryRow = {
     id: number;
-    amount: number;
+    amount_cents: number;
     frequency: string;
     start_date: string;
     end_date: string | null;

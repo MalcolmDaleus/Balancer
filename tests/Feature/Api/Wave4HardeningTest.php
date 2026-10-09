@@ -11,13 +11,6 @@ afterEach(function () {
     Carbon::setTestNow();
 });
 
-test('unverified user cannot access the API', function () {
-    $user = User::factory()->unverified()->create();
-
-    $this->actingAs($user)->getJson('/api/v1/balance-sheet/summary')
-        ->assertStatus(403);
-});
-
 test('cannot close a future month', function () {
     Carbon::setTestNow('2026-06-15 12:00:00');
     $user = User::factory()->create();

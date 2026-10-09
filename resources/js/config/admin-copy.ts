@@ -5,6 +5,7 @@ export const adminPaths = {
     bugReports: '/admin/bug-reports',
     users: '/admin/users',
     admins: '/admin/admins',
+    passwordResets: '/admin/password-resets',
 } as const;
 
 export const adminCopy = {
@@ -14,6 +15,7 @@ export const adminCopy = {
         bugReports: 'Bug reports',
         users: 'Users',
         admins: 'Admins',
+        passwordResets: 'Password resets',
     },
     overview: {
         headTitle: 'Admin',
@@ -54,15 +56,43 @@ export const adminCopy = {
         subtitle: 'People who can open this area',
         empty: 'No admins yet.',
     },
+    passwordResets: {
+        headTitle: 'Password resets',
+        title: 'Password resets',
+        subtitle: 'Create a reset link and send it to the user yourself',
+        emailLabel: 'User email',
+        emailPlaceholder: 'user@example.com',
+        create: 'Create link',
+        creating: 'Creating…',
+        generatedTitle: (name: string) => `Reset link for ${name}`,
+        generatedHint: 'Copy it now. For security it is only shown once; create a new link if you lose it.',
+        copy: 'Copy',
+        copied: 'Copied',
+        validFor: (minutes: number) =>
+            minutes % 60 === 0 ? `Links stay valid for ${minutes / 60} h, or until used.` : `Links stay valid for ${minutes} min, or until used.`,
+        openLinks: 'Open links',
+        empty: 'No open reset links.',
+        revoke: 'Revoke',
+        columns: {
+            user: 'User',
+            created: 'Created',
+            expires: 'Expires',
+            status: 'Status',
+            actions: '',
+        },
+        active: 'Active',
+        expired: 'Expired',
+    },
     userColumns: {
         name: 'Name',
         email: 'Email',
         currency: 'Currency',
-        verified: 'Verified',
         onboarded: 'Onboarded',
         role: 'Role',
         created: 'Created',
+        actions: '',
     },
+    resetLink: 'Reset link',
     role: {
         admin: 'Admin',
         member: 'Member',

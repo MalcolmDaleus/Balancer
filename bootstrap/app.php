@@ -16,6 +16,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -42,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
             \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
@@ -84,16 +87,13 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        // Unauthorized — 403 (includes unverified email via EnsureEmailIsVerified)
+        // Unauthorized — 403
         $exceptions->render(function (AuthorizationException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 $message = $e->getMessage();
-                $error = str_contains(strtolower($message), 'verified')
-                    ? 'email_unverified'
-                    : 'forbidden';
 
                 return new JsonResponse([
-                    'error' => $error,
+                    'error' => 'forbidden',
                     'message' => $message !== '' ? $message : 'This action is unauthorized.',
                 ], 403);
             }
@@ -118,5 +118,26 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'The requested resource was not found.',
                 ], 404);
             }
+        });
+
+        // Branded HTML error pages when debug output is off; JSON/API responses are untouched.
+        $exceptions->respond(function (SymfonyResponse $response, Throwable $e, Request $request) {
+            $status = $response->getStatusCode();
+
+            if (config('app.debug') || $request->is('api/*') || $request->expectsJson()) {
+                return $response;
+            }
+
+            if (in_array($status, [403, 404, 500, 503], true)) {
+                return Inertia::render('error', ['status' => $status])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            }
+
+            if ($status === 419) {
+                return back()->with('status', 'The page expired. Please try again.');
+            }
+
+            return $response;
         });
     })->create();

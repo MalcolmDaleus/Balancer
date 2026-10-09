@@ -5,6 +5,10 @@
 
     RewriteEngine On
 
+    # The subdomain's folder lives inside the main site, so malcolmjdstudio.com/balancer/... also lands here.
+    RewriteCond %{HTTP_HOST} ^(www\.)?malcolmjdstudio\.com$ [NC]
+    RewriteRule ^(.*)$ https://balancer.malcolmjdstudio.com/$1 [L,R=301]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

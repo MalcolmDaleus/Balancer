@@ -10,7 +10,10 @@ Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::get('privacy', fn () => Inertia::render('legal', ['document' => 'privacy']))->name('privacy');
+Route::get('terms', fn () => Inertia::render('legal', ['document' => 'terms']))->name('terms');
+
+Route::middleware(['auth'])->group(function () {
     Route::get('onboarding', [OnboardingController::class, 'show'])->name('onboarding');
     Route::post('onboarding', [OnboardingController::class, 'store'])->name('onboarding.store');
     Route::get('dashboard', DashboardController::class)->middleware('onboarded')->name('dashboard');

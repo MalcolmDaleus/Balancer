@@ -1,4 +1,5 @@
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
+import PublicFooter from '@/components/public-footer';
 import { marketingCopy } from '@/config/marketing-copy';
 import { dashboard, login, register } from '@/routes';
 import { type SharedData } from '@/types';
@@ -254,13 +255,7 @@ export default function Welcome() {
                     </section>
                 </main>
 
-                <footer className="border-t border-slate-900/8 px-5 py-8 sm:px-8 dark:border-white/8">
-                    <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-                        <img src="/branding/logo_dark.svg" alt="" className="h-5 w-auto opacity-50 dark:hidden" />
-                        <img src="/branding/logo_light.svg" alt="" className="hidden h-5 w-auto opacity-50 dark:block" />
-                        <p className="text-xs text-slate-400 dark:text-neutral-500">{copy.footer.tagline}</p>
-                    </div>
-                </footer>
+                <PublicFooter tagline={copy.footer.tagline} />
             </div>
         </>
     );

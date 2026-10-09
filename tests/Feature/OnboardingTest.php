@@ -2,9 +2,13 @@
 
 use App\Enums\IncomeEntryType;
 use App\Models\BudgetPlan;
+use App\Models\DebtCategory;
 use App\Models\IncomeEntry;
 use App\Models\Purchase;
+use App\Models\PurchaseCategory;
+use App\Models\RecurringPaymentCategory;
 use App\Models\User;
+use App\Services\DefaultCategoryService;
 use App\Services\LiquidityService;
 use Carbon\Carbon;
 
@@ -58,6 +62,32 @@ test('completing onboarding stores seeds in cents and opens the dashboard', func
         ->and($user->liquidity_seed)->toBe(25000)
         ->and($user->savings_seed)->toBe(80000)
         ->and($user->liquidity_seed_on?->toDateString())->toBe(now()->toDateString());
+});
+
+test('completing onboarding gives the user default categories', function () {
+    $user = User::factory()->pendingOnboarding()->create();
+
+    $this->actingAs($user)->post(route('onboarding.store'), [
+        'liquidity_cents' => 0,
+        'savings_cents' => 0,
+    ])->assertRedirect(route('dashboard'));
+
+    expect(PurchaseCategory::where('user_id', $user->id)->pluck('name')->all())->toEqualCanonicalizing(DefaultCategoryService::PURCHASE)
+        ->and(DebtCategory::where('user_id', $user->id)->pluck('name')->all())->toEqualCanonicalizing(DefaultCategoryService::DEBT)
+        ->and(RecurringPaymentCategory::where('user_id', $user->id)->pluck('name')->all())->toEqualCanonicalizing(DefaultCategoryService::RECURRING);
+});
+
+test('default categories skip a type the user already has', function () {
+    $user = User::factory()->pendingOnboarding()->create();
+    PurchaseCategory::create(['user_id' => $user->id, 'name' => 'Mine']);
+
+    $this->actingAs($user)->post(route('onboarding.store'), [
+        'liquidity_cents' => 0,
+        'savings_cents' => 0,
+    ]);
+
+    expect(PurchaseCategory::where('user_id', $user->id)->pluck('name')->all())->toBe(['Mine'])
+        ->and(DebtCategory::where('user_id', $user->id)->count())->toBe(count(DefaultCategoryService::DEBT));
 });
 
 test('zero seeds are allowed and blank is rejected', function () {

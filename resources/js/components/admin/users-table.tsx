@@ -8,9 +8,10 @@ import {
     AdminTd,
     AdminTh,
 } from '@/components/admin/admin-table';
-import { StatusChip } from '@/components/creator-suite/shared';
-import { adminCopy, formatAdminDate } from '@/config/admin-copy';
+import { secondaryBtnCls, StatusChip } from '@/components/creator-suite/shared';
+import { adminCopy, adminPaths, formatAdminDate } from '@/config/admin-copy';
 import { type AdminPaginator, type AdminUserRow } from '@/types/admin';
+import { router } from '@inertiajs/react';
 
 export default function UsersTable({
     users,
@@ -26,10 +27,10 @@ export default function UsersTable({
                     <AdminTh>{adminCopy.userColumns.name}</AdminTh>
                     <AdminTh>{adminCopy.userColumns.email}</AdminTh>
                     <AdminTh>{adminCopy.userColumns.currency}</AdminTh>
-                    <AdminTh>{adminCopy.userColumns.verified}</AdminTh>
                     <AdminTh>{adminCopy.userColumns.onboarded}</AdminTh>
                     <AdminTh>{adminCopy.userColumns.role}</AdminTh>
                     <AdminTh>{adminCopy.userColumns.created}</AdminTh>
+                    <AdminTh>{adminCopy.userColumns.actions}</AdminTh>
                 </AdminTableHead>
                 <AdminTableBody>
                     {users.data.length === 0 ? (
@@ -44,12 +45,6 @@ export default function UsersTable({
                                 <AdminTd>{user.currency}</AdminTd>
                                 <AdminTd>
                                     <StatusChip
-                                        label={user.email_verified_at ? adminCopy.yes : adminCopy.no}
-                                        color={user.email_verified_at ? 'green' : 'amber'}
-                                    />
-                                </AdminTd>
-                                <AdminTd>
-                                    <StatusChip
                                         label={user.onboarded_at ? adminCopy.yes : adminCopy.no}
                                         color={user.onboarded_at ? 'green' : 'amber'}
                                     />
@@ -59,6 +54,15 @@ export default function UsersTable({
                                 </AdminTd>
                                 <AdminTd className="whitespace-nowrap text-slate-500 dark:text-neutral-400">
                                     {formatAdminDate(user.created_at)}
+                                </AdminTd>
+                                <AdminTd className="text-right">
+                                    <button
+                                        type="button"
+                                        className={`${secondaryBtnCls} whitespace-nowrap`}
+                                        onClick={() => router.post(adminPaths.passwordResets, { email: user.email })}
+                                    >
+                                        {adminCopy.resetLink}
+                                    </button>
                                 </AdminTd>
                             </tr>
                         ))

@@ -14,6 +14,7 @@ const NAV = [
     { href: adminPaths.bugReports, label: adminCopy.nav.bugReports, match: 'bug-reports' as const },
     { href: adminPaths.users, label: adminCopy.nav.users, match: 'users' as const },
     { href: adminPaths.admins, label: adminCopy.nav.admins, match: 'admins' as const },
+    { href: adminPaths.passwordResets, label: adminCopy.nav.passwordResets, match: 'password-resets' as const },
 ];
 
 export default function AdminLayout({
@@ -27,7 +28,7 @@ export default function AdminLayout({
     title: string;
     heading: string;
     subtitle: string;
-    current: 'overview' | 'bug-reports' | 'users' | 'admins';
+    current: (typeof NAV)[number]['match'];
     toolbar?: ReactNode;
     children: ReactNode;
 }) {

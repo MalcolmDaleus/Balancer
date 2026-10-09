@@ -10,13 +10,6 @@ test('unauthenticated user cannot submit a bug report', function () {
     $this->postJson('/api/v1/bug-reports', validPayload())->assertStatus(401);
 });
 
-test('unverified user cannot submit a bug report', function () {
-    $user = User::factory()->unverified()->create();
-
-    $this->actingAs($user)->postJson('/api/v1/bug-reports', validPayload())
-        ->assertStatus(403);
-});
-
 test('user can submit a bug report', function () {
     $user = User::factory()->create();
 

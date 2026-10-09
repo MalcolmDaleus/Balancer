@@ -21,7 +21,7 @@ use App\Http\Controllers\StandingController;
 use App\Http\Controllers\StatisticsController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
+Route::middleware(['auth:sanctum', 'onboarded', 'throttle:api'])->prefix('v1')->name('api.v1.')->group(function () {
 
     // ---------------------------------------------------------------
     // Purchases + Refund action
@@ -43,10 +43,8 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
         ->name('debts.payments.store');
     Route::get('debt-payments/{debtPayment}', [DebtPaymentController::class, 'show'])
         ->name('debt-payments.show');
-    Route::put('debt-payments/{debtPayment}', [DebtPaymentController::class, 'update'])
+    Route::match(['put', 'patch'], 'debt-payments/{debtPayment}', [DebtPaymentController::class, 'update'])
         ->name('debt-payments.update');
-    Route::patch('debt-payments/{debtPayment}', [DebtPaymentController::class, 'update'])
-        ->name('debt-payments.update.patch');
     Route::delete('debt-payments/{debtPayment}', [DebtPaymentController::class, 'destroy'])
         ->name('debt-payments.destroy');
 
@@ -54,7 +52,8 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     // Income schedules + entries
     // ---------------------------------------------------------------
     Route::apiResource('income/schedules', RegularIncomeScheduleController::class)
-        ->parameters(['schedules' => 'regularIncomeSchedule']);
+        ->parameters(['schedules' => 'regularIncomeSchedule'])
+        ->names('income.schedules');
     Route::post('income/schedules/{regularIncomeSchedule}/update-amount', [RegularIncomeScheduleController::class, 'updateAmount'])
         ->name('income.schedules.update-amount');
     Route::patch('income/schedules/{regularIncomeSchedule}/toggle', [RegularIncomeScheduleController::class, 'toggle'])
@@ -64,7 +63,8 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     Route::delete('income/schedules/{id}/force', [RegularIncomeScheduleController::class, 'hardDestroy'])
         ->name('income.schedules.force-delete');
     Route::apiResource('income/entries', IncomeEntryController::class)
-        ->parameters(['entries' => 'incomeEntry']);
+        ->parameters(['entries' => 'incomeEntry'])
+        ->names('income.entries');
 
     // ---------------------------------------------------------------
     // Savings
@@ -75,17 +75,21 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     // Categories
     // ---------------------------------------------------------------
     Route::apiResource('categories/purchases', PurchaseCategoryController::class)
-        ->parameters(['purchases' => 'purchaseCategory']);
+        ->parameters(['purchases' => 'purchaseCategory'])
+        ->names('categories.purchases');
     Route::apiResource('categories/debts', DebtCategoryController::class)
-        ->parameters(['debts' => 'debtCategory']);
+        ->parameters(['debts' => 'debtCategory'])
+        ->names('categories.debts');
 
     // ---------------------------------------------------------------
     // Recurring payments (streams + entries + categories)
     // ---------------------------------------------------------------
     Route::apiResource('recurring-payments/categories', RecurringPaymentCategoryController::class)
-        ->parameters(['categories' => 'recurringPaymentCategory']);
+        ->parameters(['categories' => 'recurringPaymentCategory'])
+        ->names('recurring-payments.categories');
     Route::apiResource('recurring-payments/streams', RecurringPaymentStreamController::class)
-        ->parameters(['streams' => 'recurringPaymentStream']);
+        ->parameters(['streams' => 'recurringPaymentStream'])
+        ->names('recurring-payments.streams');
     Route::post('recurring-payments/streams/{recurringPaymentStream}/update-price', [RecurringPaymentStreamController::class, 'updatePrice'])
         ->name('recurring-payments.streams.update-price');
     Route::patch('recurring-payments/streams/{recurringPaymentStream}/toggle', [RecurringPaymentStreamController::class, 'toggle'])
@@ -95,10 +99,12 @@ Route::middleware(['auth:sanctum', 'verified', 'onboarded', 'throttle:api'])->pr
     Route::delete('recurring-payments/streams/{id}/force', [RecurringPaymentStreamController::class, 'hardDestroy'])
         ->name('recurring-payments.streams.force-delete');
     Route::apiResource('recurring-payments/entries', RecurringPaymentEntryController::class)
-        ->parameters(['entries' => 'recurringPaymentEntry']);
+        ->parameters(['entries' => 'recurringPaymentEntry'])
+        ->names('recurring-payments.entries');
     Route::apiResource('recurring-payments/charges', RecurringChargeController::class)
         ->only(['index', 'show', 'update', 'destroy'])
-        ->parameters(['charges' => 'recurringCharge']);
+        ->parameters(['charges' => 'recurringCharge'])
+        ->names('recurring-payments.charges');
 
     // ---------------------------------------------------------------
     // Optional explicit finance sync (cron is primary)

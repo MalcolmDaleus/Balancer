@@ -25,9 +25,24 @@ export interface AdminUserRow {
     currency: string;
     locale: string | null;
     is_admin: boolean;
-    email_verified_at: string | null;
     onboarded_at: string | null;
     created_at: string;
+}
+
+export interface AdminPasswordReset {
+    user_id: number;
+    name: string;
+    email: string;
+    created_at: string;
+    expires_at: string;
+    expired: boolean;
+}
+
+export interface AdminGeneratedResetLink {
+    name: string;
+    email: string;
+    url: string;
+    expires_at: string;
 }
 
 export interface AdminPaginator<T> {

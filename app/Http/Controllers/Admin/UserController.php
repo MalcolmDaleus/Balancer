@@ -38,7 +38,6 @@ class UserController extends Controller
                 'currency' => $user->currency,
                 'locale' => $user->locale,
                 'is_admin' => $user->is_admin,
-                'email_verified_at' => $user->email_verified_at?->toIso8601String(),
                 'onboarded_at' => $user->onboarded_at?->toIso8601String(),
                 'created_at' => $user->created_at?->toIso8601String(),
             ]);

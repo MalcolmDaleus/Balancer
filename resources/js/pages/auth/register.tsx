@@ -4,10 +4,13 @@ import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { legalCopy } from '@/config/legal-copy';
 import AuthLayout from '@/layouts/auth-layout';
 import { login } from '@/routes';
 import { Form, Head } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
+
+const legalLinkCls = 'text-foreground underline decoration-neutral-300 underline-offset-4 hover:decoration-current dark:decoration-neutral-500';
 
 export default function Register() {
     return (
@@ -123,6 +126,17 @@ export default function Register() {
                                 {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                                 Create account
                             </Button>
+                            <p className="text-center text-xs text-muted-foreground">
+                                {legalCopy.signupNotice.before}{' '}
+                                <a href="/terms" target="_blank" rel="noopener" className={legalLinkCls}>
+                                    {legalCopy.signupNotice.terms}
+                                </a>{' '}
+                                {legalCopy.signupNotice.and}{' '}
+                                <a href="/privacy" target="_blank" rel="noopener" className={legalLinkCls}>
+                                    {legalCopy.signupNotice.privacy}
+                                </a>
+                                {legalCopy.signupNotice.after}
+                            </p>
                         </div>
 
                         <div className="text-center text-sm text-muted-foreground">

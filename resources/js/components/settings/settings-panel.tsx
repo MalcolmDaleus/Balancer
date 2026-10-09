@@ -11,9 +11,8 @@ import { SUPPORTED_LOCALES } from '@/lib/money';
 import { type SharedData } from '@/types';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import PasswordController from '@/actions/App/Http/Controllers/Settings/PasswordController';
-import { send } from '@/routes/verification';
 import { logout } from '@/routes';
-import { Form, Link, router, usePage } from '@inertiajs/react';
+import { Form, router, usePage } from '@inertiajs/react';
 import { Loader2, LogOut, RefreshCw } from 'lucide-react';
 import { useRef, useState, type ReactNode } from 'react';
 import { useDashboardDensity, type DashboardDensity } from '@/hooks/use-dashboard-density';
@@ -75,7 +74,7 @@ function DashboardDensityTabs() {
 
 /** Shared settings body — used by desktop drawer and mobile Settings card. */
 export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: string }) {
-    const { auth, flash, isLocal } = usePage<SharedData>().props;
+    const { auth, isLocal } = usePage<SharedData>().props;
     const user = auth.user;
     const { notifyFinanceMutated } = useFinanceData();
 
@@ -187,25 +186,6 @@ export default function SettingsPanel({ idPrefix = 'settings' }: { idPrefix?: st
                                 />
                                 <InputError message={errors.email} />
                             </div>
-
-                            {user.email_verified_at === null && (
-                                <p className="text-sm text-muted-foreground">
-                                    {dashboardCopy.settings.emailUnverified}{' '}
-                                    <Link
-                                        href={send()}
-                                        as="button"
-                                        className="text-foreground underline underline-offset-4"
-                                    >
-                                        {dashboardCopy.settings.resendVerification}
-                                    </Link>
-                                </p>
-                            )}
-
-                            {flash?.status === 'verification-link-sent' && (
-                                <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                                    {dashboardCopy.settings.verificationSent}
-                                </p>
-                            )}
 
                             <div className="flex items-center gap-3">
                                 <Button type="submit" size="sm" disabled={processing}>

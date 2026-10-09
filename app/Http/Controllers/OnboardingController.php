@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CompleteOnboardingRequest;
 use App\Services\BudgetService;
 use App\Services\DateTimeService;
+use App\Services\DefaultCategoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -23,7 +24,7 @@ class OnboardingController extends Controller
         ]);
     }
 
-    public function store(CompleteOnboardingRequest $request, BudgetService $budgets): RedirectResponse
+    public function store(CompleteOnboardingRequest $request, BudgetService $budgets, DefaultCategoryService $categories): RedirectResponse
     {
         $user = $request->user();
         if ($user->isOnboarded()) {
@@ -39,6 +40,8 @@ class OnboardingController extends Controller
             'liquidity_seed_on' => $now->toDateString(),
             'onboarded_at' => now(),
         ])->save();
+
+        $categories->seedFor($user);
 
         $discretionary = (int) ($data['discretionary_cents'] ?? 0);
         if ($discretionary > 0) {
