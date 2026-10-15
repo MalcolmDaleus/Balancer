@@ -77,7 +77,7 @@ class DevDataSeeder extends Seeder
         }
 
         $this->wipeFinancialData($user);
-        $this->callCategorySeeders();
+        $this->callCategorySeeders($user);
 
         $now = Carbon::now()->startOfDay();
         $thisMonth = $now->copy()->startOfMonth();
@@ -162,13 +162,46 @@ class DevDataSeeder extends Seeder
         });
     }
 
-    private function callCategorySeeders(): void
+    /**
+     * The category seeders only fill User::first(). Demo data has to land on
+     * the user being rebuilt, with exactly the purchase names the budget step expects.
+     */
+    private function callCategorySeeders(User $user): void
     {
-        $this->call([
-            PurchaseCategorySeeder::class,
-            DebtCategorySeeder::class,
-            RecurringPaymentCategorySeeder::class,
-        ]);
+        foreach ([
+            'Groceries',
+            'Dining',
+            'Miscellaneous',
+            'Clothes & Accessories',
+            'Adulting',
+            'Household Items',
+            'Entertainment',
+            'Surprises',
+            'Gifts',
+            'Caprichos',
+        ] as $name) {
+            PurchaseCategory::withTrashed()->firstOrCreate(['user_id' => $user->id, 'name' => $name]);
+        }
+
+        foreach (['Personal', 'Loan', 'Payment Plan'] as $name) {
+            DebtCategory::withTrashed()->firstOrCreate(['user_id' => $user->id, 'name' => $name]);
+        }
+
+        foreach ([
+            'Rent / Mortgage',
+            'Utilities',
+            'Online Subscription',
+            'Insurance',
+            'Loan Repayment',
+            'Gym / Health',
+            'Phone / Internet',
+            'Transportation',
+        ] as $name) {
+            $category = RecurringPaymentCategory::withTrashed()->firstOrCreate(['user_id' => $user->id, 'name' => $name]);
+            if ($category->trashed()) {
+                $category->restore();
+            }
+        }
     }
 
     private function seedIncomeInstruments(User $user, Carbon $origin): void

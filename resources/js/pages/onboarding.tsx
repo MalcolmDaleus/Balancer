@@ -1,9 +1,10 @@
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
 import InputError from '@/components/input-error';
+import ShotFrame from '@/components/shot-frame';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { marketingCopy } from '@/config/marketing-copy';
+import { marketingCopy, shotsReady } from '@/config/marketing-copy';
 import { currencySymbol, majorInputToCents } from '@/lib/money';
 import { type SharedData } from '@/types';
 import { dashboard, logout } from '@/routes';
@@ -114,25 +115,23 @@ export default function Onboarding({
                     {copy.logOut}
                 </button>
 
-                <div className={`w-full ${showForms ? 'max-w-lg' : 'max-w-lg md:max-w-6xl'}`}>
-                    <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_40px_rgba(0,0,0,0.10)] dark:bg-neutral-900 dark:shadow-[0_8px_48px_rgba(0,0,0,0.55)] dark:ring-1 dark:ring-neutral-800/60">
+                <div className={`w-full ${showForms ? 'max-w-lg' : 'max-w-lg md:max-w-5xl'}`}>
+                    <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.10)] dark:bg-neutral-900 dark:shadow-[0_18px_50px_rgba(0,0,0,0.5)] dark:ring-1 dark:ring-neutral-800/60">
                         {!showForms ? (
-                            <div className="flex flex-col md:grid md:min-h-[min(34rem,calc(100dvh-8rem))] md:grid-cols-[3fr_2fr] lg:min-h-[min(42rem,calc(100dvh-6rem))]">
-                                <div className="flex flex-col justify-between gap-6 px-8 py-8 sm:px-10 md:px-12 md:py-12 lg:px-16">
-                                    <div className="space-y-3 md:space-y-4">
-                                        <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase dark:text-neutral-500">
+                            <div className="md:grid md:grid-cols-[1.05fr_0.95fr] md:items-center">
+                                <div className="flex flex-col justify-between gap-8 px-7 py-8 sm:px-10 md:py-12 md:pr-6 lg:px-12">
+                                    <div>
+                                        <p className="text-sm text-slate-500 dark:text-neutral-400">
                                             {replay ? copy.replayKicker : copy.stepOf(step + 1, SLIDES.length)}
                                         </p>
-                                        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-4xl dark:text-neutral-50">
+                                        <h1 className="mt-3 text-[1.7rem] leading-tight font-semibold tracking-tight text-slate-900 md:text-4xl dark:text-neutral-50">
                                             {slide.title}
                                         </h1>
-                                        <p className="text-sm leading-relaxed text-slate-600 md:text-base md:leading-7 dark:text-neutral-300">
-                                            {slide.body}
-                                        </p>
+                                        <p className="mt-4 text-base leading-relaxed text-slate-600 dark:text-neutral-300">{slide.body}</p>
                                     </div>
 
                                     <div className="flex flex-col gap-6">
-                                        <div className="flex items-center justify-center gap-1.5 md:justify-start">
+                                        <div className="flex items-center gap-1.5">
                                             {SLIDES.map((_, i) => (
                                                 <button
                                                     key={i}
@@ -161,35 +160,31 @@ export default function Onboarding({
                                                 <Button type="button" variant="ghost" size="sm" onClick={skipSlides}>
                                                     {replay ? copy.nav.close : copy.nav.skip}
                                                 </Button>
-                                                <Button type="button" size="sm" onClick={nextSlide}>
+                                                <Button type="button" size="sm" className="rounded-full px-4" onClick={nextSlide}>
                                                     {lastSlide ? (replay ? copy.nav.done : copy.nav.continue) : copy.nav.next}
                                                 </Button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <div className="order-first p-4 pb-0 md:order-none md:h-full md:p-6 md:pl-3">
-                                    <div className="flex h-40 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 md:h-full dark:bg-neutral-800">
-                                        <img
-                                            src={slide.image}
-                                            alt={slide.imageAlt}
-                                            className="h-full w-full object-contain object-top p-2 md:p-4"
-                                        />
-                                    </div>
+                                <div className="order-first p-3 pb-0 md:order-none md:p-4 md:pl-2">
+                                    <ShotFrame
+                                        src={shotsReady ? slide.image.light : undefined}
+                                        srcDark={shotsReady ? slide.image.dark : undefined}
+                                        alt={slide.imageAlt}
+                                        label={slide.shotLabel}
+                                        size={copy.shotSize}
+                                        accent="bg-slate-500"
+                                        className="aspect-[4/3] rounded-[1.25rem]"
+                                    />
                                 </div>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-6 px-8 py-8 sm:px-10">
                                 <div className="space-y-2">
-                                    <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase dark:text-neutral-500">
-                                        {copy.forms.kicker}
-                                    </p>
-                                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-neutral-50">
-                                        {copy.forms.title}
-                                    </h1>
-                                    <p className="text-sm leading-relaxed text-slate-600 dark:text-neutral-300">
-                                        {copy.forms.body}
-                                    </p>
+                                    <p className="text-sm text-slate-500 dark:text-neutral-400">{copy.forms.kicker}</p>
+                                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-neutral-50">{copy.forms.title}</h1>
+                                    <p className="text-sm leading-relaxed text-slate-600 dark:text-neutral-300">{copy.forms.body}</p>
                                 </div>
 
                                 <div className="grid gap-4">
@@ -255,7 +250,7 @@ export default function Onboarding({
                                     >
                                         {copy.nav.backToSlides}
                                     </button>
-                                    <Button type="button" onClick={submit} disabled={busy}>
+                                    <Button type="button" className="rounded-full px-5" onClick={submit} disabled={busy}>
                                         {busy && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
                                         {copy.nav.goToDashboard}
                                     </Button>
