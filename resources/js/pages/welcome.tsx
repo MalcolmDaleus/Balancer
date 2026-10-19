@@ -225,9 +225,11 @@ export default function Welcome() {
                                             />
                                             <figcaption className="mt-3">
                                                 <p className="text-sm font-semibold">{copy.others.standing.name}</p>
-                                                <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-neutral-300">
-                                                    {copy.others.standing.body}
-                                                </p>
+                                                {copy.others.standing.body ? (
+                                                    <p className="mt-1 text-sm leading-relaxed text-slate-600 dark:text-neutral-300">
+                                                        {copy.others.standing.body}
+                                                    </p>
+                                                ) : null}
                                             </figcaption>
                                         </figure>
                                     </div>
